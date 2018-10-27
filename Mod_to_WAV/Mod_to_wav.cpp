@@ -27,7 +27,8 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
      "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
      "off"};
 
-#define BUFFER_LENGTH_IN_MINUTES   8
+#define BUFFER_LENGTH_IN_MINUTES   4
+#define BENCHMARK_REPEAT_ACTION   10
 
 //#define debug_mixer
 
@@ -44,7 +45,8 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 #define MAX_NOTES_PER_CHANNEL 16
 #define MIXRATE 44100
 
-typedef signed long long MixBufferType; // equivalent of __int64
+//typedef signed long long MixBufferType; // equivalent of __int64
+typedef int MixBufferType;
 
 class Channel {
 public:
@@ -93,7 +95,9 @@ public:
     // active mixer channels for this logical channel:
     unsigned        mixerChannelsTable[MAX_NOTES_PER_CHANNEL]; // 0 means no channel
     unsigned        iPrimary;   // 0..15
-                    Channel()   { memset(this, 0, sizeof(Channel)); }
+public:
+    void            init() { memset( this,0,sizeof( Channel ) ); }
+    Channel() { init(); }
 };
 
 class MixerChannel {
@@ -104,14 +108,21 @@ public:
     bool            isPrimary;
     bool            isFadingOut;
     Sample          *sample;
-    unsigned long long  sampleOffset;
-    unsigned long long  sampleIncrement;
+    unsigned long long  sampleOffset_; // changed
+    // added:
+    unsigned        sampleOffset;      // samples can be up to 4 GB in theory
+    unsigned        sampleOffsetFrac;
+
+
+    unsigned        sampleIncrement;
     unsigned        leftVolume;
     unsigned        rightVolume;
     bool            isVolumeRampActive;
     bool            isPlayingBackwards;
     unsigned        iVolumeRamp;
-                    MixerChannel()   { memset(this, 0, sizeof(MixerChannel)); }
+public:
+    void            init() { memset( this,0,sizeof( MixerChannel ) ); }
+    MixerChannel() { init(); }
 };
 
 class Mixer {
@@ -143,7 +154,10 @@ class Mixer {
     HWAVEOUT        hWaveOut;
     WAVEFORMATEX    waveFormatEx;
     WAVEHDR         *waveHeaders;
+
+public: // debug
     SHORT           *waveBuffers[WAVE_BUFFER_NO];
+private: // debug
 
     unsigned        noteToPeriod(unsigned note, int finetune);
     unsigned        periodToFrequency(unsigned period);
@@ -172,7 +186,55 @@ public:
 //    int             setGlobalVolume (unsigned volume);  // range: 0..64
     int             setGlobalBalance(int balance); // range: -100...0...+100
     //unsigned        getnActiveChannels;    // make these into functions
+    void            resetSong();
 };
+
+void Mixer::resetSong()
+{
+    for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) {
+        mixerChannels[i].init();
+    }
+    for ( unsigned i = 0; i < nChannels; i++ ) {
+        channels[i]->init();
+        switch ( module->getPanningStyle() ) {
+            case PANNING_STYLE_MOD:
+            {
+                switch ( i % 4 ) {
+                    case 1:
+                    case 2: { channels[i]->panning = PANNING_FULL_RIGHT; break; }
+                    case 0:
+                    case 3: { channels[i]->panning = PANNING_FULL_LEFT;  break; }
+                }
+                break;
+            }
+            case PANNING_STYLE_S3M:
+            {
+                if ( i & 1 )  channels[i]->panning = PANNING_FULL_RIGHT;
+                else        channels[i]->panning = PANNING_FULL_LEFT;
+                break;
+            }
+            case PANNING_STYLE_XM:
+            default:
+            {
+                channels[i]->panning = PANNING_CENTER;
+                break;
+            }
+        }
+    }
+    globalPanning_ = 0x2F;  // 0 means extreme LEFT & RIGHT, so no attenuation
+    globalVolume_ = 64;
+    gain = 64;//128; // max = 256
+
+    tempo = module->getDefaultTempo();
+    bpm = module->getDefaultBpm();
+    setBpm();
+
+    patternDelay_ = 0;
+    patternRow = 0;
+    iPatternTable = 0;
+    pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+    iNote = pattern->getRow( 0 );
+}
 
 Mixer::Mixer () {
     int     bufSize = (sizeof(WAVEHDR) + sizeof(SHORT[BUFFER_SIZE]))
@@ -221,6 +283,7 @@ int Mixer::initialise(Module *m) {
 
     for (unsigned i = 0; i < nChannels; i++) {
         channels[i] = new Channel;
+        /*
         switch (module->getPanningStyle()) {
             case PANNING_STYLE_MOD :
                 {
@@ -245,16 +308,18 @@ int Mixer::initialise(Module *m) {
                     break;
                 }
         }
+        */
     }
-
+    /*
     globalPanning_ = 0x2F;  // 0 means extreme LEFT & RIGHT, so no attenuation
     globalVolume_ = 64;
     tempo = module->getDefaultTempo();
     bpm = module->getDefaultBpm();
     setBpm ();
     gain = 64;//128; // max = 256
-    pattern = module->getPattern(module->getPatternTable(iPatternTable));
-    iNote = pattern->getRow(0);
+    */
+    resetSong();
+
 
     isInitialised = true;
     return 0;
@@ -290,6 +355,7 @@ int Mixer::doMixBuffer (SHORT *buffer) {
 */
     // transfer sampled data from ?? bit buffer into 16 bit buffer
     saturation = 0;
+    /*
     for (unsigned i = 0; i < BUFFER_SIZE; i++) {
         MixBufferType tmp = mixBuffer[i] >> (6 + 6 + 8); // globalvolume + volume + gain
         if (tmp < -32768) { tmp = -32768; saturation++; }       
@@ -297,11 +363,30 @@ int Mixer::doMixBuffer (SHORT *buffer) {
         buffer[i] = (SHORT)tmp;
 //        if ((i > 40000) && (i < 41000)) std::cout << " " << tmp; // DEBUG
     }
+    */
+
+    
+    MixBufferType *src = mixBuffer;
+    SHORT *dst = buffer;
+    for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
+        //int tmp = (int)((*src++) >> (6 + 6 + 8)); // globalvolume + volume + gain
+        int tmp = (int)(*src++);
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        //else 
+            if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+    }
+    
+
+
     std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
     return 0;
 }
 
 int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
+    //std::cout << nSamples << std::endl; // debug
+
+
     nActiveMixChannels = 0;
 /* debug:        
     std::cout << "\n";
@@ -332,9 +417,9 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
         if (chn->isActive) {
             Sample      *smp = chn->sample;
             unsigned    mixOffset = mixIndex;
-            int         leftGain  = gain * chn->leftVolume;
-            int         rightGain = gain * chn->rightVolume;
-            unsigned    iSampleData = (unsigned)(chn->sampleOffset >> 16);
+            int         leftGain  = (gain * chn->leftVolume) >> 6;   // added >> 6
+            int         rightGain = (gain * chn->rightVolume) >> 6;  // added >> 6
+            unsigned    iSampleData = chn->sampleOffset; //(unsigned)(chn->sampleOffset >> 16);
 
             chn->age++;
             nActiveMixChannels++;
@@ -346,8 +431,14 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
             }
 
             if (!chn->isVolumeRampActive) {
+
+                //std::cout << chn->sampleIncrement << std::endl; // debug
+
+                chn->sampleOffsetFrac &= 0xFFFF;
+
                 for (unsigned j = 0; j < nSamples; j++) {
                     if (chn->isPlayingBackwards) {
+/*  // temp no backwards sample playing
                         MixBufferType s1 = smp->getData()[iSampleData];
 #ifdef LINEAR_INTERPOLATION
                         int s2 = smp->getData()[iSampleData - 1];
@@ -355,8 +446,8 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         int yd = s2 - (int)s1;                       // sample delta
                         s1 += (xd * yd) >> 15;
 #endif                        
-                        mixBuffer[mixOffset++] += s1 * leftGain;
-                        mixBuffer[mixOffset++] += s1 * rightGain;
+                        mixBuffer[mixOffset++] += (s1 * leftGain) >> 14;
+                        mixBuffer[mixOffset++] += (s1 * rightGain) >> 14;
 
                         if (chn->sampleOffset >= chn->sampleIncrement)
                             chn->sampleOffset -= chn->sampleIncrement;
@@ -386,8 +477,12 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         } else {
 
                         }
+*/
                     } else { // if (chn->isPlayingBackwards)
-                        MixBufferType s1 = smp->getData()[iSampleData];
+
+
+                        //MixBufferType s1 = smp->getData()[iSampleData];
+                        int s1 = smp->getData()[iSampleData];
 #ifdef LINEAR_INTERPOLATION
 /* sounds the same but is probably faster:
                         int s2 = smp->getData()[iSampleData + 1];
@@ -395,25 +490,42 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         s1 += ((s2 - s1) * xd) >> 8;
 */
                         int s2 = smp->getData()[iSampleData + 1];
-                        int xd = (chn->sampleOffset & 0xFFFF) >> 1;  // time delta
-                        int yd = s2 - (int)s1;                       // sample delta
-                        s1 += (xd * yd) >> 15;
+                        //int xd = (chn->sampleOffset & 0xFFFF) >> 1;  // time delta
+                        int xd = (chn->sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                        int yd = s2 - s1;                            // sample delta
+                        int s3 = s1 + ((xd * yd) >> 15);
 #endif                        
-                        mixBuffer[mixOffset++] += s1 * leftGain;
-                        mixBuffer[mixOffset++] += s1 * rightGain;
+                        mixBuffer[mixOffset++] += (s3 * leftGain) >> 14;
+                        mixBuffer[mixOffset++] += (s3 * rightGain) >> 14;
 
-                        chn->sampleOffset += chn->sampleIncrement;
-                        iSampleData = (unsigned)(chn->sampleOffset >> 16);
+                        
+                        //chn->sampleOffset += chn->sampleIncrement;          // removed
+                        //iSampleData = (unsigned)(chn->sampleOffset >> 16);  // removed
+                       
+                        chn->sampleOffsetFrac += chn->sampleIncrement;                   // added
+                        iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16); // added
+                        //iSampleData += chn->sampleOffsetFrac >> 16; // no!
+
+
+
+
+
                         if (iSampleData >= smp->getRepeatEnd()) {
                             if (smp->isRepeatSample()) {
-                                chn->sampleOffset &= 0xFFFF;
+
+                                //chn->sampleOffset &= 0xFFFF;   // removed                             
+                                chn->sampleOffsetFrac &= 0xFFFF; // added
+                                chn->sampleOffset = iSampleData; // added
+
                                 if (smp->isPingpongSample()) {
                                     iSampleData = smp->getRepeatEnd() + 1;    // ?
                                     chn->isPlayingBackwards = true;
                                 } else {
                                     iSampleData = smp->getRepeatOffset();
                                 }
-                                chn->sampleOffset += (long long)iSampleData << 16;
+
+                                //chn->sampleOffset += (long long)iSampleData << 16; // removed
+                                chn->sampleOffset = iSampleData; // added
                             } else {
                                 unsigned k;
                                 chn->isActive = false;
@@ -429,6 +541,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         }
                     }
                 }
+                chn->sampleOffset = iSampleData;
             }
         }
     }
@@ -475,7 +588,7 @@ void Mixer::startReplay() {
                             (DWORD_PTR)&waveFreeBlockCount, 
                             CALLBACK_NULL /*CALLBACK_FUNCTION*/ );
 
-    doMixBuffer (waveBuffers[0]);
+    //doMixBuffer (waveBuffers[0]);   // moved to main program for benchmarking
 
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
@@ -665,8 +778,8 @@ int Mixer::setMixerVolume(unsigned fromChannel) {
             MixerChannel    *pmc = &mixerChannels[mc];
             if (pmc->isActive) {
                 unsigned        p = channels[fromChannel]->panning;
-                unsigned        v = channels[fromChannel]->volume 
-                                    * globalVolume_;
+                unsigned        v = channels[fromChannel]->volume
+                                        * globalVolume_;
 
                 p = soften + ((p * (PANNING_MAX_STEPS - (soften << 1))) >> PANNING_SHIFT);
                 if (invchn) p = PANNING_FULL_RIGHT - p;                 
@@ -807,7 +920,8 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
         mixerChannels[newMc].sample = sample;
             // temp hack
         mixerChannels[newMc].isVolumeRampActive = false;
-        mixerChannels[newMc].sampleOffset = (long long)sampleOffset << 16;
+        //mixerChannels[newMc].sampleOffset = (long long)sampleOffset << 16; // removed
+        mixerChannels[newMc].sampleOffset = sampleOffset; // added
         channels[fromChannel]->mixerChannelsTable[emptySlot] = newMc; 
         channels[fromChannel]->iPrimary = emptySlot;
     }
@@ -1201,7 +1315,7 @@ int Mixer::updateNotes () {
         }
         pattern = module->getPattern(module->getPatternTable(iPatternTable));
         iNote = pattern->getRow(patternStartRow);
-        std::cout << "\nPlaying pattern # " << module->getPatternTable(iPatternTable) << ", order # " << iPatternTable;
+        //std::cout << "\nPlaying pattern # " << module->getPatternTable(iPatternTable) << ", order # " << iPatternTable; // debug
     }
     return 0;
 }
@@ -1595,8 +1709,16 @@ double DoBench( Mixer &mixer )
         SetThreadPriority( GetCurrentThread(),
             THREAD_PRIORITY_TIME_CRITICAL );
         QueryPerformanceCounter( &tStart );
+
         //(*funcp)();   //call the actual function being timed
-        mixer.startReplay();
+
+        mixer.doMixBuffer( mixer.waveBuffers[0] );
+        for ( int bench = 0; bench < BENCHMARK_REPEAT_ACTION - 1; bench++ )
+        {
+            mixer.resetSong();
+            mixer.doMixBuffer( mixer.waveBuffers[0] );
+        }
+
 
         QueryPerformanceCounter( &tStop );
         SetThreadPriority( GetCurrentThread(),THREAD_PRIORITY_NORMAL );
@@ -1639,7 +1761,9 @@ double DoBench( Mixer &mixer )
     return (time);
 }
 
-
+void startReplay( Mixer &mixer ) {
+    mixer.startReplay();
+}
 
 // ****************************************************************************
 // ****************************************************************************
@@ -1647,16 +1771,14 @@ double DoBench( Mixer &mixer )
 // ****************************************************************************
 // ****************************************************************************
 
-void startReplay( Mixer &mixer ) {
-    mixer.startReplay();
-}
-
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\crmx-trm.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
+//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\crmx-trm.mod",
+//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeoutstripped.xm",
@@ -1686,7 +1808,7 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\demotune.mod", // xm = wrong, ptn loop tester
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bj-love.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\3demon.mod",
+//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\3demon.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\veena.wow",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\flt8_1.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\nowwhat3.mod",
@@ -1724,35 +1846,29 @@ int main(int argc, char *argv[])  {
         Module      sourceFile( moduleFilename );
         Mixer       mixer;
 
-        std::cout << "\n\nLoading " << moduleFilename;
-        std::cout << ": " << (sourceFile.isLoaded () ? "Success." : "Error!");
-        std::cout << "\n";
+        std::cout << "\n\nLoading " << moduleFilename 
+                  << ": " << (sourceFile.isLoaded() ? "Success." : "Error!") << std::endl;
 
         if (sourceFile.isLoaded ()) {
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
-            std::cout << "\nCompiling module into " << (s / 60) << "m ";
-            std::cout << (s % 60) << "s of 16 bit WAVE data";
-/*
-            time
-MeasureIt /edit
-            http://msdn.microsoft.com/en-us/library/aa260969(VS.60).aspx
+            std::cout << "\nCompiling module into " << (s / 60) << "m "
+                      << (s % 60) << "s of 16 bit WAVE data"  << std::endl 
+                      << "Hit any key to start mixing." << std::endl;
+            _getch();
 
-*/
-            mixer.initialise(&sourceFile);
+            mixer.initialise( &sourceFile );
+           
+            double benchTime = 0.0L;
+            benchTime = DoBench( mixer ) / BENCHMARK_REPEAT_ACTION; // only for staging
 
-
-            
-            //double benchTime = DoBench( &(Mixer::startReplay) );
-            //double benchTime = DoBench( &(startReplay( mixer )) );
-            double benchTime = DoBench( mixer );
-
+            mixer.startReplay();          
 
             std::cout << "A " << sourceFile.getnChannels() << " channel module was rendered to " 
-                      << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " << benchTime << " seconds." << std::endl;
-            std::cout << "Estimated realtime cpu charge is " 
-                      << (benchTime * 100) / (BUFFER_LENGTH_IN_MINUTES * 60) << " percent." << std::endl;
-            std::cout << "On average " << benchTime * 1000.0 / sourceFile.getnChannels() << " milliseconds per channel." << std::endl;            
-            std::cout << "\nPlaying... Hit any key to stop.";
+                      << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " << benchTime << " seconds." << std::endl
+                      << "Estimated realtime cpu charge is " 
+                      << (benchTime * 100) / (BUFFER_LENGTH_IN_MINUTES * 60) << " percent." << std::endl
+                      << "On average " << (benchTime * 1000.0 / sourceFile.getnChannels()) / BUFFER_LENGTH_IN_MINUTES << " milliseconds per channel per minute." << std::endl
+                      << "\nPlaying... Hit any key to stop.";
             _getch();  
             mixer.stopReplay();
         }
