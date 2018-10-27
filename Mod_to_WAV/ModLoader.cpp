@@ -135,7 +135,7 @@ int Module::loadModFile() {
     isLoaded_ = false;
     if (!modFile.is_open()) return 0; // exit on I/O error
     fileSize = modFile.tellg();
-    buf = new char [fileSize];
+    buf = new char [(int)fileSize];
     modFile.seekg (0, ios::beg);
     modFile.read (buf, fileSize);
     modFile.close();
@@ -238,7 +238,7 @@ int Module::loadModFile() {
     patternDataOffset = (nstFile ? sizeof(HeaderNST) : sizeof(HeaderMK));
     sampleDataOffset = patternDataOffset + nPatterns_ * nChannels_ * MOD_ROWS * 4;
     if ((sampleDataOffset + sampleDataSize) > (unsigned)fileSize) {
-        unsigned    missingData = (sampleDataOffset + sampleDataSize) - fileSize;
+        unsigned    missingData = (sampleDataOffset + sampleDataSize) - (int)fileSize;
         unsigned    lastInstrument = nInstruments_;
 #ifdef debug_mod_loader
         cout << "\nWarning! File misses Sample Data!\n";

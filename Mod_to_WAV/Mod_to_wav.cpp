@@ -28,7 +28,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
      "off"};
 
 #define BUFFER_LENGTH_IN_MINUTES   4
-#define BENCHMARK_REPEAT_ACTION   10
+#define BENCHMARK_REPEAT_ACTION    4
 
 //#define debug_mixer
 
@@ -45,7 +45,6 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 #define MAX_NOTES_PER_CHANNEL 16
 #define MIXRATE 44100
 
-//typedef signed long long MixBufferType; // equivalent of __int64
 typedef int MixBufferType;
 
 class Channel {
@@ -430,30 +429,52 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                 //chn->isVolumeRampActive = true;
             }
 
-            if (!chn->isVolumeRampActive) {
+            if (!chn->isVolumeRampActive 
+              //   && (i == 1) 
+                ) {
 
                 //std::cout << chn->sampleIncrement << std::endl; // debug
 
                 chn->sampleOffsetFrac &= 0xFFFF;
+                unsigned modulus = 0; // debug
 
-                for (unsigned j = 0; j < nSamples; j++) {
+                for (unsigned j = 0; j < nSamples; /* j++ */ ) {
                     if (chn->isPlayingBackwards) {
-/*  // temp no backwards sample playing
+
+                        // no backwards sample playing right now
+                        j = nSamples;
+/* 
                         MixBufferType s1 = smp->getData()[iSampleData];
 #ifdef LINEAR_INTERPOLATION
                         int s2 = smp->getData()[iSampleData - 1];
                         int xd = (0x10000 - (chn->sampleOffset & 0xFFFF)) >> 1;  // time delta
-                        int yd = s2 - (int)s1;                       // sample delta
+                        int yd = s2 - s1;                                        // sample delta
                         s1 += (xd * yd) >> 15;
 #endif                        
                         mixBuffer[mixOffset++] += (s1 * leftGain) >> 14;
                         mixBuffer[mixOffset++] += (s1 * rightGain) >> 14;
+
 
                         if (chn->sampleOffset >= chn->sampleIncrement)
                             chn->sampleOffset -= chn->sampleIncrement;
                         else chn->sampleOffset &= 0xFFFF; 
 
                         iSampleData = (unsigned)(chn->sampleOffset >> 16);
+
+                        
+                        //chn->sampleOffsetFrac += chn->sampleIncrement;
+                        //iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16);
+                        
+
+
+
+
+
+
+
+
+
+
                         if (iSampleData <= smp->getRepeatOffset()) {
                             if (smp->isRepeatSample()) {
                                 chn->sampleOffset &= 0xFFFF;
@@ -481,30 +502,42 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                     } else { // if (chn->isPlayingBackwards)
 
 
-                        //MixBufferType s1 = smp->getData()[iSampleData];
-                        int s1 = smp->getData()[iSampleData];
-#ifdef LINEAR_INTERPOLATION
-/* sounds the same but is probably faster:
-                        int s2 = smp->getData()[iSampleData + 1];
-                        unsigned char xd = (chn->sampleOffset & 0xFFFF) >> 8;  // time delta
-                        s1 += ((s2 - s1) * xd) >> 8;
-*/
-                        int s2 = smp->getData()[iSampleData + 1];
-                        //int xd = (chn->sampleOffset & 0xFFFF) >> 1;  // time delta
-                        int xd = (chn->sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
-                        int yd = s2 - s1;                            // sample delta
-                        int s3 = s1 + ((xd * yd) >> 15);
-#endif                        
-                        mixBuffer[mixOffset++] += (s3 * leftGain) >> 14;
-                        mixBuffer[mixOffset++] += (s3 * rightGain) >> 14;
 
-                        
-                        //chn->sampleOffset += chn->sampleIncrement;          // removed
-                        //iSampleData = (unsigned)(chn->sampleOffset >> 16);  // removed
-                       
-                        chn->sampleOffsetFrac += chn->sampleIncrement;                   // added
-                        iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16); // added
-                        //iSampleData += chn->sampleOffsetFrac >> 16; // no!
+
+
+
+
+
+
+                        unsigned sampleDataLeft = smp->getRepeatEnd() - iSampleData; // samples to mix before we need to process sample repeat logic
+                        if ( sampleDataLeft > nSamples ) sampleDataLeft = nSamples;
+                        unsigned nrLoops = ((((sampleDataLeft << 16) + chn->sampleIncrement - 1) - (chn->sampleOffsetFrac & 0xFFFF)) / chn->sampleIncrement);
+                        if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;
+
+
+                        MixBufferType *mixBufferPTR = mixBuffer + mixOffset;
+                        for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
+                            MixBufferType s1 = smp->getData()[iSampleData];
+#ifdef LINEAR_INTERPOLATION
+                            int s2 = smp->getData()[iSampleData + 1];
+                            int xd = (chn->sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                            int yd = s2 - s1;                                // sample delta
+                            s1 += (xd * yd) >> 15;
+#endif
+                            //mixBuffer[mixOffset++] += (s1 * leftGain) >> 14;
+                            //mixBuffer[mixOffset++] += (s1 * rightGain) >> 14;
+                            *mixBufferPTR++ += (s1 * leftGain) >> 14;
+                            *mixBufferPTR++ += (s1 * rightGain) >> 14;
+
+                            chn->sampleOffsetFrac += chn->sampleIncrement;
+                            iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16);
+                        }
+                        j += nrLoops;
+                        mixOffset += nrLoops << 1;
+
+
+
+
 
 
 
@@ -512,26 +545,21 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
 
                         if (iSampleData >= smp->getRepeatEnd()) {
                             if (smp->isRepeatSample()) {
-
-                                //chn->sampleOffset &= 0xFFFF;   // removed                             
-                                chn->sampleOffsetFrac &= 0xFFFF; // added
-                                chn->sampleOffset = iSampleData; // added
-
                                 if (smp->isPingpongSample()) {
                                     iSampleData = smp->getRepeatEnd() + 1;    // ?
                                     chn->isPlayingBackwards = true;
                                 } else {
                                     iSampleData = smp->getRepeatOffset();
                                 }
-
-                                //chn->sampleOffset += (long long)iSampleData << 16; // removed
-                                chn->sampleOffset = iSampleData; // added
-                            } else {
-                                unsigned k;
+                                chn->sampleOffset = iSampleData; 
+                                chn->sampleOffsetFrac &= 0xFFFF;
+                                modulus = 0; // debug
+                            } else {                                
                                 chn->isActive = false;
                                 chn->isPrimary = false;
                             
                                 // remove reference to this mixer channel in the channels mixer channels table
+                                unsigned k;
                                 for (k = 0; k < MAX_SAMPLES; k++) {
                                     if (channels[chn->fromChannel]->mixerChannelsTable[k] == i) break;
                                 }
@@ -1774,6 +1802,7 @@ void startReplay( Mixer &mixer ) {
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
