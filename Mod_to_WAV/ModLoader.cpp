@@ -33,6 +33,11 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 //#define MAX_SAMPLES_SIZE_NST  (0xFFFF * 2 * 15)
 //#define MAX_SAMPLES_SIZE_MK   (0xFFFF * 2 * 31)
 
+// =============================================================================
+// These structures represent exactly the layout of a MOD file:
+// the pragma directive prevents the compiler from enlarging the struct with 
+// dummy bytes for performance purposes
+
 #pragma pack (1) 
 struct ModSampleHeader { 
     char            name[MAX_SAMPLENAME_LENGTH];

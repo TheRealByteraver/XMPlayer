@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <cmath>
 #include <vector>
+#include <iostream> // for debugging
+#include <iomanip>  // for debugging
 #include "time.h"
 
 #include "Module.h"
@@ -28,7 +30,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
      "off"};
 
 #define BUFFER_LENGTH_IN_MINUTES   4
-#define BENCHMARK_REPEAT_ACTION    4
+#define BENCHMARK_REPEAT_ACTION    1
 
 //#define debug_mixer
 
@@ -125,6 +127,7 @@ public:
 };
 
 class Mixer {
+public: // debug
     bool            isInitialised;
     Module          *module;
     MixBufferType   *mixBuffer;
@@ -190,6 +193,8 @@ public:
 
 void Mixer::resetSong()
 {
+    mixCount = 0; // added for debugging!!!
+    mixIndex = 0;
     for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) {
         mixerChannels[i].init();
     }
@@ -242,7 +247,7 @@ Mixer::Mixer () {
     
     memset(this, 0, sizeof(Mixer));
     mixBuffer = new MixBufferType[BUFFER_SIZE];
-    memset(mixBuffer, 0, sizeof(MixBufferType[BUFFER_SIZE]));
+    //memset(mixBuffer, 0, sizeof(MixBufferType[BUFFER_SIZE]));
 
     waveHeaders = (WAVEHDR *)(new char[bufSize]);
     memset(waveHeaders, 0, bufSize);
@@ -281,45 +286,10 @@ int Mixer::initialise(Module *m) {
     nChannels = module->getnChannels ();
 
     for (unsigned i = 0; i < nChannels; i++) {
-        channels[i] = new Channel;
-        /*
-        switch (module->getPanningStyle()) {
-            case PANNING_STYLE_MOD :
-                {
-                    switch(i % 4) {
-                        case 1 : 
-                        case 2 : { channels[i]->panning = PANNING_FULL_RIGHT; break; }
-                        case 0 : 
-                        case 3 : { channels[i]->panning = PANNING_FULL_LEFT;  break; }          
-                    }
-                    break;
-                }
-            case PANNING_STYLE_S3M :
-                {
-                    if (i & 1)  channels[i]->panning = PANNING_FULL_RIGHT;
-                    else        channels[i]->panning = PANNING_FULL_LEFT;
-                    break;
-                }
-            case PANNING_STYLE_XM :
-            default : 
-                {
-                    channels[i]->panning = PANNING_CENTER;
-                    break;
-                }
-        }
-        */
+        if ( channels[i] == nullptr )
+            channels[i] = new Channel;             
     }
-    /*
-    globalPanning_ = 0x2F;  // 0 means extreme LEFT & RIGHT, so no attenuation
-    globalVolume_ = 64;
-    tempo = module->getDefaultTempo();
-    bpm = module->getDefaultBpm();
-    setBpm ();
-    gain = 64;//128; // max = 256
-    */
     resetSong();
-
-
     isInitialised = true;
     return 0;
 }
@@ -328,7 +298,9 @@ int Mixer::doMixBuffer (SHORT *buffer) {
     unsigned    x, y;
 
     memset(mixBuffer, 0, BUFFER_SIZE * sizeof(MixBufferType));
-    mixIndex = 0;
+    //memset( mixBuffer,0,sizeof( MixBufferType[BUFFER_SIZE] ) );
+    mixIndex = 0;  
+
     x = callBpm - mixCount;
     y = BUFFER_SIZE / 2;   // stereo
     if (x > y) {
@@ -349,30 +321,19 @@ int Mixer::doMixBuffer (SHORT *buffer) {
             doMixSixteenbitStereo(x);
         }
     }
-/*
- mixbuffer is now 64 bit
-*/
-    // transfer sampled data from ?? bit buffer into 16 bit buffer
     saturation = 0;
-    /*
-    for (unsigned i = 0; i < BUFFER_SIZE; i++) {
-        MixBufferType tmp = mixBuffer[i] >> (6 + 6 + 8); // globalvolume + volume + gain
-        if (tmp < -32768) { tmp = -32768; saturation++; }       
-        if (tmp >  32767) { tmp =  32767; saturation++; }
-        buffer[i] = (SHORT)tmp;
-//        if ((i > 40000) && (i < 41000)) std::cout << " " << tmp; // DEBUG
-    }
-    */
 
-    
+    // transfer sampled data from ?? bit buffer into 16 bit buffer
     MixBufferType *src = mixBuffer;
     SHORT *dst = buffer;
     for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
         //int tmp = (int)((*src++) >> (6 + 6 + 8)); // globalvolume + volume + gain
-        int tmp = (int)(*src++);
+        MixBufferType tmp = (MixBufferType)((*src++) >> 8 );
         if ( tmp < -32768 ) { tmp = -32768; saturation++; }
         //else 
             if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+
+        //std::cout << tmp << std::endl;
         *dst++ = (SHORT)tmp;
     }
     
@@ -383,198 +344,184 @@ int Mixer::doMixBuffer (SHORT *buffer) {
 }
 
 int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
-    //std::cout << nSamples << std::endl; // debug
-
-
     nActiveMixChannels = 0;
-/* debug:        
-    std::cout << "\n";
-    for (unsigned i = 0; i < nChannels; i++) {
-        std::cout << "\nChannel ";
-        if (i < 10) std::cout << " ";
-        std::cout << i << ": ";
-        for (unsigned j = 0; j < MAX_SAMPLES; j++) {
-            unsigned k = channels[i]->mixerChannelsTable[j];
-            if (k < 10) std::cout << " ";
-            std::cout << k << " ";
-        }
-    }
-    _getch();
-
-// debug end 
-    std::cout << "\n";
-    for (unsigned i = 0; i < nChannels; i++) {
-        unsigned v = channels[i]->volume;
-        if (v < 10) std::cout << " ";
-        std::cout << v << " ";
-    }
-    if(iPatternTable == 6) _getch();
-// debug end */
-
     for (unsigned i = 0; i < MIXER_MAX_CHANNELS; i++) {
-        MixerChannel *chn = &mixerChannels[i];
-        if (chn->isActive) {
-            Sample      *smp = chn->sample;
-            unsigned    mixOffset = mixIndex;
-            int         leftGain  = (gain * chn->leftVolume) >> 6;   // added >> 6
-            int         rightGain = (gain * chn->rightVolume) >> 6;  // added >> 6
-            unsigned    iSampleData = chn->sampleOffset; //(unsigned)(chn->sampleOffset >> 16);
+        MixerChannel& mChn = mixerChannels[i];
+        if (mChn.isActive) {
+            Sample&         sample = *mChn.sample;
+            unsigned        mixOffset = mixIndex;
+            int             leftGain  = (gain * mChn.leftVolume) >> 12;   
+            int             rightGain = (gain * mChn.rightVolume) >> 12;  
 
-            chn->age++;
+            mChn.age++;
             nActiveMixChannels++;
-
             // quick hack for first tests
-            if (chn->isFadingOut) { 
-                chn->isActive = false;
+            if ( mChn.isFadingOut) {
+                mChn.isActive = false;
                 //chn->isVolumeRampActive = true;
             }
+            if (!mChn.isVolumeRampActive   //     && (i == 16) 
+                ) {                
+                MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
+                for (unsigned j = 0; j < nSamples; ) {
+                    // mChn.sampleIncrement is never greater dan 2 ^ 17
+                    if ( !mChn.isPlayingBackwards ) {
+                        unsigned nrSamplesLeft = sample.getRepeatEnd() - mChn.sampleOffset;
+                        if ( nrSamplesLeft > 32767 ) nrSamplesLeft = 32767;
 
-            if (!chn->isVolumeRampActive 
-              //   && (i == 1) 
-                ) {
+                        //unsigned nrLoops = (((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
+                        //    / mChn.sampleIncrement) - 1;  // not the exact formula!!!?
 
-                //std::cout << chn->sampleIncrement << std::endl; // debug
+                        unsigned nrLoops = ((((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
+                            - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
+                        if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;                        
 
-                chn->sampleOffsetFrac &= 0xFFFF;
-                unsigned modulus = 0; // debug
-
-                for (unsigned j = 0; j < nSamples; /* j++ */ ) {
-                    if (chn->isPlayingBackwards) {
-
-                        // no backwards sample playing right now
-                        j = nSamples;
-/* 
-                        MixBufferType s1 = smp->getData()[iSampleData];
-#ifdef LINEAR_INTERPOLATION
-                        int s2 = smp->getData()[iSampleData - 1];
-                        int xd = (0x10000 - (chn->sampleOffset & 0xFFFF)) >> 1;  // time delta
-                        int yd = s2 - s1;                                        // sample delta
-                        s1 += (xd * yd) >> 15;
-#endif                        
-                        mixBuffer[mixOffset++] += (s1 * leftGain) >> 14;
-                        mixBuffer[mixOffset++] += (s1 * rightGain) >> 14;
-
-
-                        if (chn->sampleOffset >= chn->sampleIncrement)
-                            chn->sampleOffset -= chn->sampleIncrement;
-                        else chn->sampleOffset &= 0xFFFF; 
-
-                        iSampleData = (unsigned)(chn->sampleOffset >> 16);
-
-                        
-                        //chn->sampleOffsetFrac += chn->sampleIncrement;
-                        //iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16);
-                        
-
-
-
-
-
-
-
-
-
-
-                        if (iSampleData <= smp->getRepeatOffset()) {
-                            if (smp->isRepeatSample()) {
-                                chn->sampleOffset &= 0xFFFF;
-                                if (smp->isPingpongSample()) {
-                                    iSampleData = smp->getRepeatOffset() - 1; // ?
-                                    chn->isPlayingBackwards = false;
-                                } 
-                                chn->sampleOffset += (long long)iSampleData << 16;
-                            } else {
-                                unsigned k;
-                                chn->isActive = false;
-                                chn->isPrimary = false;
-                            
-                                // remove reference to this mixer channel in the channels mixer channels table
-                                for (k = 0; k < MAX_SAMPLES; k++) {
-                                    if (channels[chn->fromChannel]->mixerChannelsTable[k] == i) break;
-                                }
-                                channels[chn->fromChannel]->mixerChannelsTable[k] = 0;
-                                j = nSamples; // quit loop, we're done here
-                            }
-                        } else {
-
-                        }
-*/
-                    } else { // if (chn->isPlayingBackwards)
-
-
-
-
-
-
-
-
-
-                        unsigned sampleDataLeft = smp->getRepeatEnd() - iSampleData; // samples to mix before we need to process sample repeat logic
-                        if ( sampleDataLeft > nSamples ) sampleDataLeft = nSamples;
-                        unsigned nrLoops = ((((sampleDataLeft << 16) + chn->sampleIncrement - 1) - (chn->sampleOffsetFrac & 0xFFFF)) / chn->sampleIncrement);
-                        if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;
-
-
-                        MixBufferType *mixBufferPTR = mixBuffer + mixOffset;
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
-                            MixBufferType s1 = smp->getData()[iSampleData];
-#ifdef LINEAR_INTERPOLATION
-                            int s2 = smp->getData()[iSampleData + 1];
-                            int xd = (chn->sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
+                            int s2 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16) + 1];
+                            int xd = (mChn.sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
                             int yd = s2 - s1;                                // sample delta
                             s1 += (xd * yd) >> 15;
-#endif
-                            //mixBuffer[mixOffset++] += (s1 * leftGain) >> 14;
-                            //mixBuffer[mixOffset++] += (s1 * rightGain) >> 14;
-                            *mixBufferPTR++ += (s1 * leftGain) >> 14;
-                            *mixBufferPTR++ += (s1 * rightGain) >> 14;
-
-                            chn->sampleOffsetFrac += chn->sampleIncrement;
-                            iSampleData = chn->sampleOffset + (chn->sampleOffsetFrac >> 16);
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            mChn.sampleOffsetFrac += mChn.sampleIncrement;
                         }
-                        j += nrLoops;
                         mixOffset += nrLoops << 1;
+                        j += nrLoops;
 
+                        mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
+                        mChn.sampleOffsetFrac &= 0xFFFF;
 
-
-
-
-
-
-
-
-                        if (iSampleData >= smp->getRepeatEnd()) {
-                            if (smp->isRepeatSample()) {
-                                if (smp->isPingpongSample()) {
-                                    iSampleData = smp->getRepeatEnd() + 1;    // ?
-                                    chn->isPlayingBackwards = true;
-                                } else {
-                                    iSampleData = smp->getRepeatOffset();
-                                }
-                                chn->sampleOffset = iSampleData; 
-                                chn->sampleOffsetFrac &= 0xFFFF;
-                                modulus = 0; // debug
-                            } else {                                
-                                chn->isActive = false;
-                                chn->isPrimary = false;
+                        /*
+                        if ( ((mChn.sampleOffset + ((mChn.sampleOffsetFrac + mChn.sampleIncrement) >> 16))                            
+                            >= sample.getRepeatEnd()) && (j < nSamples) ) {
                             
+                            //int a = (mChn.sampleOffset + ((mChn.sampleOffsetFrac + mChn.sampleIncrement) >> 16));
+                            //int b = sample.getRepeatEnd();
+                            //if ( a == b )   std::cout << " !!! " << std::endl;
+                            //else            std::cout << a << " >= ? " << b << std::endl;
+                            
+                            
+                            // last sample
+                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
+                            int s2;
+                            if ( sample.isRepeatSample() ) {
+                                if ( !sample.isPingpongSample() )
+                                {
+                                    s2 = sample.getData()[sample.getRepeatOffset()];
+                                } else {
+                                    s2 = sample.getData()[sample.getRepeatEnd() - 1];
+                                }
+                            } else {
+                                s2 = 0;
+                            }
+                            int xd = (mChn.sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                            int yd = s2 - s1;                                // sample delta
+                            s1 += (xd * yd) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            mChn.sampleOffsetFrac += mChn.sampleIncrement;
+                            mixOffset += 2;
+                            j++;
+
+                            mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
+                            */
+
+                        if( mChn.sampleOffset >= sample.getRepeatEnd() ) {
+                            if ( sample.isRepeatSample() ) {
+                                if ( !sample.isPingpongSample() )
+                                {
+                                    mChn.sampleOffset = sample.getRepeatOffset();  // ?
+                                } else {
+                                    mChn.sampleOffset = sample.getRepeatEnd() - 1; // ?
+                                    mChn.isPlayingBackwards = true;
+                                }
+                            } else {
+                                mChn.isActive = false;
+                                mChn.isPrimary = false;
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
-                                for (k = 0; k < MAX_SAMPLES; k++) {
-                                    if (channels[chn->fromChannel]->mixerChannelsTable[k] == i) break;
+                                for ( k = 0; k < MAX_SAMPLES; k++ ) {
+                                    if ( channels[mChn.fromChannel]->mixerChannelsTable[k] == i ) break;
                                 }
-                                channels[chn->fromChannel]->mixerChannelsTable[k] = 0;
+                                channels[mChn.fromChannel]->mixerChannelsTable[k] = 0;
+                                j = nSamples; // quit loop, we're done here
+                            }
+                        }
+                        /*
+                        for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
+                            int smpIdx = (sampleOffsetFrac >> 16);
+                            MixBufferType s1 = smpDataPTR[smpIdx];
+                            MixBufferType s2 = smpDataPTR[smpIdx + 1];
+                            int xd = (sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                            int yd = s2 - s1;                           // sample delta
+                            s1 += (xd * yd) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            sampleOffsetFrac += sampleIncrement;
+                        }
+                        */
+
+                    // ********************************************************
+                    // ********************************************************
+                    // *********** Backwards playing code *********************
+                    // ********************************************************
+                    // ********************************************************
+                    } else { 
+                        // max sample length: 2 GB :)
+                        int nrSamplesLeft = mChn.sampleOffset - sample.getRepeatOffset();
+                        if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
+                        int nrLoops = 
+                            ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
+                            - (int)mChn.sampleOffsetFrac) / (int)mChn.sampleIncrement;
+                        if ( nrLoops >= (int)(nSamples - j) ) nrLoops = (int)(nSamples - j);
+                        if ( nrLoops < 0 ) nrLoops = 0;
+
+                        mChn.sampleOffsetFrac = (int)mChn.sampleOffsetFrac + nrLoops * (int)mChn.sampleIncrement;
+                        int smpDataShift = mChn.sampleOffsetFrac >> 16;
+                        if ( (int)mChn.sampleOffset < smpDataShift ) { // for bluishbg2.xm
+                            mChn.sampleOffset = 0;
+                            //std::cout << "underrun!" << std::endl;
+                        } else mChn.sampleOffset -= smpDataShift;
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+
+                        for ( int j2 = 0; j2 < nrLoops; j2++ ) {
+                            int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];
+                            int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 16) - 1];
+                            int xd = (0x10000 - (mChn.sampleOffsetFrac & 0xFFFF)) >> 1;  // time delta
+                            int yd = s2 - s1;                                            // sample delta
+                            s1 += (xd * yd) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            mChn.sampleOffsetFrac -= mChn.sampleIncrement;
+                        }
+                        mixOffset += nrLoops << 1;
+                        j += nrLoops;
+                       
+                        if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
+                            if ( sample.isRepeatSample() )
+                            {
+                                mChn.sampleOffset = sample.getRepeatOffset();
+                                mChn.isPlayingBackwards = false;
+                            } else {
+                                mChn.isActive = false;
+                                mChn.isPrimary = false;
+                                // remove reference to this mixer channel in the channels mixer channels table
+                                unsigned k;
+                                for ( k = 0; k < MAX_SAMPLES; k++ ) {
+                                    if ( channels[mChn.fromChannel]->mixerChannelsTable[k] == i ) break;
+                                }
+                                channels[mChn.fromChannel]->mixerChannelsTable[k] = 0;
                                 j = nSamples; // quit loop, we're done here
                             }
                         }
                     }
                 }
-                chn->sampleOffset = iSampleData;
             }
         }
     }
-    mixIndex += (nSamples << 1); // stereo
-//    if (activeChannels < 10) std::cout << " "; std::cout << activeChannels << "  ";
+    mixIndex += (nSamples << 1); // *2 for stereo
     return 0;
 }
 
@@ -1016,6 +963,16 @@ int Mixer::updateNotes () {
         */
 
         note       = iNote->note;
+
+        //debug for bluishbg.xm:
+        if ( note > (MAXIMUM_NOTES + 1) ) { // + 1 for the key off
+            std::cout << "!";
+            note = 0;
+        }
+
+        //std::cout << noteStrings[note];
+        //std::cout << channel->volume << " ";
+
         instrument = iNote->instrument;
 
         if (note) {
@@ -1136,12 +1093,14 @@ int Mixer::updateNotes () {
                     {                   
                         if (channel->pSample) {
                             argument <<= 8;
+                            
                             if (argument < (channel->pSample->getLength())) {
                                 channel->sampleOffset = argument;
                                 if (isNewNote) replay = true;
                             } else {
                                 replay = false;
                             }
+                            
                         } 
                         break;
                     }
@@ -1314,7 +1273,7 @@ int Mixer::updateNotes () {
             std::cout << (channel->volume % 10) << ")";
         }
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            cout  << "." << hex[iNote->effects[fxloop].effect];
+            std::cout  << "." << hex[iNote->effects[fxloop].effect];
             std::cout << hex[iNote->effects[fxloop].argument >> 4];
             std::cout << hex[iNote->effects[fxloop].argument & 0xF]; 
         }
@@ -1743,7 +1702,8 @@ double DoBench( Mixer &mixer )
         mixer.doMixBuffer( mixer.waveBuffers[0] );
         for ( int bench = 0; bench < BENCHMARK_REPEAT_ACTION - 1; bench++ )
         {
-            mixer.resetSong();
+            mixer.resetSong();  // does not reset everything?
+            //std::cout << mixer.channels[0].
             mixer.doMixBuffer( mixer.waveBuffers[0] );
         }
 
@@ -1802,15 +1762,22 @@ void startReplay( Mixer &mixer ) {
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
 //        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\crmx-trm.mod",
 //        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeoutstripped.xm",
+//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeoutstripped.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeout.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\KNGDMSKY.XM",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\KNGDMSKY-mpt.XM",
@@ -1827,7 +1794,6 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\explorat.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\devlpr94.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",

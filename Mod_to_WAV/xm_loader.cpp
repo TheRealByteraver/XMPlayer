@@ -131,7 +131,10 @@ int Module::loadXmFile()
 
     isLoaded_ = false;
     // load file into byte buffer and then work on that buffer only
-    if (!xmFile.is_open()) return 0; // exit on I/O error
+    if ( !xmFile.is_open() ) {
+        std::cout << "can't open file";
+        return 0; // exit on I/O error
+    }
     fileSize = xmFile.tellg();
     buf = new char [fileSize];
     xmFile.seekg (0, ios::beg);
@@ -169,6 +172,7 @@ int Module::loadXmFile()
         cout << "\nDefault Bpm          = " << header->defaultBpm;
         cout << "\nDefault Tempo        = " << header->defaultTempo;
         cout << "\nXM MAX Tempo         = " << XM_MAX_TEMPO;
+        cout << "\nError reading header, this is not an xm file.\n";
 #endif
         delete [] buf;
         return 0;
@@ -264,6 +268,20 @@ int Module::loadXmFile()
             if (pack & XM_NOTE_IS_PACKED) {
                 if (pack & XM_NOTE_AVAIL) {
                     iNote->note         = *((unsigned char *)bufp++);
+#ifdef debug_xm_loader
+                    if ( iNote->note > 97 ) {
+                        cout << "\nPattern # " << iPattern << ":";
+                        cout << "\nPattern Header Size (9) = " << pattern->headerSize;
+                        cout << "\nPattern # Rows          = " << pattern->nRows;
+                        cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
+                        cout << "\nPattern Data Size       = " << pattern->patternSize;
+                        cout << "\nRow nr                  = " << n / pattern->nRows;
+                        cout << "\nColumn nr               = " << n % pattern->nRows;
+                        cout << "\nIllegal note            = " << iNote->note;
+                        cout << "\n";
+                        _getch();
+                    }
+#endif
                 } 
                 if (pack & XM_INSTRUMENT_AVAIL) {
                     iNote->instrument   = *((unsigned char *)bufp++);
@@ -279,12 +297,26 @@ int Module::loadXmFile()
                 } 
             } else {
                 iNote->note                 = pack;
+#ifdef debug_xm_loader
+                if ( iNote->note > 97 ) {
+                    cout << "\nPattern # " << iPattern << ":";
+                    cout << "\nPattern Header Size (9) = " << pattern->headerSize;
+                    cout << "\nPattern # Rows          = " << pattern->nRows;
+                    cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
+                    cout << "\nPattern Data Size       = " << pattern->patternSize;
+                    cout << "\nRow nr                  = " << n / pattern->nRows;
+                    cout << "\nColumn nr               = " << n % pattern->nRows;
+                    cout << "\nIllegal note            = " << iNote->note;
+                    cout << "\n";
+                    _getch();
+                }
+#endif                
                 iNote->instrument           = *((unsigned char *)bufp++);
                 volumeColumn                = *((unsigned char *)bufp++);
                 iNote->effects[1].effect    = *((unsigned char *)bufp++);
                 iNote->effects[1].argument  = *((unsigned char *)bufp++);
             }
-            if (iNote->note) {
+            if (iNote->note) {   // key off note????
                 if(useLinearFrequencies_) {
                     iNote->period = 120 * 64 - iNote->note * 64; 
                 } else {
@@ -375,13 +407,13 @@ int Module::loadXmFile()
                             break;
                         }
                     case SET_TEMPO_BPM :
-//                    case SET_SAMPLE_OFFSET :
                         {
                             if (!iNote->effects[fxloop].argument) {
                                 iNote->effects[fxloop].effect = 0;
                             }
                             break;
                         }
+//                    case SET_SAMPLE_OFFSET :
                 }
             }
 #ifdef debug_xm_loader
@@ -414,6 +446,7 @@ int Module::loadXmFile()
     patterns_[nPatterns_] = new Pattern;
     patterns_[nPatterns_]->Initialise(nChannels_, XM_MAX_PATTERN_ROWS, 
                                       new Note[nChannels_ * XM_MAX_PATTERN_ROWS]);
+
     // Now read all the instruments & sample data
     for (unsigned iInstrument = 0; iInstrument < nInstruments_; iInstrument++) {
         XmInstrumentHeaderPrimary   *instrumentHeader1;

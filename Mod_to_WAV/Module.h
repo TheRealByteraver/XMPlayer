@@ -81,7 +81,7 @@ const unsigned periods[MAXIMUM_NOTES] = {
        53,    50,    47,    45,    42,    40,    37,    35,    33,    31,    30,    28};
 
 
-const unsigned amigaPeriodTable[] = {
+const unsigned amigaPeriodTable[MAXIMUM_NOTES] = {
     907, 900, 894, 887, 881, 875, 868, 862, 856, 850, 844, 838, 
     832, 826, 820, 814, 808, 802, 796, 791, 785, 779, 774, 768, 
     762, 757, 752, 746, 741, 736, 730, 725, 720, 715, 709, 704, 
@@ -91,10 +91,7 @@ const unsigned amigaPeriodTable[] = {
     538, 535, 532, 528, 524, 520, 516, 513, 508, 505, 502, 498, 
     494, 491, 487, 484, 480, 477, 474, 470, 467, 463, 460, 457};
 
-// =============================================================================
-// These structures represent exactly the layout of a MOD file:
-// the pragma directive prevents the compiler from enlarging the struct with 
-// dummy bytes for performance purposes
+
 
 typedef unsigned __int16 AMIGAWORD;
 typedef signed   __int16 SHORT;
@@ -127,7 +124,12 @@ public:
     Note             *getRow (unsigned row)
     { return (data_ ? (data_ + nChannels_ * row) : 0); }
     void            Initialise(unsigned nChannels, unsigned nRows, Note *data)
-                    { nChannels_ = nChannels; nRows_ = nRows; data_ = data; }
+                    { 
+                        nChannels_ = nChannels; 
+                        nRows_ = nRows; 
+                        data_ = data; 
+                        memset( data,0,nChannels * nRows * sizeof( Note ));
+                    }
 };
 
 class SampleHeader {
