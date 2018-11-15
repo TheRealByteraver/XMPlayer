@@ -30,7 +30,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
      "off"};
 
 #define BUFFER_LENGTH_IN_MINUTES   4
-#define BENCHMARK_REPEAT_ACTION    1
+#define BENCHMARK_REPEAT_ACTION    16
 
 //#define debug_mixer
 
@@ -48,6 +48,14 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 #define MIXRATE 44100
 
 typedef int MixBufferType;
+
+union INT_UNION {
+    struct {
+        SHORT hi;
+        SHORT lo;
+    };
+    int s;
+};
 
 class Channel {
 public:
@@ -323,9 +331,13 @@ int Mixer::doMixBuffer (SHORT *buffer) {
     }
     saturation = 0;
 
+
     // transfer sampled data from ?? bit buffer into 16 bit buffer
+
+    
     MixBufferType *src = mixBuffer;
     SHORT *dst = buffer;
+    /*
     for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
         //int tmp = (int)((*src++) >> (6 + 6 + 8)); // globalvolume + volume + gain
         MixBufferType tmp = (MixBufferType)((*src++) >> 8 );
@@ -336,7 +348,84 @@ int Mixer::doMixBuffer (SHORT *buffer) {
         //std::cout << tmp << std::endl;
         *dst++ = (SHORT)tmp;
     }
-    
+    */
+    int sat = 0;
+    for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
+        MixBufferType tmp = src[i] >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; sat++; }
+        if ( tmp >  32767 ) { tmp = 32767; sat++; }
+        dst[i] = (SHORT)tmp;
+    }
+    saturation = sat;
+
+
+    /*
+    MixBufferType *src = mixBuffer;
+    MixBufferType *end = src + BUFFER_SIZE;
+    SHORT *dst = buffer;
+    //for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
+    for ( ; src < end ; ) {
+        MixBufferType tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+    }
+    */
+
+    /*
+    MixBufferType *src = mixBuffer;
+    SHORT *dst = buffer;
+    MixBufferType *endLoop1 = src + (BUFFER_SIZE & 0xFFFFFFF8);
+    MixBufferType *endLoop2 = src + BUFFER_SIZE;
+    for ( ; src < endLoop1; ) {
+        MixBufferType tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+
+        tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+    }
+
+    for ( ; src < endLoop2; ) {
+        MixBufferType tmp = *src++ >> 8;
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        *dst++ = (SHORT)tmp;
+    }
+    */
 
 
     std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
@@ -363,19 +452,24 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
             if (!mChn.isVolumeRampActive   //     && (i == 16) 
                 ) {                
                 MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
+                int chnInc = mChn.sampleIncrement;
                 for (unsigned j = 0; j < nSamples; ) {
                     // mChn.sampleIncrement is never greater dan 2 ^ 17
                     if ( !mChn.isPlayingBackwards ) {
                         unsigned nrSamplesLeft = sample.getRepeatEnd() - mChn.sampleOffset;
-                        if ( nrSamplesLeft > 32767 ) nrSamplesLeft = 32767;
+                        if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
 
-                        //unsigned nrLoops = (((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
-                        //    / mChn.sampleIncrement) - 1;  // not the exact formula!!!?
-
-                        unsigned nrLoops = ((((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
+                        //unsigned nrLoops = ((((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
+                        //    - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
+                        unsigned nrLoops = ((((nrSamplesLeft << 15) + mChn.sampleIncrement - 1)
                             - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
+
+
+
                         if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;                        
 
+                        /*
+                        // original rolled code:
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
                             int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
@@ -387,11 +481,213 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                             *mixBufferPTR++ += (s1 * rightGain);
                             mChn.sampleOffsetFrac += mChn.sampleIncrement;
                         }
+                        */
+                        
+
+                        // ********************
+                        // Start of loop unroll
+                        // ********************
+
+                        /*
+                        // 32 bit frequency index:
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;                        
+                        
+                        for ( int ofsFrac = mChn.sampleOffsetFrac; 
+                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
+                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 16)));
+                            int s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            int xd = (ofsFrac & 0xFFFF) >> 1;  // time delta
+                            s1 += (xd * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                        }
+                        mChn.sampleOffsetFrac = loopEnd;
+                        */
+
+                        
+                        // 31 bit frequency index:
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+
+                        //int j2 = 0;
+                        for ( int ofsFrac = mChn.sampleOffsetFrac;
+                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
+                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            int s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                             // sample delta 
+                            int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += (xd * s2) >> 15;
+                            //mixBufferPTR[j2++] += (s1 * leftGain);
+                            //mixBufferPTR[j2++] += (s1 * rightGain);
+                            *mixBufferPTR++ += (s1 * leftGain);    // this is faster
+                            *mixBufferPTR++ += (s1 * rightGain);
+                        }
+                        //mixBufferPTR += j2;
+                        mChn.sampleOffsetFrac = loopEnd;
+                         
+
+                        /* 
+                        // 31 bit frequency index:
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+
+                        for ( int ofsFrac = mChn.sampleOffsetFrac;
+                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
+                            union {
+                                struct {
+                                    SHORT lo;
+                                    SHORT hi;
+                                };
+                                int i;
+                            } s;
+                            s.i = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            int s2 = (int)s.hi - (int)s.lo;
+                            int s1 = s.lo + (((ofsFrac & 0x7FFF) * s2) >> 15);
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                        }
+                        mChn.sampleOffsetFrac = loopEnd;
+                        //  A 28 channel module was rendered to 4 min of wave data in 0.493671 seconds.
+                        //  Estimated realtime cpu charge is 0.205696 percent.
+                        //  On average 4.40778 milliseconds per channel per minute.
+                        */
+
+
+
+                        /*
+                        // loop unrolled code with 31 bit freq counter:
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        int loopEnd1 = (nrLoops & 0xFFF8) * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+                        int loopEnd2 = (nrLoops & 0x7   ) * mChn.sampleIncrement + loopEnd1;
+
+                        
+                        for ( int ofsFrac = mChn.sampleOffsetFrac;
+                            ofsFrac < loopEnd1; ) { // ofsFrac += chnInc ) {
+                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            int s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+                            
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+
+                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                            ofsFrac += chnInc;
+                            
+                        }
+
+                        for ( int ofsFrac = loopEnd1;
+                            ofsFrac < loopEnd2; ofsFrac += chnInc ) {
+                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                            int s1 = (SHORT)s2;
+                            s2 >>= 16;
+                            s2 -= s1;                          // sample delta 
+                            int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                            s1 += (xd * s2) >> 15;
+                            *mixBufferPTR++ += (s1 * leftGain);
+                            *mixBufferPTR++ += (s1 * rightGain);
+                        }
+                        mChn.sampleOffsetFrac = loopEnd2;
+                        */
+
+
+
+
+
+
+
+
+
+
+                        
+
+
+
+
+                        // ********************
+                        // End of loop unroll
+                        // ********************
+
                         mixOffset += nrLoops << 1;
                         j += nrLoops;
 
-                        mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
-                        mChn.sampleOffsetFrac &= 0xFFFF;
+                        //mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
+                        //mChn.sampleOffsetFrac &= 0xFFFF;
+                        mChn.sampleOffset += mChn.sampleOffsetFrac >> 15;
+                        mChn.sampleOffsetFrac &= 0x7FFF;
 
                         /*
                         if ( ((mChn.sampleOffset + ((mChn.sampleOffsetFrac + mChn.sampleIncrement) >> 16))                            
@@ -473,13 +769,15 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         int nrSamplesLeft = mChn.sampleOffset - sample.getRepeatOffset();
                         if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
                         int nrLoops = 
-                            ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
+                        //    ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
+                            ((nrSamplesLeft << 15) + (int)mChn.sampleIncrement - 1
                             - (int)mChn.sampleOffsetFrac) / (int)mChn.sampleIncrement;
                         if ( nrLoops >= (int)(nSamples - j) ) nrLoops = (int)(nSamples - j);
                         if ( nrLoops < 0 ) nrLoops = 0;
 
                         mChn.sampleOffsetFrac = (int)mChn.sampleOffsetFrac + nrLoops * (int)mChn.sampleIncrement;
-                        int smpDataShift = mChn.sampleOffsetFrac >> 16;
+                        //int smpDataShift = mChn.sampleOffsetFrac >> 16;
+                        int smpDataShift = mChn.sampleOffsetFrac >> 15;
                         if ( (int)mChn.sampleOffset < smpDataShift ) { // for bluishbg2.xm
                             mChn.sampleOffset = 0;
                             //std::cout << "underrun!" << std::endl;
@@ -487,9 +785,12 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
 
                         for ( int j2 = 0; j2 < nrLoops; j2++ ) {
-                            int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];
-                            int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 16) - 1];
-                            int xd = (0x10000 - (mChn.sampleOffsetFrac & 0xFFFF)) >> 1;  // time delta
+                            //int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];
+                            //int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 16) - 1];
+                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 15)];
+                            int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 15) - 1];
+                            //int xd = (0x10000 - (mChn.sampleOffsetFrac & 0xFFFF)) >> 1;  // time delta
+                            int xd = (0x8000 - (mChn.sampleOffsetFrac & 0x7FFF));       // time delta
                             int yd = s2 - s1;                                            // sample delta
                             s1 += (xd * yd) >> 15;
                             *mixBufferPTR++ += (s1 * leftGain);
@@ -498,6 +799,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         }
                         mixOffset += nrLoops << 1;
                         j += nrLoops;
+
                        
                         if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
                             if ( sample.isRepeatSample() )
@@ -802,7 +1104,8 @@ int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
                     f = (period ? (PAL_CALC / (double)(period << 1)) : 0);
                 } 
                 */
-                double f = ((double)frequency * 65536.0) / (double)MIXRATE;
+                //double f = ((double)frequency * 65536.0) / (double)MIXRATE;
+                double f = ((double)frequency * 32768.0) / (double)MIXRATE;
                 pmc->sampleIncrement = (unsigned) f;
                 return 0;
             }
@@ -1762,7 +2065,9 @@ void startReplay( Mixer &mixer ) {
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        //"D:\\MODS\\MOD\\beastsong.mod",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
