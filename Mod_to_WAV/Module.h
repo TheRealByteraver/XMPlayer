@@ -15,7 +15,7 @@
 #define MAX_SAMPLES                         16   // max.samples / instrument
 #define SIGNED_EIGHT_BIT_SAMPLE             1
 #define SIGNED_SIXTEEN_BIT_SAMPLE           2
-#define INTERPOLATION_SPACER                1
+#define INTERPOLATION_SPACER                2
 #define MAX_EFFECT_COLUMS                   2
 #define MAXIMUM_NOTES                       (8 * 12)
 #define PANNING_FULL_LEFT                   0

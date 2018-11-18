@@ -30,7 +30,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
      "off"};
 
 #define BUFFER_LENGTH_IN_MINUTES   4
-#define BENCHMARK_REPEAT_ACTION    16
+#define BENCHMARK_REPEAT_ACTION    4
 
 //#define debug_mixer
 
@@ -39,7 +39,8 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 #define BUFFER_SIZE (44100 * 2 * 60 * BUFFER_LENGTH_IN_MINUTES) // 0x4000 // temp bloated buf for easy progging
 #define FILTER_SQUARE 0
 #define FILTER_LINEAR 1
-#define FILTER_CUBIC 2
+#define FILTER_CUBIC  2
+#define FILTER        FILTER_CUBIC
 #define PLAYER_MAX_CHANNELS 64
 #define MIXER_MAX_CHANNELS 256
 #define WAVE_BUFFER_NO 1 // temp, should be at least 4
@@ -233,7 +234,7 @@ void Mixer::resetSong()
             }
         }
     }
-    globalPanning_ = 0x2F;  // 0 means extreme LEFT & RIGHT, so no attenuation
+    globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
     globalVolume_ = 64;
     gain = 64;//128; // max = 256
 
@@ -507,7 +508,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         mChn.sampleOffsetFrac = loopEnd;
                         */
 
-                        
+                        /*
                         // 31 bit frequency index:
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
@@ -528,6 +529,48 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         }
                         //mixBufferPTR += j2;
                         mChn.sampleOffsetFrac = loopEnd;
+                        */
+
+
+                        
+                        // cubic interpolation:
+                        // 31 bit frequency index:
+                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+                        for ( int ofsFrac = mChn.sampleOffsetFrac;
+                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
+
+                            int idx = ofsFrac >> 15;
+                            int p0 = SampleDataPTR[idx - 1];
+                            int p1 = SampleDataPTR[idx    ];
+                            int p2 = SampleDataPTR[idx + 1];
+                            int p3 = SampleDataPTR[idx + 2];
+
+                            
+#define FRAC_RES_SHIFT  7
+#define SAR             (15 - FRAC_RES_SHIFT)
+                            
+                            int fract = (ofsFrac & 0x7FFF) >> SAR;
+                            int t = p1 - p2;
+                            int a = ((t << 1) + t - p0 + p3) >> 1;
+                            int b = (p2 << 1) + p0 - (((p1 << 2) + p1 + p3) >> 1);
+                            int c = (p2 - p0) >> 1;
+
+                            int f2 = ((
+                                ((((((a  * fract) >> FRAC_RES_SHIFT) 
+                                    + b) * fract) >> FRAC_RES_SHIFT)
+                                    + c) * fract) >> FRAC_RES_SHIFT) 
+                                    + p1; 
+                            
+                            *mixBufferPTR++ += (f2 * leftGain);    // this is faster
+                            *mixBufferPTR++ += (f2 * rightGain);
+                        }
+                        mChn.sampleOffsetFrac = loopEnd;
+                        
+
+
+
+
                          
 
                         /* 
@@ -2067,6 +2110,7 @@ int main(int argc, char *argv[])  {
     char        *modPaths[] = {
         //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
