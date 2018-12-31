@@ -54,7 +54,8 @@ void Module::setFileName (const char *fileName) {
 
 int Module::loadFile() {
     int result;
-    result = loadModFile();
-    if (!isLoaded()) result = loadXmFile();
+    result = loadS3mFile();
+    if ( !isLoaded() ) result = loadModFile();
+    if ( !isLoaded() ) result = loadXmFile();
     return result;
 }

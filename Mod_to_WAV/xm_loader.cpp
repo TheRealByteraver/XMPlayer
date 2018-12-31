@@ -136,7 +136,7 @@ int Module::loadXmFile()
         return 0; // exit on I/O error
     }
     fileSize = xmFile.tellg();
-    buf = new char [fileSize];
+    buf = new char [(unsigned)fileSize];
     xmFile.seekg (0, ios::beg);
     xmFile.read (buf, fileSize);
     xmFile.close ();
@@ -484,13 +484,8 @@ int Module::loadXmFile()
         if (instrument.nSamples) {          
             SHORT           oldSample16;
             SHORT           newSample16;
-/*
-            SHORT           oldSample8;
-            SHORT           newSample8;
-*/            
             signed char     oldSample8;
-            signed char     newSample8;
-            
+            signed char     newSample8;            
             unsigned        sampleOffset;
             SampleHeader    samples[MAX_SAMPLES];
             char            sampleNames[MAX_SAMPLES][XM_MAX_SAMPLE_NAME_LENGTH + 1];
@@ -502,6 +497,11 @@ int Module::loadXmFile()
                 instrument.volumeEnvelope [i].y = instrumentHeader2->volumeEnvelope [i].y;
                 instrument.panningEnvelope[i].x = instrumentHeader2->panningEnvelope[i].x;
                 instrument.panningEnvelope[i].y = instrumentHeader2->panningEnvelope[i].y;
+#ifdef debug_xm_loader
+                cout << "\nEnveloppe point #" << i << ": "
+                    << instrument.volumeEnvelope[i].x << "," 
+                    << instrument.volumeEnvelope[i].y;
+#endif
             }
             instrument.nVolumePoints    = instrumentHeader2->nVolumePoints;
             instrument.volumeSustain    = instrumentHeader2->volumeSustain;
@@ -573,35 +573,20 @@ int Module::loadXmFile()
                     (samples[iSample].isPingpongSample ? "Yes" : "No");
 #endif
             }
-            /*
-            sample data is one continuous block,
-            so the delta compression continues
-            and does *NOT* start at 0 for each sample!!!   
-            Grrrr Triton! Come on!
-
-            Actually, I changed it again - start at 0 for each sample - it works now
-            I stopped understanding!!!! Additional testing needed
-            XPlayer: starts at 0 each time
-
-            */            
-            //oldSample16 = 0;
-            //oldSample8  = 0; NO! not here?
             sampleOffset = 0;
             for (unsigned iSample = 0; iSample < instrument.nSamples; iSample++) {
                 if (samples[iSample].length) {
                     oldSample16 = 0;
-                    oldSample8  = 0; // But Here!!! ???
+                    oldSample8  = 0;
                     nSamples_++;
                     samples[iSample].data = (SHORT *)(bufp + sampleOffset);                 
                     sampleOffset += samples[iSample].length;
                     if (samples[iSample].dataType == SIGNED_SIXTEEN_BIT_SAMPLE) {
                         SHORT   *ps = (SHORT *)samples[iSample].data;
                         SHORT   *pd = ps;
-
                         samples[iSample].length       >>= 1; 
                         samples[iSample].repeatLength >>= 1;
                         samples[iSample].repeatOffset >>= 1;
-
                         for (unsigned iData = 0; iData < samples[iSample].length; iData++) {
                             newSample16 = *ps++ + oldSample16;
                             *pd++       = newSample16;
@@ -624,8 +609,6 @@ int Module::loadXmFile()
                         cout << "\n";
 #endif
                         for (unsigned iData = 0; iData < samples[iSample].length; iData++) {
-                            //int buf = ps[iData] + oldSample8;
-                            //newSample8 = buf;
                             newSample8 = *ps++ + oldSample8;
 #ifdef debug_xm_loader
                             if (iData < SHOWNR) {
@@ -644,9 +627,6 @@ int Module::loadXmFile()
 #endif
                             *pd++      = newSample8; 
                             oldSample8 = newSample8;
-                            
-                            //ps[iData] = buf;
-                            //oldSample8 = buf;
                         }
                     }
                     instrument.samples[iSample] = new Sample;

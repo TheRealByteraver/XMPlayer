@@ -164,6 +164,7 @@
     <ClCompile Include="ModLoader.cpp" />
     <ClCompile Include="Module.cpp" />
     <ClCompile Include="Mod_to_wav.cpp" />
+    <ClCompile Include="S3MLoader.cpp" />
     <ClCompile Include="Sample.cpp" />
     <ClCompile Include="xm_loader.cpp" />
   </ItemGroup>

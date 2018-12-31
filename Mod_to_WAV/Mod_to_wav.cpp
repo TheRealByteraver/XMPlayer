@@ -508,12 +508,11 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         mChn.sampleOffsetFrac = loopEnd;
                         */
 
-                        /*
+                        // lineaire interpolatie:
                         // 31 bit frequency index:
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
 
-                        //int j2 = 0;
                         for ( int ofsFrac = mChn.sampleOffsetFrac;
                             ofsFrac < loopEnd; ofsFrac += chnInc ) {
                             int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
@@ -522,17 +521,13 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                             s2 -= s1;                             // sample delta 
                             int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
                             s1 += (xd * s2) >> 15;
-                            //mixBufferPTR[j2++] += (s1 * leftGain);
-                            //mixBufferPTR[j2++] += (s1 * rightGain);
                             *mixBufferPTR++ += (s1 * leftGain);    // this is faster
                             *mixBufferPTR++ += (s1 * rightGain);
                         }
-                        //mixBufferPTR += j2;
-                        mChn.sampleOffsetFrac = loopEnd;
-                        */
-
-
+                        mChn.sampleOffsetFrac = loopEnd; 
                         
+
+                        /*
                         // cubic interpolation:
                         // 31 bit frequency index:
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
@@ -562,11 +557,11 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                     + c) * fract) >> FRAC_RES_SHIFT) 
                                     + p1; 
                             
-                            *mixBufferPTR++ += (f2 * leftGain);    // this is faster
+                            *mixBufferPTR++ += (f2 * leftGain);    
                             *mixBufferPTR++ += (f2 * rightGain);
                         }
                         mChn.sampleOffsetFrac = loopEnd;
-                        
+                        */
 
 
 
@@ -1074,16 +1069,26 @@ END;
         return periods[note + 11] - (finetune >> 4);   // doesn't work either!!!!!
 */
         //finally. thank god for Benjamin Rousseaux!!!
-        return (unsigned)(pow(2.0, (133.0 - ((double)note + (double)(finetune / 128.0))) / 12.0) * 13.375);
+        return (unsigned)(
+            pow(2.0, 
+                (   133.0 - 
+                    ((double)note + (double)(finetune / 128.0))
+                ) / 12.0
+            ) * 13.375);
     }
 }
 
 unsigned Mixer::periodToFrequency(unsigned period) {
     if (module->useLinearFrequencies()) {
-        return (unsigned)(8363.0 * pow(2, ((4608.0 - (double)period) / 768.0)));
+        return (unsigned)(8363.0 * 
+            pow(2, 
+                ((4608.0 - (double)period) / 768.0)
+            )); // orig
+        //return (unsigned)(14317056 / period);  
     } else {
         //return (period ? (unsigned)(PAL_CALC / (period << 1)) : 0);
         return (period ? ((8363 * 1712) / period) : 0);
+        //return (unsigned)((14317056 * 4) / period);  // S3M
     }
 }
 
@@ -1309,6 +1314,8 @@ int Mixer::updateNotes () {
         */
 
         note       = iNote->note;
+
+        //channel->period = iNote->period; // S3M
 
         //debug for bluishbg.xm:
         if ( note > (MAXIMUM_NOTES + 1) ) { // + 1 for the key off
@@ -1578,8 +1585,10 @@ int Mixer::updateNotes () {
             playSample(iChannel, channel->pSample, 
                        channel->sampleOffset, FORWARD);
             if(!finetune) finetune = channel->pSample->getFinetune();
+
             setFrequency(iChannel, periodToFrequency(noteToPeriod(note + 
                 channel->pSample->getRelativeNote(), finetune)));
+            //setFrequency(iChannel,channel->period ); // S3M
         } 
 
         if (!isNoteDelayed) { 
@@ -2105,9 +2114,26 @@ void startReplay( Mixer &mixer ) {
 // ****************************************************************************
 // ****************************************************************************
 
+/*
+1 pixel = 1 tick, ft2 env. window == 6 sec
+vibrato is active even if enveloppe is not
+vibrato sweep: amount of ticks before vibrato reaches max. amplitude
+*/
+
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\china1-okt.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.s3m",
+        
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
+        
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
@@ -2116,7 +2142,6 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
@@ -2159,7 +2184,16 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
         nullptr
     };
+    /*
+    int positive_val = 199;
+    int negative_val = -199;
+    std::cout << (positive_val / 2) << std::endl; // rondt af naar beneden
+    std::cout << (positive_val >> 1) << std::endl; // rondt af naar beneden
 
+    std::cout << (negative_val / 2) << std::endl; // rondt af naar BOVEN!
+    std::cout << (negative_val >> 1) << std::endl; // rondt af naar beneden
+    _getch();
+    */
     if (argc > 1) {
         for ( int i = 1; i < argc; i++ ) filePaths.push_back( argv[i] );
     } else {

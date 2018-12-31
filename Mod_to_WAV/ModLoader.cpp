@@ -19,7 +19,7 @@
 
 using namespace std;
 
-//#define debug_mod_loader
+#define debug_mod_loader
 
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
@@ -508,7 +508,6 @@ int Module::loadModFile() {
             j2 = *((unsigned char *)bufp++);
             j3 = *((unsigned char *)bufp++);
             j4 = *((unsigned char *)bufp++);
-
             iNote->effects[0].effect = j3 & 0xF;
             iNote->effects[0].argument = j4;
             iNote->period = j2;
@@ -524,13 +523,15 @@ int Module::loadModFile() {
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
                 else                      iNote->note = j + 1;
             }
-
-            for (unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
+            /*
+            // done in memset in pattern initialize function
+            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++ ) {
                 iNote->effects[fxloop].effect   = 0; 
                 iNote->effects[fxloop].argument = 0; // not used in mod files
             }
+            */
             // do some error checking & effect remapping:
-            switch (iNote->effects[0].effect) {
+            switch ( iNote->effects[0].effect ) {
 /*
                 case    0x0 :
                     {
