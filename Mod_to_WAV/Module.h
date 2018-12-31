@@ -17,7 +17,7 @@
 #define SIGNED_SIXTEEN_BIT_SAMPLE           2
 #define INTERPOLATION_SPACER                2
 #define MAX_EFFECT_COLUMS                   2
-#define MAXIMUM_NOTES                       (8 * 12)
+#define MAXIMUM_NOTES                       (11 * 12)
 #define PANNING_FULL_LEFT                   0
 #define PANNING_CENTER                      128
 #define PANNING_FULL_RIGHT                  255
@@ -96,9 +96,7 @@ const unsigned periods[] = {
     26   ,25   ,23   ,22   ,21   ,20   ,18   ,17   ,16   ,15   ,15   ,14
 };
 
-
-
-const unsigned amigaPeriodTable[MAXIMUM_NOTES] = {
+const unsigned amigaPeriodTable[/* MAXIMUM_NOTES */] = {
     907, 900, 894, 887, 881, 875, 868, 862, 856, 850, 844, 838, 
     832, 826, 820, 814, 808, 802, 796, 791, 785, 779, 774, 768, 
     762, 757, 752, 746, 741, 736, 730, 725, 720, 715, 709, 704, 
@@ -106,9 +104,8 @@ const unsigned amigaPeriodTable[MAXIMUM_NOTES] = {
     640, 636, 632, 628, 623, 619, 614, 610, 604, 601, 597, 592, 
     588, 584, 580, 575, 570, 567, 563, 559, 555, 551, 547, 543, 
     538, 535, 532, 528, 524, 520, 516, 513, 508, 505, 502, 498, 
-    494, 491, 487, 484, 480, 477, 474, 470, 467, 463, 460, 457};
-
-
+    494, 491, 487, 484, 480, 477, 474, 470, 467, 463, 460, 457
+};
 
 typedef unsigned __int16 AMIGAWORD;
 typedef signed   __int16 SHORT;

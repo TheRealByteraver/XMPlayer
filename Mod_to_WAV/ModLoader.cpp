@@ -19,7 +19,7 @@
 
 using namespace std;
 
-#define debug_mod_loader
+//#define debug_mod_loader
 
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
@@ -499,7 +499,6 @@ int Module::loadModFile() {
         unsigned    j1, j2, j3, j4;
 
         patterns_[i] = new Pattern;
-
         patternData = new Note[nChannels_ * MOD_ROWS];
         patterns_[i]->Initialise(nChannels_, MOD_ROWS, patternData);
         iNote = patternData;
@@ -521,7 +520,7 @@ int Module::loadModFile() {
                   if (iNote->period >= periods[j]) break;
                 }
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
-                else                      iNote->note = j + 1;
+                else                      iNote->note = j + 1 - 24; // two octaves down
             }
             /*
             // done in memset in pattern initialize function

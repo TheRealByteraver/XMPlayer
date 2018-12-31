@@ -2123,20 +2123,21 @@ vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\china1-okt.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.s3m",
         
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
         
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",

@@ -85,7 +85,7 @@ struct S3mFileHeader {
 
 struct S3mInstHeader {
     unsigned char   sampleType;
-    char            dosFilename[12];// 12! not 13!!!
+    char            dosFilename[12];// 12, not 13!
     unsigned char   memSeg;
     unsigned short  memOfs;
     unsigned        length;
@@ -109,6 +109,23 @@ struct UnpackedNote {
     unsigned char fxp;
 };
 #pragma pack (8) 
+
+#ifdef debug_s3m_loader
+const char *notetable[] = {
+    "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
+    "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
+    "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
+    "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
+    "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
+    "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
+    "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
+    "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
+    "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
+    "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
+    "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
+    "C-B","C#B","D-B","D#B","E-B","F-B","F#B","G-B","G#B","A-B","A#B","B-B"
+};
+#endif
 
 int Module::loadS3mFile() {
     char                *buf;
@@ -210,7 +227,7 @@ int Module::loadS3mFile() {
         trackerTag_[i] = s3mFileHeader.tag[i];
     }
     trackerTag_[S3M_TRACKER_TAG_LENGTH] = '\0';
-    useLinearFrequencies_ = true;
+    useLinearFrequencies_ = false;   // S3M uses AMIGA periods
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
     panningStyle_ = PANNING_STYLE_S3M; // to be changed in the player code
@@ -332,7 +349,7 @@ int Module::loadS3mFile() {
             << "Loop Start:         " << instHeader.loopStart << std::endl
             << "Loop End:           " << instHeader.loopEnd << std::endl
             << "Volume:             " << (int)instHeader.volume << std::endl
-            << "0x1D:             0x" << std::hex << (int)instHeader.reserved << std::endl << std::dec
+            << "0x1D:               0x" << std::hex << (int)instHeader.reserved << std::endl << std::dec
             << "pack ID:            " << (int)instHeader.packId << std::endl
             << "flags:              " << (int)instHeader.flags << std::endl
             << "C2SPD:              " << instHeader.c2Speed << std::endl
@@ -396,6 +413,22 @@ int Module::loadS3mFile() {
                 for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
             }
             instrument.samples[0]->load( sample );
+
+            // finetune recalc:
+            unsigned int period = ((unsigned)8363 * periods[4 * 12]) / instHeader.c2Speed;
+            unsigned j;
+            unsigned n = 0;
+            for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
+                if ( period >= periods[j] ) break;
+            }
+            if ( j >= MAXIMUM_NOTES ) n = 0;
+            else                      n = j + 1;
+            int relativeNote = n - (4 * 12);
+            // finetune to be calculated
+#ifdef debug_s3m_loader
+            std::cout << "relative note: " << notetable[4 * 12 + relativeNote] << std::endl;
+            std::cout << "finetune:      " << (int)1712 - (int)periods[4 * 12 + relativeNote] << std::endl;
+#endif
         }
         instruments_[nInst] = new Instrument;
         instruments_[nInst]->load( instrument );
@@ -583,65 +616,9 @@ int Module::loadS3mFile() {
                 }                
             }            
         }
-/*
-MP.PAS:
-
-  PeriodTable: Array[0..14*8] of Word = (
-    960,954,948,940,934,926,920,914,
-    907,900,894,887,881,875,868,862,856,850,844,838,832,826,820,814,
-    808,802,796,791,785,779,774,768,762,757,752,746,741,736,730,725,
-    720,715,709,704,699,694,689,684,678,675,670,665,660,655,651,646,
-    640,636,632,628,623,619,614,610,604,601,597,592,588,584,580,575,
-    570,567,563,559,555,551,547,543,538,535,532,528,524,520,516,513,
-    508,505,502,498,494,491,487,484,480,477,474,470,467,463,460,457,
-    453,450,447,443,440,437,434,431,428);
-
-Function Note2Period(Note, Finetune: ShortInt): Word;
-VAR
-  i, j, k, l: LongInt;
-BEGIN
-  If Note>0 then Dec(Note);
-  i:=Word(Note mod 12) shl 3 + ((Finetune + 128) shr 4);
-  j:=(Byte(Finetune) and $F) shl 1;
-  k:=Note div 12 + 2;
-  l:=PeriodTable[8+i];
-  Note2Period:=(l shl 5 + (PeriodTable[9+i] - l) * j) shr k;
-END;
-
-{лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл}
-
-Function Period2Freq(Period: Word): LongInt; {fn should be ok}
-BEGIN
-{ If Period<>0 then Period2Freq:=(8363*1712) div (Period)
-  Else Period2Freq:=0; }
-  If Period<>0 then
-    Period2Freq:=7093789 div (Period shl 1)
-  Else Period2Freq:=0;
-END;
-*/
-
 #ifdef debug_s3m_loader
-        const char *notetable[/*2 + MAXIMUM_NOTES*/] = { //"---",
-            "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
-            "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
-            "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
-            "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
-            "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
-            "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
-            "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
-            "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
-            "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
-            "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
-            "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
-            "C-B","C#B","D-B","D#B","E-B","F-B","F#B","G-B","G#B","A-B","A#B","B-B"
-            //,"off" 
-        };
+
         /*
-        char *notetable[] = {
-            "C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-",
-            "C-","C#","D-","D#","E-","F-","F#","G-","G#","A-","A#","B-"
-        };
-        */
         std::cout << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
         for ( int row = 0; row < S3M_ROWS_PER_PATTERN; row++ )
         {
@@ -649,53 +626,27 @@ END;
             for ( unsigned chn = 0; chn < nChannels_; chn++ )
                 if ( chn < 6 )
                 {
-                    // octave = /16
-                    // 
                     UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
                     if ( unpackedNote.note )
-                        /*
-                        std::cout << notetable[unpackedNote.note % 12]
-                                  << (int)(unpackedNote.note / 12);
-                        */
                         std::cout << notetable[unpackedNote.note];
                     else std::cout << "---";
                     std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;
-                    /*
-                    std::cout << std::hex;
-                    if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
-                    else  std::cout << "  ";
-                    if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
-                    else  std::cout << "  ";
-                    if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
-                    else  std::cout << "  ";
-                    if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
-                    else  */std::cout << "  ";
+                    
+                    // std::cout << std::hex;
+                    // if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
+                    // else  std::cout << "  ";
+                    // if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
+                    // else  std::cout << "  ";
+                    // if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
+                    // else  std::cout << "  ";
+                    // if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
+                    // else  
+                        std::cout << "  ";
                     std::cout << "|";
                 }
         } 
-        
+        */
 #endif
-        const unsigned S3MPeriodTab[] = {
-            27392,25856,24384,23040,21696,20480,19328,18240,17216,16256,15360,14496,
-            13696,12928,12192,11520,10848,10240,9664 ,9120 ,8608 ,8128 ,7680 ,7248 ,
-            6848 ,6464 ,6096 ,5760 ,5424 ,5120 ,4832 ,4560 ,4304 ,4064 ,3840 ,3624 ,
-            3424 ,3232 ,3048 ,2880 ,2712 ,2560 ,2416 ,2280 ,2152 ,2032 ,1920 ,1812 ,
-            1712 ,1616 ,1524 ,1440 ,1356 ,1280 ,1208 ,1140 ,1076 ,1016 ,960  ,906  ,
-            856  ,808  ,762  ,720  ,678  ,640  ,604  ,570  ,538  ,508  ,480  ,453  ,
-            428  ,404  ,381  ,360  ,339  ,320  ,302  ,285  ,269  ,254  ,240  ,226  ,
-            214  ,202  ,190  ,180  ,170  ,160  ,151  ,143  ,135  ,127  ,120  ,113  ,
-            107  ,101  ,95   ,90   ,85   ,80   ,75   ,71   ,67   ,63   ,60   ,56   ,
-            /*
-            These next 2 octaves below,are included if you want to support the entire
-            FT2 octave range of.MOD.DOPE.MOD uses these period values for example,
-            and are only used when loading.MOD,not for anything else,as S3M doesn't
-            even use these octaves. (it does indeed stop at B - 8)
-            */
-            53   ,50   ,47   ,45   ,42   ,40   ,37   ,35   ,33   ,31   ,30   ,28   ,
-            26   ,25   ,23   ,22   ,21   ,20   ,18   ,17   ,16   ,15   ,15   ,14
-        };
-
-
         // read the pattern into the internal format:
         Note        *iNote,*patternData;
         UnpackedNote* unPackedNote = unPackedPtn;
@@ -706,25 +657,24 @@ END;
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
-            // current_period = (8363 * periodtab[note]) / (instrument's C2SPD * 4)
             if ( iNote->note )
             {
-                iNote->note -= 20; // !!!!!
-                
-                S3mInstHeader& instHeader = *((S3mInstHeader *)
-                    (buf + 16 * instrParaPtrs[iNote->instrument]));
-                iNote->period = (((unsigned)8363 * S3MPeriodTab[iNote->note]) / (instHeader.c2Speed));
+                iNote->note -= 24; // two octaves down
                 /*
-                iNote->period = S3MPeriodTab[iNote->note];
+                // finetune recalc:
+                unsigned int c2Speed = ((S3mInstHeader *)
+                    (buf + 16 * instrParaPtrs[iNote->instrument]))->c2Speed;
+                unsigned int period = ((unsigned)8363 * periods[iNote->note]) / c2Speed;
+
                 unsigned j;
-                for ( j = 0; j < (132); j++ ) {
-                    if ( iNote->period >= periods[j] ) break;
+                unsigned n = 0;
+                for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
+                    if ( period >= periods[j] ) break;
                 }
-                if ( j >= (132) ) iNote->note = 0;
-                else                      iNote->note = j + 1;
+                if ( j >= MAXIMUM_NOTES ) n = 0;
+                else                      n = j + 1;
+                int relativeNote = n - iNote->note;
                 */
-
-
             } else iNote->period = 0;
 
             if ( unPackedNote->volc && (unPackedNote->volc <= S3M_MAX_VOLUME) )
@@ -878,18 +828,12 @@ END;
                     break;
                 }
             }
-
             // next note / channel
             iNote++;
             unPackedNote++;
         }
     }
-
-
-#ifdef debug_s3m_loader
-    _getch();
-#endif
-    isLoaded_ = true; // temp disabled for debug
+    isLoaded_ = true;
     delete[] unPackedPtn;
     delete[] buf;
     return 0;
