@@ -54,6 +54,8 @@ Thanks must go to:
 #define S3M_SAMPLE_LOOP_FLAG        1
 #define S3M_SAMPLE_STEREO_FLAG      2
 #define S3M_SAMPLE_16BIT_FLAG       4
+#define S3M_KEY_OFF                 254
+#define S3M_MAX_NOTE                (9 * 12)
 #define S3M_INSTRUMENT_TYPE_SAMPLE          1
 #define S3M_INSTRUMENT_TYPE_ADLIB_MELODY    2
 #define S3M_INSTRUMENT_TYPE_ADLIB_DRUM      3
@@ -95,7 +97,7 @@ struct S3mInstHeader {
     unsigned char   reserved;       // should be 0x1D
     unsigned char   packId;         // should be 0
     unsigned char   flags;
-    unsigned        c2Speed;
+    unsigned        c4Speed;
     unsigned char   reserved2[12];  // useless info for us
     char            name[S3M_MAX_SAMPLENAME_LENGTH];
     char            tag[4];         // "SCRS"
@@ -111,7 +113,8 @@ struct UnpackedNote {
 #pragma pack (8) 
 
 #ifdef debug_s3m_loader
-const char *notetable[] = {
+const char *notetable[] = { 
+    "---",
     "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
     "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
     "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
@@ -123,7 +126,7 @@ const char *notetable[] = {
     "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
     "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
     "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
-    "C-B","C#B","D-B","D#B","E-B","F-B","F#B","G-B","G#B","A-B","A#B","B-B"
+    "==="
 };
 #endif
 
@@ -325,7 +328,7 @@ int Module::loadS3mFile() {
         S3mInstHeader& instHeader = *((S3mInstHeader *)(buf + bufOffset));
         smpDataPtrs[nInst] = 
             16 * (((int)instHeader.memSeg << 16) + (int)instHeader.memOfs);
-        if ( !instHeader.c2Speed ) instHeader.c2Speed = 8363;
+        if ( !instHeader.c4Speed ) instHeader.c4Speed = 8363;
 #ifdef debug_s3m_loader
         instHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
         instHeader.tag[3] = '\0';                              // debug only
@@ -352,7 +355,7 @@ int Module::loadS3mFile() {
             << "0x1D:               0x" << std::hex << (int)instHeader.reserved << std::endl << std::dec
             << "pack ID:            " << (int)instHeader.packId << std::endl
             << "flags:              " << (int)instHeader.flags << std::endl
-            << "C2SPD:              " << instHeader.c2Speed << std::endl
+            << "C2SPD:              " << instHeader.c4Speed << std::endl
             << "Sample DOS Name:    " << instHeader.dosFilename << std::endl
             << "Name:               " << instHeader.name << std::endl
             << "Tag:                " << instHeader.tag << std::endl;
@@ -376,6 +379,7 @@ int Module::loadS3mFile() {
         sample.length = instHeader.length;
         sample.repeatOffset = instHeader.loopStart;
         sample.volume = (int)instHeader.volume;
+        sample.c4Speed = instHeader.c4Speed;
         // safety checks:
         if ( instHeader.loopEnd >= instHeader.loopStart )
             sample.repeatLength = instHeader.loopEnd - instHeader.loopStart + 1;
@@ -411,24 +415,26 @@ int Module::loadS3mFile() {
             if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
                 unsigned char *s = (unsigned char *)sample.data;
                 for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
-            }
-            instrument.samples[0]->load( sample );
-
-            // finetune recalc:
-            unsigned int period = ((unsigned)8363 * periods[4 * 12]) / instHeader.c2Speed;
+            }            
+            // finetune + relative note recalc: to finish / debug
+            unsigned int s3mPeriod = ((unsigned)8363 * periods[4 * 12]) / instHeader.c4Speed;
             unsigned j;
-            unsigned n = 0;
             for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
-                if ( period >= periods[j] ) break;
+                if ( s3mPeriod >= periods[j] ) break;
             }
-            if ( j >= MAXIMUM_NOTES ) n = 0;
-            else                      n = j + 1;
-            int relativeNote = n - (4 * 12);
-            // finetune to be calculated
+            if ( j < MAXIMUM_NOTES ) {
+                sample.relativeNote = j - (4 * 12);
+                sample.finetune = (int)round(((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
+                    * 128.0) - 128;
+            }
 #ifdef debug_s3m_loader
-            std::cout << "relative note: " << notetable[4 * 12 + relativeNote] << std::endl;
-            std::cout << "finetune:      " << (int)1712 - (int)periods[4 * 12 + relativeNote] << std::endl;
+            std::cout 
+                << "relative note: " 
+                << notetable[4 * 12 + sample.relativeNote] << std::endl
+                << "finetune:      " << sample.finetune
+                << std::endl;
 #endif
+            instrument.samples[0]->load( sample );
         }
         instruments_[nInst] = new Instrument;
         instruments_[nInst]->load( instrument );
@@ -596,7 +602,8 @@ int Module::loadS3mFile() {
                     inst = *ptnPtr++;
                     if ( note == 255 ) note = 0;
                 }
-                if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = *ptnPtr++;
+                // we add 0x10 to the volume column so we now an effect is there
+                if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
                 if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
                 {
                     fx = *ptnPtr++;
@@ -605,10 +612,19 @@ int Module::loadS3mFile() {
                 if ( chn < nChannels_ )
                 {
                     UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                    //unpackedNote.note = note;// (note >> 4) * (note & 0xF) * 12;
+                    /*
                     if( note )
                         unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 24;
                     else unpackedNote.note = 0;  // c-0 can't be saved?
+                    */
+                    if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
+                    else {    
+                        if( note )
+                            unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
+                        else unpackedNote.note = 0;
+                        if ( unpackedNote.note > S3M_MAX_NOTE )
+                            unpackedNote.note = 0;
+                    }
                     unpackedNote.inst = inst;
                     unpackedNote.volc = volc;
                     unpackedNote.fx = fx;
@@ -617,21 +633,24 @@ int Module::loadS3mFile() {
             }            
         }
 #ifdef debug_s3m_loader
-
-        /*
-        std::cout << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
+        
+        std::cout << std::dec << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
         for ( int row = 0; row < S3M_ROWS_PER_PATTERN; row++ )
         {
-            std::cout << std::endl << std::dec << std::setw( 2 ) << row << ":";
+            std::cout << std::endl << std::hex << std::setw( 2 ) << row << ":" << std::dec;
             for ( unsigned chn = 0; chn < nChannels_; chn++ )
-                if ( chn < 6 )
+                if ( chn < 16 )
                 {
                     UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                    if ( unpackedNote.note )
-                        std::cout << notetable[unpackedNote.note];
-                    else std::cout << "---";
-                    std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;
-                    
+                    if ( unpackedNote.note ) {
+                        if( unpackedNote.note < (12 * 11) )
+                            std::cout << notetable[unpackedNote.note];
+                        else if ( unpackedNote.note == KEY_OFF ) std::cout << "===";
+                             else std::cout << "!!!";
+
+                    } else std::cout << "---";
+
+                    //std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;                    
                     // std::cout << std::hex;
                     // if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
                     // else  std::cout << "  ";
@@ -641,11 +660,23 @@ int Module::loadS3mFile() {
                     // else  std::cout << "  ";
                     // if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
                     // else  
+                    //    std::cout << "  ";
+
+                    if ( chn == 15 ) { 
+                        std::cout << std::hex;
+                        if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
+                        else  std::cout << "  "; 
                         std::cout << "  ";
+                        if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
+                        else  std::cout << "  ";
+                        std::cout << "  ";
+                        if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
+                        else std::cout << "  ";
+                    }
                     std::cout << "|";
                 }
         } 
-        */
+        
 #endif
         // read the pattern into the internal format:
         Note        *iNote,*patternData;
@@ -657,30 +688,19 @@ int Module::loadS3mFile() {
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
+
+            /*
             if ( iNote->note )
             {
-                iNote->note -= 24; // two octaves down
-                /*
-                // finetune recalc:
-                unsigned int c2Speed = ((S3mInstHeader *)
-                    (buf + 16 * instrParaPtrs[iNote->instrument]))->c2Speed;
-                unsigned int period = ((unsigned)8363 * periods[iNote->note]) / c2Speed;
+                iNote->note -= 24 - 1; // two octaves down, 1 note up for .xm compatibility
+            } else 
+            */    
+                iNote->period = 0;
 
-                unsigned j;
-                unsigned n = 0;
-                for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
-                    if ( period >= periods[j] ) break;
-                }
-                if ( j >= MAXIMUM_NOTES ) n = 0;
-                else                      n = j + 1;
-                int relativeNote = n - iNote->note;
-                */
-            } else iNote->period = 0;
-
-            if ( unPackedNote->volc && (unPackedNote->volc <= S3M_MAX_VOLUME) )
+            if ( unPackedNote->volc && (unPackedNote->volc <= (S3M_MAX_VOLUME + 0x10)) )
             {
                 iNote->effects[0].effect = SET_VOLUME;
-                iNote->effects[0].argument = unPackedNote->volc;
+                iNote->effects[0].argument = unPackedNote->volc - 0x10;
             }
             /*
                 S3M effect A = 1, B = 2, etc

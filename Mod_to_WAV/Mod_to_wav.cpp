@@ -18,16 +18,28 @@
 
 //extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
+/*
+bugs:
+
+- women.s3m: set sample offset effect, pattern #30, 16th chn,row 32 
+
+*/
+
 const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
-     "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
-     "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
-     "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
-     "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
-     "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
-     "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
-     "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
-     "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
-     "off"};
+    "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
+    "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
+    "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
+    "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
+    "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
+    "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
+    "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
+    "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
+    "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
+    "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
+    "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
+    "==="
+};
+
 
 #define BUFFER_LENGTH_IN_MINUTES   4
 #define BENCHMARK_REPEAT_ACTION    4
@@ -171,7 +183,7 @@ public: // debug
 private: // debug
 
     unsigned        noteToPeriod(unsigned note, int finetune);
-    unsigned        periodToFrequency(unsigned period);
+    unsigned        periodToFrequency(unsigned period, unsigned c4Speed);
 //    int             setVolume   (unsigned fromChannel, unsigned volume);  // range: 0..64
 //    int             setPanning  (unsigned fromChannel, unsigned panning); // range: 0..255: extr left... extr right
     int             setMixerVolume(unsigned fromChannel);
@@ -1065,30 +1077,34 @@ END;
         //int         frac = finetune - ((finetune >> 4) << 4) + 8;
         return (period1 * (16 - frac) + period2 * frac) >> (note / 12);
 */
-/*
-        return periods[note + 11] - (finetune >> 4);   // doesn't work either!!!!!
-*/
         //finally. thank god for Benjamin Rousseaux!!!
         return (unsigned)(
             pow(2.0, 
                 (   133.0 - 
-                    ((double)note + (double)(finetune / 128.0))
+                    ((double)note + ((double)finetune / 128.0))
                 ) / 12.0
-            ) * 13.375);
+            ) * 13.375
+        );
     }
 }
 
-unsigned Mixer::periodToFrequency(unsigned period) {
+// C4 SPeed should be implemented in period calc???
+unsigned Mixer::periodToFrequency(unsigned period, unsigned c4Speed) {
     if (module->useLinearFrequencies()) {
-        return (unsigned)(8363.0 * 
+        return (unsigned)(8363 * // could keep it 8363, s3m uses amiga freq
             pow(2, 
                 ((4608.0 - (double)period) / 768.0)
-            )); // orig
+            )); 
         //return (unsigned)(14317056 / period);  
     } else {
         //return (period ? (unsigned)(PAL_CALC / (period << 1)) : 0);
-        return (period ? ((8363 * 1712) / period) : 0);
-        //return (unsigned)((14317056 * 4) / period);  // S3M
+        return (period ? 
+            ((8363 * (unsigned)1712) / period )
+            //((8363 * (unsigned)1712) / ( (8363 * period) / c4Speed ))  
+            //(8363 * (unsigned)1712 * 4) / ((8363 * 4 * period) / c4Speed)
+            //(1712 * c4Speed) / period
+            : 
+            0);
     }
 }
 
@@ -1579,16 +1595,19 @@ int Mixer::updateNotes () {
                     }
             }
         }
-
         // valid sample for replay ? -> replay sample if new note
         if (replay && channel->pSample && (!isNoteDelayed)) {
             playSample(iChannel, channel->pSample, 
                        channel->sampleOffset, FORWARD);
             if(!finetune) finetune = channel->pSample->getFinetune();
 
-            setFrequency(iChannel, periodToFrequency(noteToPeriod(note + 
-                channel->pSample->getRelativeNote(), finetune)));
-            //setFrequency(iChannel,channel->period ); // S3M
+            setFrequency(iChannel, 
+                periodToFrequency(
+                    noteToPeriod(note + 
+                        channel->pSample->getRelativeNote(), 
+                        finetune),
+                    channel->pSample->getC4Speed())
+            );
         } 
 
         if (!isNoteDelayed) { 
@@ -1600,7 +1619,7 @@ int Mixer::updateNotes () {
             //setVolume(iChannel, channel->volume);    // temp
         }
 #ifdef debug_mixer
-        if (note) std::cout << noteStrings[note + 12];
+        if (note) std::cout << noteStrings[note /* + 12 */];
         else std::cout << "---";
 /*        
         if (channel->volume < 10)    std::cout << " ";
@@ -1618,20 +1637,27 @@ int Mixer::updateNotes () {
                 channel->pSample->getRelativeNote(), finetune) << "|";
         } else std::cout << "     ";
 */
+
+        /*
         if (instrument < 10)    std::cout << " ";
         else                    std::cout << (instrument / 10);
         std::cout << (instrument % 10);
+        */
+        /*
         if(iChannel == 0) {
             std::cout << "(";
             if (channel->volume < 10)   std::cout << " ";
             else                        std::cout << (channel->volume / 10);
             std::cout << (channel->volume % 10) << ")";
         }
+        */
+        /*
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
             std::cout  << "." << hex[iNote->effects[fxloop].effect];
             std::cout << hex[iNote->effects[fxloop].argument >> 4];
             std::cout << hex[iNote->effects[fxloop].argument & 0xF]; 
         }
+        */
         std::cout << "|";
 #endif
         iNote++;
@@ -1750,11 +1776,15 @@ int Mixer::updateEffects () {
                                                        channel->pSample, 
                                                        channel->sampleOffset, 
                                                        FORWARD);
-                                            setFrequency(iChannel, periodToFrequency(
-                                                noteToPeriod(
-                                                    channel->lastNote + 
-                                                    channel->pSample->getRelativeNote(), 
-                                                    channel->pSample->getFinetune())));
+                                            setFrequency( iChannel,
+                                                periodToFrequency(
+                                                    noteToPeriod(
+                                                        channel->lastNote +
+                                                        channel->pSample->getRelativeNote(),
+                                                        channel->pSample->getFinetune() ),
+                                                    channel->pSample->getC4Speed()
+                                                )
+                                            );
                                         }
                                     }
                                     break;
@@ -1778,11 +1808,15 @@ int Mixer::updateEffects () {
                                                        channel->pSample, 
                                                        channel->sampleOffset, 
                                                        FORWARD);
-                                            setFrequency(iChannel, periodToFrequency(
-                                                noteToPeriod(
-                                                    channel->lastNote + 
-                                                    channel->pSample->getRelativeNote(), 
-                                                    channel->pSample->getFinetune())));
+                                            setFrequency(iChannel, 
+                                                periodToFrequency(
+                                                    noteToPeriod(
+                                                        channel->lastNote + 
+                                                            channel->pSample->getRelativeNote(), 
+                                                        channel->pSample->getFinetune()),
+                                                    channel->pSample->getC4Speed()
+                                                )
+                                            );
                                         }
                                         note->effects[fxloop].effect   = 0;
                                         note->effects[fxloop].argument = 0;
@@ -1863,11 +1897,15 @@ int Mixer::updateEffects () {
                                            channel->pSample, 
                                            channel->sampleOffset, 
                                            FORWARD);
-                                setFrequency(iChannel, periodToFrequency(
-                                    noteToPeriod(
-                                        channel->lastNote + 
-                                        channel->pSample->getRelativeNote(), 
-                                        channel->pSample->getFinetune())));
+                                setFrequency(iChannel, 
+                                    periodToFrequency(
+                                        noteToPeriod(
+                                            channel->lastNote + 
+                                                channel->pSample->getRelativeNote(), 
+                                            channel->pSample->getFinetune()),
+                                        channel->pSample->getC4Speed()
+                                    )
+                                );
                             }
                         }
                         //setVolume(iChannel, channel->volume);    // temp
@@ -2123,15 +2161,28 @@ vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.xm",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\china1-okt.s3m",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track2.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track3.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track4.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track5.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track6.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track7.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track8.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track9.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.s3m",
-        
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.xm",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
         
@@ -2143,7 +2194,6 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",

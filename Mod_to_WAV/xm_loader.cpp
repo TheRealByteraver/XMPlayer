@@ -41,6 +41,7 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define XM_SIXTEEN_BIT_SAMPLE_FLAG      16
 #define XM_STANDARD_COMPRESSION         0
 #define XM_ADPCM_COMPRESSION            0xAD
+#define XM_KEY_OFF                      97  // 8 octaves, 1 based, plus 1
 
 #pragma pack (1)
 
@@ -257,11 +258,12 @@ int Module::loadXmFile()
         patternData = new Note[nChannels_ * pattern->nRows];
         patterns_[iPattern]->Initialise(nChannels_, pattern->nRows, patternData);
         iNote = patternData;
-        memset(patternData, 0, sizeof(Note) * nChannels_ * pattern->nRows);
+        // below (memset) is done in pattern class
+        //memset(patternData, 0, sizeof(Note) * nChannels_ * pattern->nRows);
         //bufp += sizeof(XmPatternHeader);
         bufp += pattern->headerSize;
         // empty patterns are not stored
-        if (!pattern->patternSize) continue;
+        if (!pattern->patternSize) continue; 
 
         for (unsigned n = 0; n < (nChannels_ * pattern->nRows); n++) {
             pack = *((unsigned char *)bufp++);
@@ -269,7 +271,7 @@ int Module::loadXmFile()
                 if (pack & XM_NOTE_AVAIL) {
                     iNote->note         = *((unsigned char *)bufp++);
 #ifdef debug_xm_loader
-                    if ( iNote->note > 97 ) {
+                    if ( iNote->note > XM_KEY_OFF ) {
                         cout << "\nPattern # " << iPattern << ":";
                         cout << "\nPattern Header Size (9) = " << pattern->headerSize;
                         cout << "\nPattern # Rows          = " << pattern->nRows;
@@ -298,7 +300,7 @@ int Module::loadXmFile()
             } else {
                 iNote->note                 = pack;
 #ifdef debug_xm_loader
-                if ( iNote->note > 97 ) {
+                if ( iNote->note > XM_KEY_OFF ) {
                     cout << "\nPattern # " << iPattern << ":";
                     cout << "\nPattern Header Size (9) = " << pattern->headerSize;
                     cout << "\nPattern # Rows          = " << pattern->nRows;
@@ -316,14 +318,16 @@ int Module::loadXmFile()
                 iNote->effects[1].effect    = *((unsigned char *)bufp++);
                 iNote->effects[1].argument  = *((unsigned char *)bufp++);
             }
-            if (iNote->note) {   // key off note????
-                if(useLinearFrequencies_) {
+            if ( iNote->note == XM_KEY_OFF ) iNote->note = KEY_OFF;
+            // we might not use period values later --------------
+            if ( iNote->note && (iNote->note != KEY_OFF) ) {   
+                if( useLinearFrequencies_ ) {
                     iNote->period = 120 * 64 - iNote->note * 64; 
                 } else {
                     iNote->period = periods[iNote->note];
                 }
             } else iNote->period = 0;
-
+            // ---------------------------------------------------
             if (volumeColumn) {
                 if      (volumeColumn > 0xF0)
                     iNote->effects[0].effect   = TONE_PORTAMENTO;

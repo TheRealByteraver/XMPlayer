@@ -4,6 +4,8 @@
 // More general constants: 
 #define PAL_CALC                            7093789.2   // these values are
 #define NTSC_CALC                           7159090.5   // not used 
+#define NTSC_C4_SPEED                       8363.42
+#define PAL_C4_SPEED                        8287.14
 #define PANNING_STYLE_MOD                   1   // LRRL etc
 #define PANNING_STYLE_XM                    2   // ALL CENTER
 #define PANNING_STYLE_S3M                   3   // LRLR etc
@@ -67,7 +69,7 @@
 #define EXTRA_FINE_PORTAMENTO               0x21
 #define EXTRA_FINE_PORTAMENTO_UP            0x1   // 0x21 in XM file spec
 #define EXTRA_FINE_PORTAMENTO_DOWN          0x2   // X1 & X2
-#define KEY_OFF                             97
+#define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
 /*
 const unsigned periods[MAXIMUM_NOTES] = {
@@ -134,9 +136,21 @@ public:
                     { memset(this, 0, sizeof(Pattern)); }
                     ~Pattern ()                 { delete data_;             }
     unsigned        getnRows ()                 { return nRows_;            }
-    Note            getNote (unsigned n)        { return data_[n];          }
+    Note            getNote( unsigned n )       { return data_[n];          }
+    /*
+    { 
+        return data_ ? data_[n] : (Note)
+        {
+            0,0,0,
+            { 
+                { 0,0 },
+                { 0,0 }
+            }
+        }            
+    }
+    */
     Note             *getRow (unsigned row)
-    { return (data_ ? (data_ + nChannels_ * row) : 0); }
+    { return (data_ ? (data_ + nChannels_ * row) : nullptr); }
     void            Initialise(unsigned nChannels, unsigned nRows, Note *data)
                     { 
                         nChannels_ = nChannels; 
@@ -148,7 +162,11 @@ public:
 
 class SampleHeader {
 public:
-                    SampleHeader () { memset(this, 0, sizeof(SampleHeader)); }
+                    SampleHeader () 
+                    { 
+                        memset(this, 0, sizeof(SampleHeader)); 
+                        c4Speed = (unsigned)NTSC_C4_SPEED;
+                    }
     char            *name;
     unsigned        length;
     unsigned        repeatOffset;
@@ -160,13 +178,18 @@ public:
     int             relativeNote;
     unsigned        panning;
     int             finetune;
+    unsigned        c4Speed;
     int             dataType;           // 8 or 16 bit, compressed, etc
     SHORT           *data;              // only 16 bit samples allowed                    
 };
 
 class Sample {
 public:
-                    Sample () { memset(this, 0, sizeof(Sample)); }
+                    Sample () 
+                    { 
+                        memset(this, 0, sizeof(Sample)); 
+                        c4Speed_ = (unsigned)NTSC_C4_SPEED;
+                    }
                     ~Sample ();
     bool            load (const SampleHeader &sampleHeader);
     unsigned        getLength ()        { return length_;           }
@@ -180,6 +203,7 @@ public:
     int             getRelativeNote ()  { return relativeNote_;     }
     unsigned        getPanning ()       { return panning_;          }
     int             getFinetune ()      { return finetune_;         }
+    unsigned        getC4Speed()        { return c4Speed_;          }
     SHORT           *getData ()         { return data_ + INTERPOLATION_SPACER; }
 private:
     char            *name_;
@@ -194,6 +218,7 @@ private:
     int             relativeNote_;
     unsigned        panning_;
     int             finetune_;
+    unsigned        c4Speed_;
     SHORT           *data_;             // only 16 bit samples allowed
 };
 
@@ -202,7 +227,6 @@ public:
     unsigned        x;
     unsigned        y;
 };
-
 
 class InstrumentHeader {
 public:
