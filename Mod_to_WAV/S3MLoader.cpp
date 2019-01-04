@@ -3,7 +3,7 @@ Thanks must go to:
 - PSI (Sami Tammilehto) / Future Crew for creating Scream Tracker 3
 - FireLight / Brett Paterson for writing a detailed document explaining how to
   parse .s3m files. Without fs3mdoc.txt this would have been hell. With his
-  valuable document, it was a breeze.
+  valuable document, it was a hell of a lot easier.
 */
 
 #include <conio.h>
@@ -15,47 +15,57 @@ Thanks must go to:
 
 #include "Module.h"
 
-#define debug_s3m_loader  
+//#define debug_s3m_loader  
+//#define debug_s3m_show_patterns
+//#define debug_s3m_play_samples
+
 
 #ifdef debug_s3m_loader
 #include <bitset>
 #include <iomanip>
 #endif
 
-#define S3M_MIN_FILESIZE            (sizeof(S3mFileHeader) + 4 * 64 * 2 + 1)
-#define S3M_MAX_CHANNELS            32
-#define S3M_MAX_INSTRUMENTS         100
-#define S3M_CHN_UNUSED              255
-#define S3M_DEFAULT_PAN_LEFT        48
-#define S3M_DEFAULT_PAN_RIGHT       207
-#define S3M_DEFAULT_PAN_CENTER      128
-#define S3M_MAX_SONGTITLE_LENGTH    28
-#define S3M_MAX_SAMPLENAME_LENGTH   28
-#define S3M_MAX_VOLUME              64
-#define S3M_TRACKER_TAG_LENGTH      4
-#define S3M_MARKER_PATTERN          254
-#define S3M_END_OF_SONG_MARKER      255
-#define S3M_ST2VIBRATO_FLAG         1
-#define S3M_ST2TEMPO_FLAG           2
-#define S3M_AMIGASLIDES_FLAG        4
-#define S3M_VOLUME_ZERO_OPT_FLAG    8
-#define S3M_AMIGA_LIMITS_FLAG       16
-#define S3M_FILTER_ENABLE_FLAG      32
-#define S3M_ST300_VOLSLIDES_FLAG    64
-#define S3M_CUSTOM_DATA_FLAG        128
-#define S3M_TRACKER_MASK            0xF000
-#define S3M_TRACKER_VERSION_MASK    0x0FFF
-#define S3M_SIGNED_SAMPLE_DATA      1
-#define S3M_UNSIGNED_SAMPLE_DATA    2
-#define S3M_STEREO_FLAG             128
-#define S3M_DEFAULT_PANNING_PRESENT 0xFC
-#define S3M_SAMPLE_NOTPACKED_FLAG   0
-#define S3M_SAMPLE_PACKED_FLAG      1    // DP30ADPCM, not supported
-#define S3M_SAMPLE_LOOP_FLAG        1
-#define S3M_SAMPLE_STEREO_FLAG      2
-#define S3M_SAMPLE_16BIT_FLAG       4
-#define S3M_KEY_OFF                 254
-#define S3M_MAX_NOTE                (9 * 12)
+#define S3M_MIN_FILESIZE                    (sizeof(S3mFileHeader) + \
+                                             sizeof(S3mInstHeader) + 64 + 16)
+#define S3M_MAX_CHANNELS                    32
+#define S3M_MAX_INSTRUMENTS                 100
+#define S3M_CHN_UNUSED                      255
+#define S3M_DEFAULT_PAN_LEFT                48
+#define S3M_DEFAULT_PAN_RIGHT               207
+#define S3M_DEFAULT_PAN_CENTER              128
+#define S3M_MAX_SONGTITLE_LENGTH            28
+#define S3M_MAX_SAMPLENAME_LENGTH           28
+#define S3M_MAX_VOLUME                      64
+#define S3M_TRACKER_TAG_LENGTH              4
+#define S3M_MARKER_PATTERN                  254
+#define S3M_END_OF_SONG_MARKER              255
+#define S3M_ST2VIBRATO_FLAG                 1
+#define S3M_ST2TEMPO_FLAG                   2
+#define S3M_AMIGASLIDES_FLAG                4
+#define S3M_VOLUME_ZERO_OPT_FLAG            8
+#define S3M_AMIGA_LIMITS_FLAG               16
+#define S3M_FILTER_ENABLE_FLAG              32
+#define S3M_ST300_VOLSLIDES_FLAG            64
+#define S3M_CUSTOM_DATA_FLAG                128
+#define S3M_TRACKER_MASK                    0xF000
+#define S3M_TRACKER_VERSION_MASK            0x0FFF
+#define S3M_SIGNED_SAMPLE_DATA              1
+#define S3M_UNSIGNED_SAMPLE_DATA            2
+#define S3M_STEREO_FLAG                     128
+#define S3M_DEFAULT_PANNING_PRESENT         0xFC
+#define S3M_SAMPLE_NOTPACKED_FLAG           0
+#define S3M_SAMPLE_PACKED_FLAG              1    // DP30ADPCM, not supported
+#define S3M_SAMPLE_LOOP_FLAG                1
+#define S3M_SAMPLE_STEREO_FLAG              2
+#define S3M_SAMPLE_16BIT_FLAG               4
+#define S3M_ROWS_PER_PATTERN                64
+#define S3M_PTN_END_OF_ROW_MARKER           0
+#define S3M_PTN_CHANNEL_MASK                31
+#define S3M_PTN_NOTE_INST_FLAG              32
+#define S3M_PTN_VOLUME_COLUMN_FLAG          64
+#define S3M_PTN_EFFECT_PARAM_FLAG           128
+#define S3M_KEY_OFF                         254
+#define S3M_MAX_NOTE                        (9 * 12)
 #define S3M_INSTRUMENT_TYPE_SAMPLE          1
 #define S3M_INSTRUMENT_TYPE_ADLIB_MELODY    2
 #define S3M_INSTRUMENT_TYPE_ADLIB_DRUM      3
@@ -220,16 +230,16 @@ int Module::loadS3mFile() {
     std::cout << std::endl << "Order list: ";
 #endif
     // initialize internal module data.
-    songTitle_ = new char[S3M_MAX_SONGTITLE_LENGTH + 1];
+    //songTitle_ = new char[S3M_MAX_SONGTITLE_LENGTH + 1];
     for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) {
-        songTitle_[i] = s3mFileHeader.songTitle[i];
+        songTitle_ += s3mFileHeader.songTitle[i];
     }
-    songTitle_[S3M_MAX_SONGTITLE_LENGTH] = '\0';
-    trackerTag_ = new char[S3M_TRACKER_TAG_LENGTH + 1];
+    //songTitle_[S3M_MAX_SONGTITLE_LENGTH] = '\0';
+    //trackerTag_ = new char[S3M_TRACKER_TAG_LENGTH + 1];
     for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) {
-        trackerTag_[i] = s3mFileHeader.tag[i];
+        trackerTag_ += s3mFileHeader.tag[i];
     }
-    trackerTag_[S3M_TRACKER_TAG_LENGTH] = '\0';
+    //trackerTag_[S3M_TRACKER_TAG_LENGTH] = '\0';
     useLinearFrequencies_ = false;   // S3M uses AMIGA periods
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
@@ -325,10 +335,10 @@ int Module::loadS3mFile() {
     for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ )
     {
         bufOffset = 16 * instrParaPtrs[nInst];
-        S3mInstHeader& instHeader = *((S3mInstHeader *)(buf + bufOffset));
+        S3mInstHeader& s3mInstHeader = *((S3mInstHeader *)(buf + bufOffset));
         smpDataPtrs[nInst] = 
-            16 * (((int)instHeader.memSeg << 16) + (int)instHeader.memOfs);
-        if ( !instHeader.c4Speed ) instHeader.c4Speed = 8363;
+            16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
+        if ( !s3mInstHeader.c4Speed ) s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
 #ifdef debug_s3m_loader
         instHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
         instHeader.tag[3] = '\0';                              // debug only
@@ -360,36 +370,45 @@ int Module::loadS3mFile() {
             << "Name:               " << instHeader.name << std::endl
             << "Tag:                " << instHeader.tag << std::endl;
 #endif
-        if ( (instHeader.sampleType != 0) &&
-            (instHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {
+        if ( (s3mInstHeader.sampleType != 0) &&
+            (s3mInstHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {
 #ifdef debug_s3m_loader
+            // exit on error disabled for 2nd_pm.s3m
             std::cout << std::endl
-                << "Unable to read adlib samples, exiting!";
+                << "Unable to read adlib samples!"/*", exiting!"*/;
 #endif
-            delete[] buf;
-            return 0;
+            //delete[] buf;
+            //return 0;
         }
         InstrumentHeader    instrument;
         SampleHeader        sample;
+        /*
         char                sampleName[S3M_MAX_SAMPLENAME_LENGTH + 1];
         sampleName[S3M_MAX_SAMPLENAME_LENGTH] = '\0';
         strncpy_s( sampleName,S3M_MAX_SAMPLENAME_LENGTH + 1,instHeader.name,S3M_MAX_SAMPLENAME_LENGTH );
         sample.name = sampleName;
         instrument.name = sampleName;
-        sample.length = instHeader.length;
-        sample.repeatOffset = instHeader.loopStart;
-        sample.volume = (int)instHeader.volume;
-        sample.c4Speed = instHeader.c4Speed;
+        */
+        for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
+        {
+            sample.name += s3mInstHeader.name[i];
+        }
+        instrument.name = sample.name;
+
+        sample.length = s3mInstHeader.length;
+        sample.repeatOffset = s3mInstHeader.loopStart;
+        sample.volume = (int)s3mInstHeader.volume;
+        //sample.c4Speed = instHeader.c4Speed;
         // safety checks:
-        if ( instHeader.loopEnd >= instHeader.loopStart )
-            sample.repeatLength = instHeader.loopEnd - instHeader.loopStart + 1;
+        if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
+            sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart + 1;
         else sample.repeatLength = sample.length;
         if ( sample.volume > S3M_MAX_VOLUME ) sample.volume = S3M_MAX_VOLUME;
         if ( sample.repeatOffset >= sample.length ) sample.repeatOffset = 0;
         if ( sample.repeatOffset + sample.repeatLength > sample.length )
             sample.repeatLength = sample.length - sample.repeatOffset;
-        sample.isRepeatSample = (instHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
-        if ( (instHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
+        sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
+        if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
             (smpDataPtrs[nInst] != 0)) {
             nSamples_++;
             sample.data = (SHORT *)(buf + smpDataPtrs[nInst]);
@@ -417,15 +436,16 @@ int Module::loadS3mFile() {
                 for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
             }            
             // finetune + relative note recalc: to finish / debug
-            unsigned int s3mPeriod = ((unsigned)8363 * periods[4 * 12]) / instHeader.c4Speed;
+            unsigned int s3mPeriod = ((unsigned)8363 * periods[4 * 12]) / s3mInstHeader.c4Speed;
             unsigned j;
             for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
                 if ( s3mPeriod >= periods[j] ) break;
             }
             if ( j < MAXIMUM_NOTES ) {
                 sample.relativeNote = j - (4 * 12);
-                sample.finetune = (int)round(((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
-                    * 128.0) - 128;
+                sample.finetune = (int)round(
+                    ((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
+                     * 128.0) - 128;
             }
 #ifdef debug_s3m_loader
             std::cout 
@@ -439,7 +459,7 @@ int Module::loadS3mFile() {
         instruments_[nInst] = new Instrument;
         instruments_[nInst]->load( instrument );
 #ifdef debug_s3m_loader
-        /*
+#ifdef debug_s3m_play_samples
         std::cout << "\nSample " << nInst << ": name     = " << instruments_[nInst]->getName();
         if ( !instruments_[nInst]->getSample( 0 ) ) _getch();
 
@@ -557,16 +577,10 @@ int Module::loadS3mFile() {
                 waveOutClose( hWaveOut );
             }
         }
-*/
+#endif
 #endif
     }
     // Now load the patterns:
-#define S3M_ROWS_PER_PATTERN                64
-#define S3M_PTN_END_OF_ROW_MARKER           0
-#define S3M_PTN_CHANNEL_MASK                31
-#define S3M_PTN_NOTE_INST_FLAG              32
-#define S3M_PTN_VOLUME_COLUMN_FLAG          64
-#define S3M_PTN_EFFECT_PARAM_FLAG           128
     UnpackedNote *unPackedPtn = new UnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
     for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ )
     {
@@ -612,11 +626,6 @@ int Module::loadS3mFile() {
                 if ( chn < nChannels_ )
                 {
                     UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                    /*
-                    if( note )
-                        unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 24;
-                    else unpackedNote.note = 0;  // c-0 can't be saved?
-                    */
                     if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
                     else {    
                         if( note )
@@ -633,7 +642,7 @@ int Module::loadS3mFile() {
             }            
         }
 #ifdef debug_s3m_loader
-        
+#ifdef debug_s3m_show_patterns
         std::cout << std::dec << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
         for ( int row = 0; row < S3M_ROWS_PER_PATTERN; row++ )
         {
@@ -649,7 +658,6 @@ int Module::loadS3mFile() {
                              else std::cout << "!!!";
 
                     } else std::cout << "---";
-
                     //std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;                    
                     // std::cout << std::hex;
                     // if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
@@ -662,6 +670,7 @@ int Module::loadS3mFile() {
                     // else  
                     //    std::cout << "  ";
 
+                    /*
                     if ( chn == 15 ) { 
                         std::cout << std::hex;
                         if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
@@ -673,10 +682,11 @@ int Module::loadS3mFile() {
                         if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
                         else std::cout << "  ";
                     }
+                    */
                     std::cout << "|";
                 }
         } 
-        
+#endif
 #endif
         // read the pattern into the internal format:
         Note        *iNote,*patternData;
@@ -688,15 +698,6 @@ int Module::loadS3mFile() {
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
-
-            /*
-            if ( iNote->note )
-            {
-                iNote->note -= 24 - 1; // two octaves down, 1 note up for .xm compatibility
-            } else 
-            */    
-                iNote->period = 0;
-
             if ( unPackedNote->volc && (unPackedNote->volc <= (S3M_MAX_VOLUME + 0x10)) )
             {
                 iNote->effects[0].effect = SET_VOLUME;
@@ -853,8 +854,8 @@ int Module::loadS3mFile() {
             unPackedNote++;
         }
     }
-    isLoaded_ = true;
     delete[] unPackedPtn;
     delete[] buf;
+    isLoaded_ = true;
     return 0;
 }

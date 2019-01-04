@@ -112,7 +112,7 @@ const unsigned amigaPeriodTable[/* MAXIMUM_NOTES */] = {
 typedef unsigned __int16 AMIGAWORD;
 typedef signed   __int16 SHORT;
 
-// These type definitions are needed by the MOD loader & replay routines:
+// These type definitions are needed by the replay routines:
 class Effect {
 public:
     unsigned        effect;
@@ -137,18 +137,6 @@ public:
                     ~Pattern ()                 { delete data_;             }
     unsigned        getnRows ()                 { return nRows_;            }
     Note            getNote( unsigned n )       { return data_[n];          }
-    /*
-    { 
-        return data_ ? data_[n] : (Note)
-        {
-            0,0,0,
-            { 
-                { 0,0 },
-                { 0,0 }
-            }
-        }            
-    }
-    */
     Note             *getRow (unsigned row)
     { return (data_ ? (data_ + nChannels_ * row) : nullptr); }
     void            Initialise(unsigned nChannels, unsigned nRows, Note *data)
@@ -165,9 +153,10 @@ public:
                     SampleHeader () 
                     { 
                         memset(this, 0, sizeof(SampleHeader)); 
-                        c4Speed = (unsigned)NTSC_C4_SPEED;
+                        //c4Speed = (unsigned)NTSC_C4_SPEED;
                     }
-    char            *name;
+    //char            *name;
+    std::string     name;
     unsigned        length;
     unsigned        repeatOffset;
     unsigned        repeatLength;
@@ -178,7 +167,7 @@ public:
     int             relativeNote;
     unsigned        panning;
     int             finetune;
-    unsigned        c4Speed;
+    //unsigned        c4Speed;
     int             dataType;           // 8 or 16 bit, compressed, etc
     SHORT           *data;              // only 16 bit samples allowed                    
 };
@@ -188,7 +177,7 @@ public:
                     Sample () 
                     { 
                         memset(this, 0, sizeof(Sample)); 
-                        c4Speed_ = (unsigned)NTSC_C4_SPEED;
+                        //c4Speed_ = (unsigned)NTSC_C4_SPEED;
                     }
                     ~Sample ();
     bool            load (const SampleHeader &sampleHeader);
@@ -203,10 +192,11 @@ public:
     int             getRelativeNote ()  { return relativeNote_;     }
     unsigned        getPanning ()       { return panning_;          }
     int             getFinetune ()      { return finetune_;         }
-    unsigned        getC4Speed()        { return c4Speed_;          }
+    //unsigned        getC4Speed()        { return c4Speed_;          }
     SHORT           *getData ()         { return data_ + INTERPOLATION_SPACER; }
 private:
-    char            *name_;
+    std::string     name_;
+    //char            *name_;
     unsigned        length_;
     unsigned        repeatOffset_;
     unsigned        repeatEnd_;
@@ -218,7 +208,7 @@ private:
     int             relativeNote_;
     unsigned        panning_;
     int             finetune_;
-    unsigned        c4Speed_;
+    //unsigned        c4Speed_;
     SHORT           *data_;             // only 16 bit samples allowed
 };
 
@@ -230,7 +220,8 @@ public:
 
 class InstrumentHeader {
 public:
-    char            *name;
+    //char            *name;
+    std::string     name;
     unsigned        nSamples;
     unsigned        sampleForNote[MAXIMUM_NOTES];
     EnvelopePoint   volumeEnvelope[12];
@@ -260,8 +251,9 @@ public:
                     { memset(this, 0, sizeof(Instrument)); }
                     ~Instrument ();
     void            load(const InstrumentHeader &instrumentHeader);
-    const char      *getName ()                     { return name_;  }
-    char            *getName (char *name);
+    //const char      *getName ()                     { return name_;  }
+    std::string     getName() { return name_; }
+    //char            *getName (char *name);
     unsigned        getnSamples ()                  { return nSamples_;           }
     unsigned        getSampleForNote(unsigned n)    { return sampleForNote_[n];   }
     EnvelopePoint   getVolumeEnvelope (unsigned p)  { return volumeEnvelope_[p];  }
@@ -284,7 +276,8 @@ public:
     Sample          *getSample (unsigned sample)    
                     { return ((sample < MAX_SAMPLES) ? samples_[sample] : 0);     }
 private:
-    char            *name_;
+    std::string     name_;
+    //char            *name_;
     unsigned        nSamples_;
     unsigned        sampleForNote_[MAXIMUM_NOTES];
     EnvelopePoint   volumeEnvelope_[12];
@@ -310,13 +303,17 @@ private:
 class Module {
 public:
                     Module ()               { memset(this, 0, sizeof(Module)); } 
-                    Module (const char *fileName);
+                    Module( std::string &fileName ) : Module() { loadFile( fileName ); }
                     ~Module();
+                    //Module (const char *fileName);
 //    char            *getFileName (const char *fileName);
-    void            setFileName (const char *fileName);
+    //void            setFileName (const char *fileName);
+    //int             loadFile (char *fileName)   
+    std::string     getFileName()               { return fileName_;             }
+    void            setFileName( std::string &fileName ) { fileName_ = fileName; }
     int             loadFile ();
-    int             loadFile (char *fileName)   
-                    { setFileName(fileName); return loadFile();                 }
+    int             loadFile( std::string &fileName )
+                    { setFileName( fileName ); return loadFile(); }
     bool            isLoaded ()                 { return isLoaded_;             }
     bool            useLinearFrequencies ()     { return useLinearFrequencies_; }
     bool            isCustomRepeat()            { return isCustomRepeat_;       }
@@ -337,9 +334,12 @@ public:
        { return ((pattern < MAX_PATTERNS) ? patterns_[pattern] : 0); }
 
 private:
-    char            *fileName_;
-    char            *songTitle_;
-    char            *trackerTag_;
+    //char            *fileName_;
+    //char            *songTitle_;
+    //char            *trackerTag_;
+    std::string     fileName_;
+    std::string     songTitle_;
+    std::string     trackerTag_;
     bool            isLoaded_;
     bool            useLinearFrequencies_;
     bool            isCustomRepeat_;

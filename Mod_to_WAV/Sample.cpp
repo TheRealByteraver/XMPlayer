@@ -7,6 +7,7 @@
 using namespace std;
 
 bool Sample::load(const SampleHeader &sampleHeader) {
+    /*
     char        *s = sampleHeader.name;
     char        *d;
     unsigned    k = strlen(sampleHeader.name);
@@ -18,7 +19,8 @@ bool Sample::load(const SampleHeader &sampleHeader) {
     d = name_;
     while (*s && (i < k)) { *d++ = *s++; i++; }
     *d = '\0';
-
+    */
+    name_ = sampleHeader.name;
     if (sampleHeader.data) { 
         length_           = sampleHeader.length;
         repeatOffset_     = sampleHeader.repeatOffset;
@@ -31,9 +33,10 @@ bool Sample::load(const SampleHeader &sampleHeader) {
         relativeNote_     = sampleHeader.relativeNote;
         panning_          = sampleHeader.panning;
         finetune_         = sampleHeader.finetune;
+        //c4Speed_          = sampleHeader.c4Speed;
         
         // allocate memory for 16 bit version of sample + some spare space
-        k = length_ + 2 * INTERPOLATION_SPACER;
+        unsigned k = length_ + 2 * INTERPOLATION_SPACER;
         k += 16;
         k &= 0xFFFFFFF0; 
         data_ = new SHORT [k]; 
@@ -88,6 +91,8 @@ bool Sample::load(const SampleHeader &sampleHeader) {
 }
 
 Sample::~Sample() {
+    /*
     delete name_;
+    */
     delete data_;
 }

@@ -85,9 +85,27 @@ int nBadComment(char *comment) {
 }
 
 // this fn returns the number of channels based on the format tag (0 on error)
-int tagID(char *dstr, bool &flt8Err) {
+int tagID(std::string tagID, bool &flt8Err) {
     int     chn; // chn = number of channels
     flt8Err = false;
+    if ( tagID == "M.K." ) chn = 4;
+    else if ( tagID == "M!K!" ) chn = 4;
+    else if ( tagID == "FLT4" ) chn = 4;
+    else if ( tagID == "FLT8" ) { chn = 8; flt8Err = true; } 
+    else if ( tagID == "OCTA" ) chn = 8;
+    else if ( tagID == "CD81" ) chn = 8;
+    else if ( (tagID[2] == 'C') && (tagID[3] == 'H') ) {
+        chn = ((unsigned char)tagID[0] - 48) * 10 +
+               (unsigned char)tagID[1] - 48;
+        if ( (chn > 32) || (chn < 10) ) chn = 0;
+    } else if ( (tagID[0] == 'T') && (tagID[1] == 'D') && (tagID[2] == 'Z') ) {
+        chn = (unsigned char)tagID[3] - 48;
+        if ( (chn < 1) || (chn > 3) ) chn = 0; // only values 1..3 are valid
+    } else if ( (tagID[1] == 'C') && (tagID[2] == 'H') && (tagID[3] == 'N') ) {
+        chn = (unsigned char)tagID[0] - 48;
+        if ( (chn < 5) || (chn > 9) ) chn = 0; // only values 5..9 are valid
+    } else chn = 0;
+    /*
     if      (!strcmp(dstr, "M.K.")) chn = 4;
     else if (!strcmp(dstr, "M!K!")) chn = 4;
     else if (!strcmp(dstr, "FLT4")) chn = 4;
@@ -107,13 +125,14 @@ int tagID(char *dstr, bool &flt8Err) {
             chn = (unsigned char)dstr[0] - 48;
             if ((chn < 5) || (chn > 9)) chn = 0; // only values 5..9 are valid
     } else chn = 0;
+    */
     return chn;
 }
 
 // returns true if file has extension .WOW
-bool isWowFile(char *p) {
+bool isWowFile(std::string fileName) {
     int     i = 0;
-
+    const char *p = fileName.c_str();
     while(*p && ( i < 255)) { p++; i++; }
     if ((i < 4) || (i >= 255)) { return false; } 
     p -= 4; 
@@ -149,10 +168,18 @@ int Module::loadModFile() {
     // check extension for the wow factor ;)
     wowFile = isWowFile(fileName_);
     // check if a valid tag is present
+    /*
     trackerTag_ = new char[4 + 1];
     trackerTag_[4] = '\0';
     strncpy_s(trackerTag_, 5, headerMK->tag, 4);
     nChannels_ = tagID(trackerTag_, flt8Err);
+    */  
+    trackerTag_ = "";
+    trackerTag_ += headerMK->tag[0];
+    trackerTag_ += headerMK->tag[1];
+    trackerTag_ += headerMK->tag[2];
+    trackerTag_ += headerMK->tag[3];
+    nChannels_ = tagID( trackerTag_,flt8Err );
     if (!nChannels_) tagErr = true;
     // read sample names, this is how we differentiate a 31 instruments file 
     // from an old format 15 instruments file
@@ -167,10 +194,10 @@ int Module::loadModFile() {
     if (tagErr && nstErr && (!smpErr)) { 
         nstFile = true; 
         nChannels_ = 4; 
-        strncpy_s(trackerTag_, 5, "NST", _TRUNCATE);
+        //strncpy_s(trackerTag_, 5, "NST", _TRUNCATE);
+        trackerTag_ = "NST";
     }
-
-    patternCalc = (unsigned)fileSize; // I have yet to encounter a > 4 gb xm file
+    patternCalc = (unsigned)fileSize; 
     if (nstFile)    { nInstruments_ = 15; patternCalc -= sizeof(HeaderNST); } 
     else            { nInstruments_ = 31; patternCalc -= sizeof(HeaderMK ); }
     nSamples_ = 0;
@@ -299,10 +326,15 @@ int Module::loadModFile() {
     }  
     // Now start with copying the data
     // we start with the song title :)
+
+    /*
     songTitle_ = new char[MOD_MAX_SONGNAME_LENGTH + 1];
     songTitle_[MOD_MAX_SONGNAME_LENGTH] = '\0';
     strncpy_s(songTitle_, MOD_MAX_SONGNAME_LENGTH + 1, headerMK->songTitle, MOD_MAX_SONGNAME_LENGTH);
+    */
+    songTitle_ = ""; 
     //for (int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++) { songTitle_[i] = headerMK->songTitle[i]; }
+    for ( int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++ ) songTitle_ += headerMK->songTitle[i]; 
 
     // now, the sample headers & sample data.
     fileOffset = sampleDataOffset;

@@ -4,10 +4,11 @@
 
 Instrument::~Instrument () {
 //    std::cout << "\nInst destructor called";
-    delete name_;
+    //delete name_;
     for (int i = 0; i < MAX_SAMPLES; i++) delete samples_[i];
 }
 
+/*
 char *Instrument::getName (char *name) {
     int         max = (unsigned)strlen(name);
     char        *s = name_;
@@ -18,11 +19,12 @@ char *Instrument::getName (char *name) {
     *d = '\0';
     return name;
 }
+*/
 
 void Instrument::load(const InstrumentHeader &instrumentHeader) {
+    /*
     int     i = 0;
     char    *s, *d;
-
     name_ = new char[strlen(instrumentHeader.name) + 1];
     d = name_;
     s = instrumentHeader.name;
@@ -30,6 +32,8 @@ void Instrument::load(const InstrumentHeader &instrumentHeader) {
         *d++ = *s++; i++;
     }
     *d = '\0';
+    */
+    name_ = instrumentHeader.name;
     for (int i = 0; i < MAXIMUM_NOTES; i++) {
         sampleForNote_[i] = instrumentHeader.sampleForNote[i];
     }

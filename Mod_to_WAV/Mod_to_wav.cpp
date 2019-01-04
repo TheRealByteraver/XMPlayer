@@ -21,7 +21,6 @@
 /*
 bugs:
 
-- women.s3m: set sample offset effect, pattern #30, 16th chn,row 32 
 
 */
 
@@ -183,7 +182,7 @@ public: // debug
 private: // debug
 
     unsigned        noteToPeriod(unsigned note, int finetune);
-    unsigned        periodToFrequency(unsigned period, unsigned c4Speed);
+    unsigned        periodToFrequency(unsigned period /*, unsigned c4Speed */);
 //    int             setVolume   (unsigned fromChannel, unsigned volume);  // range: 0..64
 //    int             setPanning  (unsigned fromChannel, unsigned panning); // range: 0..255: extr left... extr right
     int             setMixerVolume(unsigned fromChannel);
@@ -1080,16 +1079,14 @@ END;
         //finally. thank god for Benjamin Rousseaux!!!
         return (unsigned)(
             pow(2.0, 
-                (   133.0 - 
-                    ((double)note + ((double)finetune / 128.0))
-                ) / 12.0
+                (133.0 - ((double)note + ((double)finetune / 128.0))) / 12.0
             ) * 13.375
         );
     }
 }
 
 // C4 SPeed should be implemented in period calc???
-unsigned Mixer::periodToFrequency(unsigned period, unsigned c4Speed) {
+unsigned Mixer::periodToFrequency(unsigned period /*, unsigned c4Speed */) {
     if (module->useLinearFrequencies()) {
         return (unsigned)(8363 * // could keep it 8363, s3m uses amiga freq
             pow(2, 
@@ -1331,13 +1328,13 @@ int Mixer::updateNotes () {
 
         note       = iNote->note;
 
-        //channel->period = iNote->period; // S3M
-
+        /*
         //debug for bluishbg.xm:
         if ( note > (MAXIMUM_NOTES + 1) ) { // + 1 for the key off
             std::cout << "!";
             note = 0;
         }
+        */
 
         //std::cout << noteStrings[note];
         //std::cout << channel->volume << " ";
@@ -1542,8 +1539,11 @@ int Mixer::updateNotes () {
                                 }
                             case NOTE_DELAY : 
                                 {
-                                    channel->delayCount = argument;
-                                    isNoteDelayed = true;
+                                    if( argument < tempo )
+                                    {
+                                        channel->delayCount = argument;
+                                        isNoteDelayed = true;
+                                    }
                                     break;
                                 }
                             case PATTERN_DELAY :
@@ -1605,8 +1605,9 @@ int Mixer::updateNotes () {
                 periodToFrequency(
                     noteToPeriod(note + 
                         channel->pSample->getRelativeNote(), 
-                        finetune),
-                    channel->pSample->getC4Speed())
+                        finetune)
+                    //,channel->pSample->getC4Speed()
+                )
             );
         } 
 
@@ -1781,8 +1782,8 @@ int Mixer::updateEffects () {
                                                     noteToPeriod(
                                                         channel->lastNote +
                                                         channel->pSample->getRelativeNote(),
-                                                        channel->pSample->getFinetune() ),
-                                                    channel->pSample->getC4Speed()
+                                                        channel->pSample->getFinetune() )
+                                                    //,channel->pSample->getC4Speed()
                                                 )
                                             );
                                         }
@@ -1813,8 +1814,8 @@ int Mixer::updateEffects () {
                                                     noteToPeriod(
                                                         channel->lastNote + 
                                                             channel->pSample->getRelativeNote(), 
-                                                        channel->pSample->getFinetune()),
-                                                    channel->pSample->getC4Speed()
+                                                        channel->pSample->getFinetune())
+                                                    //,channel->pSample->getC4Speed()
                                                 )
                                             );
                                         }
@@ -1902,8 +1903,8 @@ int Mixer::updateEffects () {
                                         noteToPeriod(
                                             channel->lastNote + 
                                                 channel->pSample->getRelativeNote(), 
-                                            channel->pSample->getFinetune()),
-                                        channel->pSample->getC4Speed()
+                                            channel->pSample->getFinetune())
+                                        //,channel->pSample->getC4Speed()
                                     )
                                 );
                             }
@@ -2153,7 +2154,7 @@ void startReplay( Mixer &mixer ) {
 // ****************************************************************************
 
 /*
-1 pixel = 1 tick, ft2 env. window == 6 sec
+1 pixel = 1 tick, ft2 envelope window width == 6 sec
 vibrato is active even if enveloppe is not
 vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 */
@@ -2167,8 +2168,18 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",
@@ -2189,7 +2200,6 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
@@ -2219,7 +2229,6 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\explorat.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\devlpr94.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bj-eyes.xm",
@@ -2271,16 +2280,19 @@ int main(int argc, char *argv[])  {
 
 
     for (unsigned i = 0; i < filePaths.size(); i++) {
-        const char *moduleFilename = filePaths[i].c_str();
-        Module      sourceFile( moduleFilename );
+        //const char *moduleFilename = filePaths[i].c_str();
+        //Module      sourceFile( moduleFilename );
+        Module      sourceFile( filePaths[i] );
         Mixer       mixer;
 
-        std::cout << "\n\nLoading " << moduleFilename 
+        std::cout << "\n\nLoading " << filePaths[i].c_str()//moduleFilename
                   << ": " << (sourceFile.isLoaded() ? "Success." : "Error!") << std::endl;
 
         if (sourceFile.isLoaded ()) {
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
-            std::cout << "\nCompiling module into " << (s / 60) << "m "
+            std::cout << "\nCompiling module " 
+                      //<< sourceFile.getSongName()  
+                      << " into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data"  << std::endl 
                       << "Hit any key to start mixing." << std::endl;
             _getch();

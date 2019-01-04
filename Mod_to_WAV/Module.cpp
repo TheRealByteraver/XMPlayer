@@ -13,21 +13,27 @@
 
 using namespace std;
 
-Module::Module(const char *fileName) {
-//    cout << "\nModule constructor with parameter fileName called.";
+/*
+//Module::Module(const char *fileName) {
+Module::Module( std::string &fileName ) {
+        //    cout << "\nModule constructor with parameter fileName called.";
     //Module::Module ();  // this calls the default DEstructor!!!
     memset(this, 0, sizeof(Module));
-    setFileName(fileName);
-    loadFile ();
+    //fileName_ = fileName;
+    //setFileName( fileName );
+    loadFile ( fileName );
 }
+*/
 
 Module::~Module() {
 //    cout << "\nDefault Module destructor called.";
     for (int i = 0; i < MAX_INSTRUMENTS; i++) delete instruments_[i];
     for (int i = 0; i < MAX_PATTERNS; i++) delete patterns_[i];
+    /*
     delete fileName_;
     delete trackerTag_;
     delete songTitle_;
+    */
     return;
 }
 
@@ -44,17 +50,21 @@ char *Module::getFileName (const char *fileName) {
     return fileName;
 }
 */
-void Module::setFileName (const char *fileName) {
-    fileName_ = new char[strlen(fileName) + 1];
-    char        *d = fileName_;
-    const char  *s = fileName;
-    while (*s) *d++ = *s++; 
-    *d = '\0';
+/*
+//void Module::setFileName( const char *fileName ) {
+void Module::setFileName ( std::string &fileName ) {
+    fileName_ = fileName;
+    
+    //fileName_ = new char[strlen(fileName) + 1];
+    //char        *d = fileName_;
+    //const char  *s = fileName;
+    //while (*s) *d++ = *s++; 
+    //*d = '\0';
 }
+*/
 
 int Module::loadFile() {
-    int result;
-    result = loadS3mFile();
+    int result = loadS3mFile();
     if ( !isLoaded() ) result = loadModFile();
     if ( !isLoaded() ) result = loadXmFile();
     return result;
