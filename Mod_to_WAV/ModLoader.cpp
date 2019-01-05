@@ -24,7 +24,7 @@ using namespace std;
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 // Constants for the .MOD Format:
-#define LIMIT                               8    // nr of illegal chars permitted in smp names
+#define MOD_LIMIT                           8    // nr of illegal chars permitted in smp names
 #define MOD_ROWS                            64   // always 64 rows in a MOD pattern
 #define MOD_MAX_SONGNAME_LENGTH             20
 #define MOD_MAX_PATTERNS                    128
@@ -186,11 +186,11 @@ int Module::loadModFile() {
     // if there is no tag then this is probably not a MOD file!
     k = 0;
     for (int i = 0 ; i < 15; i++) k += nBadComment(headerMK->samples[i].name);
-    if(k > LIMIT) smpErr = true; 
+    if(k > MOD_LIMIT ) smpErr = true;
     // no tag means this is an old NST - MOD file!
     k = 0;
     for (int i = 15; i < 31; i++) k += nBadComment(headerMK->samples[i].name);
-    if(k > LIMIT) nstErr = true; 
+    if(k > MOD_LIMIT ) nstErr = true;
     if (tagErr && nstErr && (!smpErr)) { 
         nstFile = true; 
         nChannels_ = 4; 
@@ -503,6 +503,13 @@ int Module::loadModFile() {
             }
 		}
 #endif
+    }
+    for ( unsigned i = 0; i < nChannels_; i += 4 )
+    {
+        defaultPanPositions_[i + 0] = PANNING_FULL_LEFT;
+        defaultPanPositions_[i + 1] = PANNING_FULL_RIGHT;
+        defaultPanPositions_[i + 2] = PANNING_FULL_RIGHT;
+        defaultPanPositions_[i + 3] = PANNING_FULL_LEFT;
     }
     // read the patterns now
     bufp = buf + patternDataOffset;

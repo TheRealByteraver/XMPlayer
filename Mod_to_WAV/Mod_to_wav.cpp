@@ -52,7 +52,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 #define FILTER_LINEAR 1
 #define FILTER_CUBIC  2
 #define FILTER        FILTER_CUBIC
-#define PLAYER_MAX_CHANNELS 64
+
 #define MIXER_MAX_CHANNELS 256
 #define WAVE_BUFFER_NO 1 // temp, should be at least 4
 #define VOLUME_RAMP_SPEED 41
@@ -220,6 +220,8 @@ void Mixer::resetSong()
     }
     for ( unsigned i = 0; i < nChannels; i++ ) {
         channels[i]->init();
+        channels[i]->panning = module->getDefaultPanPosition( i );
+        /*
         switch ( module->getPanningStyle() ) {
             case PANNING_STYLE_MOD:
             {
@@ -244,6 +246,7 @@ void Mixer::resetSong()
                 break;
             }
         }
+        */
     }
     globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
     globalVolume_ = 64;
@@ -2168,8 +2171,12 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
@@ -2197,19 +2204,16 @@ int main(int argc, char *argv[])  {
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
         
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
 //        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\crmx-trm.mod",
-//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
 //        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeoutstripped.xm",

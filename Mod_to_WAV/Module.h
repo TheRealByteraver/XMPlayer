@@ -1,6 +1,8 @@
 #ifndef MODULE_H
 #define MODULE_H
 
+#include "assert.h"
+
 // More general constants: 
 #define PAL_CALC                            7093789.2   // these values are
 #define NTSC_CALC                           7159090.5   // not used 
@@ -20,6 +22,7 @@
 #define INTERPOLATION_SPACER                2
 #define MAX_EFFECT_COLUMS                   2
 #define MAXIMUM_NOTES                       (11 * 12)
+#define PLAYER_MAX_CHANNELS                 32
 #define PANNING_FULL_LEFT                   0
 #define PANNING_CENTER                      128
 #define PANNING_FULL_RIGHT                  255
@@ -248,7 +251,7 @@ public:
 class Instrument {
 public:
                     Instrument ()
-                    { memset(this, 0, sizeof(Instrument)); }
+                    { memset(this, 0, sizeof(Instrument)); }    // still ok w/ std::string?
                     ~Instrument ();
     void            load(const InstrumentHeader &instrumentHeader);
     //const char      *getName ()                     { return name_;  }
@@ -326,6 +329,11 @@ public:
     unsigned        getDefaultBpm ()            { return defaultBpm_;           }
     unsigned        getSongLength ()            { return songLength_;           }
     unsigned        getSongRestartPosition ()   { return songRestartPosition_;  }
+    unsigned        getDefaultPanPosition( unsigned i ) 
+    { 
+        assert( i < nChannels_ );
+        return defaultPanPositions_[i];
+    }
     unsigned        getPatternTable (unsigned i)
                     { return ((i < MAX_PATTERNS) ? patternTable_[i] : 0);   }
     Instrument      *getInstrument(unsigned instrument) 
@@ -352,6 +360,7 @@ private:
     unsigned        defaultBpm_;
     unsigned        songLength_;
     unsigned        songRestartPosition_;
+    unsigned char   defaultPanPositions_[PLAYER_MAX_CHANNELS];
     unsigned        patternTable_[MAX_PATTERNS];
     Instrument      *instruments_[MAX_INSTRUMENTS];
     Pattern         *patterns_[MAX_PATTERNS];

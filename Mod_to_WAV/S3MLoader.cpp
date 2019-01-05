@@ -15,7 +15,7 @@ Thanks must go to:
 
 #include "Module.h"
 
-//#define debug_s3m_loader  
+#define debug_s3m_loader  
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
@@ -207,44 +207,41 @@ int Module::loadS3mFile() {
     }
     std::cout << std::endl;
 #endif
-    int nChannels = 0;
+    nChannels_ = 0;
     int chnRemap[S3M_MAX_CHANNELS];
+    int chnBackmap[S3M_MAX_CHANNELS];
     int chnPanVals[S3M_MAX_CHANNELS];
     for ( int chn = 0; chn < S3M_MAX_CHANNELS; chn++ )
     {
+        chnBackmap[chn] = S3M_CHN_UNUSED;
         chnPanVals[chn] = S3M_DEFAULT_PAN_CENTER;
         int chnInfo = (int)s3mFileHeader.channelsEnabled[chn];
         if ( chnInfo < 16 ) // channel is used! // x64 FT2 detects weird #chn
         {
-            chnRemap[chn] = nChannels;
-            if ( chnInfo < 7 )  chnPanVals[nChannels] = S3M_DEFAULT_PAN_LEFT;
-            else                chnPanVals[nChannels] = S3M_DEFAULT_PAN_RIGHT;
-            nChannels++;
+            chnBackmap[nChannels_] = chn;
+            chnRemap[chn] = nChannels_;
+            if ( chnInfo < 7 )  chnPanVals[nChannels_] = S3M_DEFAULT_PAN_LEFT;
+            else                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_RIGHT;
+            nChannels_++;
         } else { 
             chnRemap[chn] = S3M_CHN_UNUSED;
         }
     }
 #ifdef debug_s3m_loader
     std::cout << std::endl
-        << "# channels:         " << std::dec << nChannels;
+        << "# channels:         " << std::dec << nChannels_;
     std::cout << std::endl << "Order list: ";
 #endif
-    // initialize internal module data.
-    //songTitle_ = new char[S3M_MAX_SONGTITLE_LENGTH + 1];
     for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) {
         songTitle_ += s3mFileHeader.songTitle[i];
     }
-    //songTitle_[S3M_MAX_SONGTITLE_LENGTH] = '\0';
-    //trackerTag_ = new char[S3M_TRACKER_TAG_LENGTH + 1];
     for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) {
         trackerTag_ += s3mFileHeader.tag[i];
     }
-    //trackerTag_[S3M_TRACKER_TAG_LENGTH] = '\0';
     useLinearFrequencies_ = false;   // S3M uses AMIGA periods
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
-    panningStyle_ = PANNING_STYLE_S3M; // to be changed in the player code
-    nChannels_ = nChannels;
+    panningStyle_ = PANNING_STYLE_S3M; 
     nInstruments_ = s3mFileHeader.nInstruments;
     nSamples_ = 0;
     defaultTempo_ = s3mFileHeader.defaultTempo;
@@ -292,10 +289,21 @@ int Module::loadS3mFile() {
     if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
     {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-            defPanPositions[i] = S3M_DEFAULT_PAN_CENTER;
+            defPanPositions[i] = (defPanPositions[i] & 0xF) * 17; // convert to 8 bit pan
     } else {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-            defPanPositions[i] <<= 4;
+            defPanPositions[i] = S3M_DEFAULT_PAN_CENTER;
+    }
+    if ( s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT )
+    {
+        for ( unsigned i = 0; i < nChannels_; i++ )
+        {                       
+            chnPanVals[i] = defPanPositions[chnBackmap[i]];
+        }
+    }
+    for ( unsigned i = 0; i < nChannels_; i++ )
+    {
+        defaultPanPositions_[i] = chnPanVals[i];
     }
 #ifdef debug_s3m_loader
     std::cout << std::endl << "Instrument pointers: ";
@@ -317,7 +325,7 @@ int Module::loadS3mFile() {
         std::cout << ((int)defPanPositions[i]) << " ";
     }
     std::cout << std::endl;
-    if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
+    if ( ((int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG) == 0 )
             std::cout << "S3M file is in mono mode.";
     else    std::cout << "S3M file is in stereo mode.";
     std::cout << std::endl << "Final panning positions: ";
@@ -340,35 +348,35 @@ int Module::loadS3mFile() {
             16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
         if ( !s3mInstHeader.c4Speed ) s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
 #ifdef debug_s3m_loader
-        instHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
-        instHeader.tag[3] = '\0';                              // debug only
+        s3mInstHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
+        s3mInstHeader.tag[3] = '\0';                              // debug only
         std::cout << std::endl
             << "Instrument nr " << nInst << " info: " << std::endl
             << "Sample Type:        ";
-        if ( instHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE )
+        if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE )
             std::cout << "digital sample";
-        else if ( instHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_MELODY )
+        else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_MELODY )
             std::cout << "adlib melody";
-        else if ( instHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_DRUM )
+        else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_DRUM )
             std::cout << "adlib drum";
         std::cout << std::endl
             << "Sample location:    "
-            << (int)instHeader.memSeg << ":"
-            << (int)instHeader.memOfs << " " << std::endl;
-        instHeader.memSeg = '\0'; // so we can read the DOS file name
+            << (int)s3mInstHeader.memSeg << ":"
+            << (int)s3mInstHeader.memOfs << " " << std::endl;
+        s3mInstHeader.memSeg = '\0'; // so we can read the DOS file name
         std::cout
             << "Sample location:    " << smpDataPtrs[nInst] << std::endl
-            << "Length:             " << instHeader.length << std::endl
-            << "Loop Start:         " << instHeader.loopStart << std::endl
-            << "Loop End:           " << instHeader.loopEnd << std::endl
-            << "Volume:             " << (int)instHeader.volume << std::endl
-            << "0x1D:               0x" << std::hex << (int)instHeader.reserved << std::endl << std::dec
-            << "pack ID:            " << (int)instHeader.packId << std::endl
-            << "flags:              " << (int)instHeader.flags << std::endl
-            << "C2SPD:              " << instHeader.c4Speed << std::endl
-            << "Sample DOS Name:    " << instHeader.dosFilename << std::endl
-            << "Name:               " << instHeader.name << std::endl
-            << "Tag:                " << instHeader.tag << std::endl;
+            << "Length:             " << s3mInstHeader.length << std::endl
+            << "Loop Start:         " << s3mInstHeader.loopStart << std::endl
+            << "Loop End:           " << s3mInstHeader.loopEnd << std::endl
+            << "Volume:             " << (int)s3mInstHeader.volume << std::endl
+            << "0x1D:               0x" << std::hex << (int)s3mInstHeader.reserved << std::endl << std::dec
+            << "pack ID:            " << (int)s3mInstHeader.packId << std::endl
+            << "flags:              " << (int)s3mInstHeader.flags << std::endl
+            << "C2SPD:              " << s3mInstHeader.c4Speed << std::endl
+            << "Sample DOS Name:    " << s3mInstHeader.dosFilename << std::endl
+            << "Name:               " << s3mInstHeader.name << std::endl
+            << "Tag:                " << s3mInstHeader.tag << std::endl;
 #endif
         if ( (s3mInstHeader.sampleType != 0) &&
             (s3mInstHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {
