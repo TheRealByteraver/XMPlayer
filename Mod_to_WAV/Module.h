@@ -83,7 +83,6 @@
 // internal remapped effects for the player
 #define SET_BPM                             0x24  // after effect "Z" for XM safety
 #define FINE_VIBRATO                        0x26  // S3M fine vibrato
-//#define S3M_VOLUME_SLIDE                    0x27  // S3M volume slide
 #define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
 /*

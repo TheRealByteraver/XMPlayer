@@ -3,7 +3,7 @@ Thanks must go to:
 - PSI (Sami Tammilehto) / Future Crew for creating Scream Tracker 3
 - FireLight / Brett Paterson for writing a detailed document explaining how to
   parse .s3m files. Without fs3mdoc.txt this would have been hell. With his
-  valuable document, it was a hell of a lot easier.
+  invaluable document, it was a hell of a lot easier.
 */
 
 #include <conio.h>
@@ -15,7 +15,7 @@ Thanks must go to:
 
 #include "Module.h"
 
-#define debug_s3m_loader  
+//#define debug_s3m_loader  
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
@@ -393,19 +393,9 @@ int Module::loadS3mFile() {
         }
         InstrumentHeader    instrument;
         SampleHeader        sample;
-        /*
-        char                sampleName[S3M_MAX_SAMPLENAME_LENGTH + 1];
-        sampleName[S3M_MAX_SAMPLENAME_LENGTH] = '\0';
-        strncpy_s( sampleName,S3M_MAX_SAMPLENAME_LENGTH + 1,instHeader.name,S3M_MAX_SAMPLENAME_LENGTH );
-        sample.name = sampleName;
-        instrument.name = sampleName;
-        */
         for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
-        {
             sample.name += s3mInstHeader.name[i];
-        }
         instrument.name = sample.name;
-
         sample.length = s3mInstHeader.length;
         sample.repeatOffset = s3mInstHeader.loopStart;
         sample.volume = (int)s3mInstHeader.volume;
@@ -491,7 +481,7 @@ int Module::loadS3mFile() {
 
             waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
             waveFormatEx.nChannels = 1;
-            waveFormatEx.nSamplesPerSec = 8000; // frequency
+            waveFormatEx.nSamplesPerSec = 16000; // frequency
             waveFormatEx.wBitsPerSample = 16;
             waveFormatEx.nBlockAlign = waveFormatEx.nChannels *
                 (waveFormatEx.wBitsPerSample >> 3);

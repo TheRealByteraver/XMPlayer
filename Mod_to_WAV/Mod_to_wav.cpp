@@ -85,12 +85,13 @@ public:
     unsigned        targetPeriod;
     unsigned        instrumentNo;
     unsigned        sampleNo;
+    unsigned        sampleOffset;
 
 
     /*
     effect memory:
     */
-    unsigned        sampleOffset;
+    unsigned        lastSampleOffset;
     unsigned        vibratoWave;
     unsigned        tremoloWave;
     unsigned        retrigCount;
@@ -113,6 +114,7 @@ public:
     unsigned        lastMultiNoteRetrig;
     unsigned        lastExtraFinePortamentoUp;
     unsigned        lastExtraFinePortamentoDown;
+
     // active mixer channels for this logical channel:
     unsigned        mixerChannelsTable[MAX_NOTES_PER_CHANNEL]; // 0 means no channel
     unsigned        iPrimary;   // 0..15
@@ -949,8 +951,7 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
         mixerChannels[newMc].sample = sample;
             // temp hack
         mixerChannels[newMc].isVolumeRampActive = false;
-        //mixerChannels[newMc].sampleOffset = (long long)sampleOffset << 16; // removed
-        mixerChannels[newMc].sampleOffset = sampleOffset; // added
+        mixerChannels[newMc].sampleOffset = sampleOffset;
         channels[fromChannel]->mixerChannelsTable[emptySlot] = newMc; 
         channels[fromChannel]->iPrimary = emptySlot;
     }
@@ -1119,18 +1120,18 @@ int Mixer::updateNotes () {
                         channel.panning = argument;                       
                         break;
                     }
-                case SET_SAMPLE_OFFSET : 
+                case SET_SAMPLE_OFFSET :   // memory!!!
                     {                   
                         if (channel.pSample) {
-                            argument <<= 8;
-                            
+                            if ( argument ) channel.lastSampleOffset = argument;
+                            else argument = channel.lastSampleOffset;
+                            argument <<= 8;                            
                             if (argument < (channel.pSample->getLength())) {
                                 channel.sampleOffset = argument;
                                 if (isNewNote) replay = true;
                             } else {
                                 replay = false;
-                            }
-                            
+                            }                            
                         } 
                         break;
                     }
@@ -1141,26 +1142,6 @@ int Mixer::updateNotes () {
                         if (argument) channel.lastVolumeSlide = argument;
                         break;
                     }
-                /*
-                case S3M_VOLUME_SLIDE :
-                    {
-                        if ( argument ) channel.lastVolumeSlide = argument;
-                        unsigned&   v = channel.volume;
-                        unsigned& arg = channel.lastVolumeSlide;
-                        unsigned    slide1 = arg >> 4;
-                        unsigned    slide2 = arg & 0xF;
-                        // fine slides:
-                        if (slide1 == 0xF) // fine volume down
-                        {
-                            if ( slide2 > v ) v = 0;
-                            else              v -= slide2;
-                        } else if ( slide2 == 0xF ) { // fine volume up
-                            v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        }
-                        break;
-                    }
-                */
                 case POSITION_JUMP :
                     {
                         patternBreak = true;
@@ -1209,11 +1190,13 @@ int Mixer::updateNotes () {
                                 }
                             case NOTE_RETRIG : 
                                 {
-                                    if (argument) channel.retrigCount = 0;//argument;
+                                    /*
+                                    if ( argument ) channel.retrigCount = 0;//argument;
                                     else {
                                         iNote->effects[fxloop].effect = 0;
                                         iNote->effects[fxloop].argument = 0;
                                     }
+                                    */
                                     break;
                                 }
                             case NOTE_CUT : 
@@ -1271,7 +1254,7 @@ int Mixer::updateNotes () {
                     }
                 case MULTI_NOTE_RETRIG :
                     {
-                        if (argument) channel.lastMultiNoteRetrig = argument;
+                        if( argument ) channel.lastMultiNoteRetrig = argument;                        
                         break;
                     }
                 case TREMOR :
@@ -1495,6 +1478,7 @@ int Mixer::updateEffects () {
                                             );
                                         }
                                     }
+                                    //std::cout << "!";
                                     break;
                                 }
                             case NOTE_CUT : 
@@ -1573,37 +1557,38 @@ int Mixer::updateEffects () {
                         channel.panning = panning;
                         break;
                     }
-                case MULTI_NOTE_RETRIG :
-                    {  /* R + interval + Volume change */
-                        int v = channel.volume;
-                        switch (argument & 0xF) {
-                            case 1 : { v --;            break; }
-                            case 2 : { v -= 2;          break; }
-                            case 3 : { v -= 4;          break; }
-                            case 4 : { v -= 8;          break; }
-                            case 5 : { v -= 16;         break; }
-                            case 6 : { v <<= 1; v /= 3; break; }
-                            case 7 : { v >>= 1;         break; }
-                            case 9 : { v++;             break; }
-                            case 10: { v += 2;          break; }
-                            case 11: { v += 4;          break; }
-                            case 12: { v += 8;          break; }
-                            case 13: { v += 16;         break; }
-                            case 14: { v *= 3; v >>= 1; break; }
-                            case 15: { v >>= 1;         break; }
-                        }
-                        if (v < 0) v = 0;
-                        if (v > MAX_VOLUME) v = MAX_VOLUME;
-                        channel.volume = (unsigned)v;
-
-                        channel.retrigCount++;
-                        if (channel.retrigCount >= (argument >> 4)) {
-                            channel.retrigCount = 0;
-                            if (channel.pSample) { 
+                case MULTI_NOTE_RETRIG : /* R + volume change + interval */   
+                    {  
+                        if ( channel.pSample ) {
+                            channel.retrigCount++;
+                            if ( (argument == 0) && 
+                                (channel.oldNote.effects[fxloop].effect == MULTI_NOTE_RETRIG) )
+                                argument = channel.lastMultiNoteRetrig;
+                            if ( channel.retrigCount >= (argument & 0xF) ) {
+                                channel.retrigCount = 0;                             
+                                int v = channel.volume;
+                                switch ( argument >> 4 ) {
+                                    case  1: { v--;             break; }
+                                    case  2: { v -= 2;          break; }
+                                    case  3: { v -= 4;          break; }
+                                    case  4: { v -= 8;          break; }
+                                    case  5: { v -= 16;         break; }
+                                    case  6: { v <<= 1; v /= 3; break; }
+                                    case  7: { v >>= 1;         break; }
+                                    case  9: { v++;             break; }
+                                    case 10: { v += 2;          break; }
+                                    case 11: { v += 4;          break; }
+                                    case 12: { v += 8;          break; }
+                                    case 13: { v += 16;         break; }
+                                    case 14: { v *= 3; v >>= 1; break; }
+                                    case 15: { v <<= 1;         break; }
+                                }
+                                if ( v < 0 )          channel.volume = 0;
+                                if ( v > MAX_VOLUME ) channel.volume = MAX_VOLUME;
                                 playSample(iChannel, 
-                                           channel.pSample, 
-                                           channel.sampleOffset, 
-                                           FORWARD);
+                                            channel.pSample, 
+                                            channel.sampleOffset, 
+                                            FORWARD);
                                 setFrequency(iChannel, 
                                     periodToFrequency(
                                         noteToPeriod(
@@ -1872,7 +1857,10 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
@@ -1884,7 +1872,6 @@ int main(int argc, char *argv[])  {
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
@@ -1935,7 +1922,6 @@ int main(int argc, char *argv[])  {
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\explorat.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\devlpr94.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bj-eyes.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\1993.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\1993.xm",
