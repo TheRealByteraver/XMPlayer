@@ -56,8 +56,8 @@ Thanks must go to:
 #define S3M_SAMPLE_NOTPACKED_FLAG           0
 #define S3M_SAMPLE_PACKED_FLAG              1    // DP30ADPCM, not supported
 #define S3M_SAMPLE_LOOP_FLAG                1
-#define S3M_SAMPLE_STEREO_FLAG              2
-#define S3M_SAMPLE_16BIT_FLAG               4
+#define S3M_SAMPLE_STEREO_FLAG              2    // not supported
+#define S3M_SAMPLE_16BIT_FLAG               4    // not supported
 #define S3M_ROWS_PER_PATTERN                64
 #define S3M_PTN_END_OF_ROW_MARKER           0
 #define S3M_PTN_CHANNEL_MASK                31
@@ -172,8 +172,7 @@ int Module::loadS3mFile() {
         delete[] buf;
         return 0;
     }
-    s3mFileHeader.id = '\0'; // use the EOF dos marker as end of cstring marker
-    // ?? s3mFileHeader.songLength++; // counts from zero in file
+    s3mFileHeader.id = '\0'; // use the DOS EOF marker as end of cstring marker    
 #ifdef debug_s3m_loader
     std::cout << std::endl
         << "header info:" << std::endl
@@ -207,6 +206,10 @@ int Module::loadS3mFile() {
     }
     std::cout << std::endl;
 #endif
+    if ( (s3mFileHeader.CWTV == 0x1300) ||
+        (s3mFileHeader.flags & S3M_ST300_VOLSLIDES_FLAG) )
+            trackerType_ = TRACKER_ST300;
+    else    trackerType_ = TRACKER_ST321;
     nChannels_ = 0;
     int chnRemap[S3M_MAX_CHANNELS];
     int chnBackmap[S3M_MAX_CHANNELS];
@@ -278,7 +281,7 @@ int Module::loadS3mFile() {
     unsigned short *ptnParaPtrs = (unsigned short *)(buf + bufOffset);
     bufOffset += s3mFileHeader.nPatterns    * 2; // sizeof( unsigned short ) == 2
     unsigned char *defPanPositions = (unsigned char *)(buf + bufOffset); // 32 bytes
-    if ( bufOffset > fileSize ) { 
+    if ( (bufOffset + 32) > fileSize ) { 
 #ifdef debug_s3m_loader
         std::cout << std::endl
             << "File is too small, exiting.";
@@ -719,7 +722,12 @@ int Module::loadS3mFile() {
             switch ( unPackedNote->fx ) {
                 case 1:  // set Speed
                 {
-                    iNote->effects[1].effect = SET_TEMPO_BPM; // to be fixed
+                    iNote->effects[1].effect = SET_TEMPO; 
+                    if ( !unPackedNote->fxp ) 
+                    { 
+                        iNote->effects[1].effect = 0;
+                        iNote->effects[1].argument = 0;
+                    }
                     break;
                 }
                 case 2:
@@ -732,19 +740,89 @@ int Module::loadS3mFile() {
                     iNote->effects[1].effect = PATTERN_BREAK;
                     break;
                 }
-                case 4:
-                {
-                    iNote->effects[1].effect = VOLUME_SLIDE;
+                case 4: // all kinds of (fine) volume slide
+                /*
+                    So, apparently:
+                    D01 = volume slide down by 1
+                    D10 = volume slide up   by 1
+                    DF1 = fine volume slide down by 1
+                    D1F = fine volume slide up   by 1
+                    DFF = fine volume slide up   by F
+                    DF0 = volume slide up   by F
+                    D0F = volume slide down by F
+                */
+                {   
+                    iNote->effects[1].effect = VOLUME_SLIDE; // default
+                    int slide1 = iNote->effects[1].argument >> 4;
+                    int slide2 = iNote->effects[1].argument & 0xF;
+                    if ( (slide2 == 0xF) && slide1 ) // fine volume up if arg non-zero
+                    {
+                        iNote->effects[1].effect = EXTENDED_EFFECTS;
+                        iNote->effects[1].argument = (FINE_VOLUME_SLIDE_UP << 4)
+                            + slide1;
+                    } else if ( (slide1 == 0xF) && slide2 ) { // fine volume down if arg non-zero
+                        iNote->effects[1].effect = EXTENDED_EFFECTS;
+                        iNote->effects[1].argument = (FINE_VOLUME_SLIDE_DOWN << 4)
+                            + slide2;
+                    } 
                     break;
                 }
-                case 5:
+                case 5: // all kinds of (extra) (fine) portamento down
                 {
-                    iNote->effects[1].effect = PORTAMENTO_DOWN;
+                    int xfx = iNote->effects[1].argument >> 4;
+                    int xfxArg = iNote->effects[1].argument & 0xF;
+                    switch ( xfx )
+                    {
+                        case 0xE: // extra fine slide
+                        {
+                            iNote->effects[1].effect = EXTRA_FINE_PORTAMENTO;
+                            iNote->effects[1].argument = (EXTRA_FINE_PORTAMENTO_DOWN << 4)
+                                + xfxArg;
+                            break;
+                        }
+                        case 0xF: // fine slide
+                        {
+                            iNote->effects[1].effect = EXTENDED_EFFECTS;
+                            iNote->effects[1].argument = (FINE_PORTAMENTO_DOWN << 4)
+                                + xfxArg;
+                            
+                            break;
+                        }
+                        default: // normal slide
+                        {
+                            iNote->effects[1].effect = PORTAMENTO_DOWN;
+                            break;
+                        }
+                    }
                     break;
                 }
-                case 6:
+                case 6: // all kinds of (extra) (fine) portamento up
                 {
-                    iNote->effects[1].effect = PORTAMENTO_UP;
+                    int xfx = iNote->effects[1].argument >> 4;
+                    int xfxArg = iNote->effects[1].argument & 0xF;
+                    switch ( xfx )
+                    {
+                        case 0xE: // extra fine slide
+                        {
+                            iNote->effects[1].effect = EXTRA_FINE_PORTAMENTO;
+                            iNote->effects[1].argument = (EXTRA_FINE_PORTAMENTO_UP << 4)
+                                + xfxArg;
+                            break;
+                        }
+                        case 0xF: // fine slide
+                        {
+                            iNote->effects[1].effect = EXTENDED_EFFECTS;
+                            iNote->effects[1].argument = (FINE_PORTAMENTO_UP << 4)
+                                + xfxArg;
+
+                            break;
+                        }
+                        default: // normal slide
+                        {
+                            iNote->effects[1].effect = PORTAMENTO_UP;
+                            break;
+                        }
+                    }
                     break;
                 }
                 case 7:
@@ -825,11 +903,48 @@ int Module::loadS3mFile() {
                         case 8:
                         {
                             iNote->effects[1].effect = SET_FINE_PANNING;
-                            iNote->effects[1].argument = xfxp << 4;
+                            iNote->effects[1].argument = xfxp * 17;
                             break;
                         }
-                        case 10: // stereo control, new effect to be implemented
+                        case 10: // stereo control, for panic.s3m :s
                         {
+                            /*
+                            Signed rough panning, meaning:
+                                 0 is center
+                                -8 is full left 
+                                 7 is full right
+
+                            unsigned: | signed nibble: | pan value:
+                            ----------+----------------+-----------
+                             0        |  0             |  8
+                             1        |  1             |  9
+                             2        |  2             | 10
+                             3        |  3             | 11
+                             4        |  4             | 12
+                             5        |  5             | 13
+                             6        |  6             | 14
+                             7        |  7             | 15
+                             8        | -8             |  0
+                             9        | -7             |  1
+                            10        | -6             |  2
+                            11        | -5             |  3
+                            12        | -4             |  4
+                            13        | -3             |  5
+                            14        | -2             |  6
+                            15        | -1             |  7 
+
+                            Conversion from signed nibble to 
+                            0 .. 15 unsigned panning value:
+
+                            if (nibble > 7), then nibble = nibble - 8
+                            else nibble = nibble + 8 
+
+                            This is according to fs3mdoc.txt
+                            */
+                            iNote->effects[1].effect = SET_FINE_PANNING;
+                            if ( xfxp > 7 ) xfxp -= 8;
+                            else            xfxp += 8;
+                            iNote->effects[1].argument = xfxp * 17;
                             break;
                         }
                         case 11:
@@ -841,14 +956,19 @@ int Module::loadS3mFile() {
                     }                    
                     break;
                 }
-                case 20:  // set tempo (bpm)
+                case 20: 
                 {
-                    iNote->effects[1].effect = SET_TEMPO_BPM; // to be fixed
+                    iNote->effects[1].effect = SET_BPM; 
+                    if ( unPackedNote->fxp < 0x20 )
+                    {
+                        iNote->effects[1].effect = 0;
+                        iNote->effects[1].argument = 0;
+                    }
                     break;
                 }
-                case 21:  // fine vibrato, to be fixed
+                case 21:  
                 {
-                    iNote->effects[1].effect = VIBRATO;
+                    iNote->effects[1].effect = FINE_VIBRATO;
                     break;
                 }
                 case 22:
@@ -857,7 +977,7 @@ int Module::loadS3mFile() {
                     break;
                 }
             }
-            // next note / channel
+            // next note / channel:
             iNote++;
             unPackedNote++;
         }

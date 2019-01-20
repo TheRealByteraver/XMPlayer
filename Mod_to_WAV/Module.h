@@ -31,6 +31,12 @@
 #define FORWARD                             false
 #define BACKWARD                            true
 
+// differentiate trackers, fro S3M compatibility mainly
+#define TRACKER_PROTRACKER                  1
+#define TRACKER_ST300                       2
+#define TRACKER_ST321                       3
+#define TRACKER_FT2                         4
+
 // effect nrs:
 #define ARPEGGIO                            0x0
 #define PORTAMENTO_UP                       0x1
@@ -47,31 +53,37 @@
 #define SET_VOLUME                          0xC
 #define PATTERN_BREAK                       0xD
 #define EXTENDED_EFFECTS                    0xE // extended effects
-#define SET_FILTER                          0x0
-#define FINE_PORTAMENTO_UP                  0x1 
-#define FINE_PORTAMENTO_DOWN                0x2
-#define SET_GLISSANDO_CONTROL               0x3
-#define SET_VIBRATO_CONTROL                 0x4
-#define SET_FINETUNE                        0x5
-#define SET_PATTERN_LOOP                    0x6
-#define SET_TREMOLO_CONTROL                 0x7
-#define NOTE_RETRIG                         0x9
-#define FINE_VOLUME_SLIDE_UP                0xA
-#define FINE_VOLUME_SLIDE_DOWN              0xB
-#define NOTE_CUT                            0xC
-#define NOTE_DELAY                          0xD
-#define PATTERN_DELAY                       0xE // end of extended effects
-#define FUNK_REPEAT                         0xF 
-#define SET_TEMPO_BPM                       0xF
-#define SET_GLOBAL_VOLUME                   0x10
-#define GLOBAL_VOLUME_SLIDE                 0x11
-#define SET_ENVELOPE_POSITION               0x15
-#define PANNING_SLIDE                       0x19
-#define MULTI_NOTE_RETRIG                   0x1B
-#define TREMOR                              0x1D
-#define EXTRA_FINE_PORTAMENTO               0x21
-#define EXTRA_FINE_PORTAMENTO_UP            0x1   // 0x21 in XM file spec
-#define EXTRA_FINE_PORTAMENTO_DOWN          0x2   // X1 & X2
+#define SET_FILTER                          0x0 // XM effect E0
+#define FINE_PORTAMENTO_UP                  0x1 // XM effect E1
+#define FINE_PORTAMENTO_DOWN                0x2 // XM effect E2
+#define SET_GLISSANDO_CONTROL               0x3 // XM effect E3
+#define SET_VIBRATO_CONTROL                 0x4 // XM effect E4
+#define SET_FINETUNE                        0x5 // XM effect E5
+#define SET_PATTERN_LOOP                    0x6 // XM effect E6
+#define SET_TREMOLO_CONTROL                 0x7 // XM effect E7
+#define SET_ROUGH_PANNING                   0x8 // XM effect E8, not used in player
+#define NOTE_RETRIG                         0x9 // XM effect E9
+#define FINE_VOLUME_SLIDE_UP                0xA // XM effect EA
+#define FINE_VOLUME_SLIDE_DOWN              0xB // XM effect EB
+#define NOTE_CUT                            0xC // XM effect EC
+#define NOTE_DELAY                          0xD // XM effect ED
+#define PATTERN_DELAY                       0xE // XM effect EE
+#define FUNK_REPEAT                         0xF // XM effect EF, end of extended effects
+#define SET_TEMPO                           0xF
+#define SET_GLOBAL_VOLUME                   0x10// XM effect G
+#define GLOBAL_VOLUME_SLIDE                 0x11// XM effect H
+#define SET_ENVELOPE_POSITION               0x15// XM effect L
+#define PANNING_SLIDE                       0x19// XM effect P
+#define MULTI_NOTE_RETRIG                   0x1B// XM effect R
+#define TREMOR                              0x1D// XM effect T
+#define EXTRA_FINE_PORTAMENTO               0x21// XM effect X
+#define EXTRA_FINE_PORTAMENTO_UP            0x1 // XM effect X1
+#define EXTRA_FINE_PORTAMENTO_DOWN          0x2 // XM effect X2
+
+// internal remapped effects for the player
+#define SET_BPM                             0x24  // after effect "Z" for XM safety
+#define FINE_VIBRATO                        0x26  // S3M fine vibrato
+//#define S3M_VOLUME_SLIDE                    0x27  // S3M volume slide
 #define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
 /*
@@ -101,7 +113,7 @@ const unsigned periods[] = {
     26   ,25   ,23   ,22   ,21   ,20   ,18   ,17   ,16   ,15   ,15   ,14
 };
 
-const unsigned amigaPeriodTable[/* MAXIMUM_NOTES */] = {
+const unsigned amigaPeriodTable[] = {
     907, 900, 894, 887, 881, 875, 868, 862, 856, 850, 844, 838, 
     832, 826, 820, 814, 808, 802, 796, 791, 785, 779, 774, 768, 
     762, 757, 752, 746, 741, 736, 730, 725, 720, 715, 709, 704, 
@@ -329,6 +341,8 @@ public:
     unsigned        getDefaultBpm ()            { return defaultBpm_;           }
     unsigned        getSongLength ()            { return songLength_;           }
     unsigned        getSongRestartPosition ()   { return songRestartPosition_;  }
+    std::string     getSongTitle()              { return songTitle_;            }
+
     unsigned        getDefaultPanPosition( unsigned i ) 
     { 
         assert( i < nChannels_ );
@@ -342,12 +356,10 @@ public:
        { return ((pattern < MAX_PATTERNS) ? patterns_[pattern] : 0); }
 
 private:
-    //char            *fileName_;
-    //char            *songTitle_;
-    //char            *trackerTag_;
     std::string     fileName_;
     std::string     songTitle_;
     std::string     trackerTag_;
+    unsigned        trackerType_;
     bool            isLoaded_;
     bool            useLinearFrequencies_;
     bool            isCustomRepeat_;

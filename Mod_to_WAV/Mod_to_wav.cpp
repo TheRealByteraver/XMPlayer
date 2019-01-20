@@ -318,14 +318,10 @@ int Mixer::initialise(Module *m) {
 }
 
 int Mixer::doMixBuffer (SHORT *buffer) {
-    unsigned    x, y;
-
     memset(mixBuffer, 0, BUFFER_SIZE * sizeof(MixBufferType));
-    //memset( mixBuffer,0,sizeof( MixBufferType[BUFFER_SIZE] ) );
     mixIndex = 0;  
-
-    x = callBpm - mixCount;
-    y = BUFFER_SIZE / 2;   // stereo
+    unsigned x = callBpm - mixCount;
+    unsigned y = BUFFER_SIZE / 2;   // stereo
     if (x > y) {
         mixCount += y;
         doMixSixteenbitStereo(y);
@@ -344,105 +340,16 @@ int Mixer::doMixBuffer (SHORT *buffer) {
             doMixSixteenbitStereo(x);
         }
     }
-    saturation = 0;
-
-
     // transfer sampled data from ?? bit buffer into 16 bit buffer
-
-    
+    saturation = 0;
     MixBufferType *src = mixBuffer;
     SHORT *dst = buffer;
-    /*
-    for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
-        //int tmp = (int)((*src++) >> (6 + 6 + 8)); // globalvolume + volume + gain
-        MixBufferType tmp = (MixBufferType)((*src++) >> 8 );
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        //else 
-            if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-
-        //std::cout << tmp << std::endl;
-        *dst++ = (SHORT)tmp;
-    }
-    */
-    int sat = 0;
     for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
         MixBufferType tmp = src[i] >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; sat++; }
-        if ( tmp >  32767 ) { tmp = 32767; sat++; }
+        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
+        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
         dst[i] = (SHORT)tmp;
     }
-    saturation = sat;
-
-
-    /*
-    MixBufferType *src = mixBuffer;
-    MixBufferType *end = src + BUFFER_SIZE;
-    SHORT *dst = buffer;
-    //for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
-    for ( ; src < end ; ) {
-        MixBufferType tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-    }
-    */
-
-    /*
-    MixBufferType *src = mixBuffer;
-    SHORT *dst = buffer;
-    MixBufferType *endLoop1 = src + (BUFFER_SIZE & 0xFFFFFFF8);
-    MixBufferType *endLoop2 = src + BUFFER_SIZE;
-    for ( ; src < endLoop1; ) {
-        MixBufferType tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-
-        tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-    }
-
-    for ( ; src < endLoop2; ) {
-        MixBufferType tmp = *src++ >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
-        *dst++ = (SHORT)tmp;
-    }
-    */
-
-
     std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
     return 0;
 }
@@ -479,12 +386,10 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         unsigned nrLoops = ((((nrSamplesLeft << 15) + mChn.sampleIncrement - 1)
                             - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
 
-
-
                         if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;                        
 
                         /*
-                        // original rolled code:
+                        // original rolled code:   // 32 bit
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
                             int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
@@ -522,6 +427,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         mChn.sampleOffsetFrac = loopEnd;
                         */
 
+                        /*
                         // lineaire interpolatie:
                         // 31 bit frequency index:
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
@@ -539,11 +445,10 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                             *mixBufferPTR++ += (s1 * rightGain);
                         }
                         mChn.sampleOffsetFrac = loopEnd; 
-                        
+                        */ 
 
-                        /*
                         // cubic interpolation:
-                        // 31 bit frequency index:
+                        // 31 bit frequency index:                        
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                         int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
                         for ( int ofsFrac = mChn.sampleOffsetFrac;
@@ -554,8 +459,6 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                             int p1 = SampleDataPTR[idx    ];
                             int p2 = SampleDataPTR[idx + 1];
                             int p3 = SampleDataPTR[idx + 2];
-
-                            
 #define FRAC_RES_SHIFT  7
 #define SAR             (15 - FRAC_RES_SHIFT)
                             
@@ -575,207 +478,18 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                             *mixBufferPTR++ += (f2 * rightGain);
                         }
                         mChn.sampleOffsetFrac = loopEnd;
-                        */
-
-
-
-
-                         
-
-                        /* 
-                        // 31 bit frequency index:
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
-                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
-
-                        for ( int ofsFrac = mChn.sampleOffsetFrac;
-                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
-                            union {
-                                struct {
-                                    SHORT lo;
-                                    SHORT hi;
-                                };
-                                int i;
-                            } s;
-                            s.i = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            int s2 = (int)s.hi - (int)s.lo;
-                            int s1 = s.lo + (((ofsFrac & 0x7FFF) * s2) >> 15);
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                        }
-                        mChn.sampleOffsetFrac = loopEnd;
-                        //  A 28 channel module was rendered to 4 min of wave data in 0.493671 seconds.
-                        //  Estimated realtime cpu charge is 0.205696 percent.
-                        //  On average 4.40778 milliseconds per channel per minute.
-                        */
-
-
-
-                        /*
-                        // loop unrolled code with 31 bit freq counter:
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
-                        int loopEnd1 = (nrLoops & 0xFFF8) * mChn.sampleIncrement + mChn.sampleOffsetFrac;
-                        int loopEnd2 = (nrLoops & 0x7   ) * mChn.sampleIncrement + loopEnd1;
-
-                        
-                        for ( int ofsFrac = mChn.sampleOffsetFrac;
-                            ofsFrac < loopEnd1; ) { // ofsFrac += chnInc ) {
-                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            int s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-                            
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-
-                            s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            //xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += ((ofsFrac & 0x7FFF) * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            ofsFrac += chnInc;
-                            
-                        }
-
-                        for ( int ofsFrac = loopEnd1;
-                            ofsFrac < loopEnd2; ofsFrac += chnInc ) {
-                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            int s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += (xd * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                        }
-                        mChn.sampleOffsetFrac = loopEnd2;
-                        */
-
-
-
-
-
-
-
-
-
-
-                        
-
-
-
 
                         // ********************
                         // End of loop unroll
                         // ********************
 
+
                         mixOffset += nrLoops << 1;
                         j += nrLoops;
-
                         //mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
                         //mChn.sampleOffsetFrac &= 0xFFFF;
                         mChn.sampleOffset += mChn.sampleOffsetFrac >> 15;
                         mChn.sampleOffsetFrac &= 0x7FFF;
-
-                        /*
-                        if ( ((mChn.sampleOffset + ((mChn.sampleOffsetFrac + mChn.sampleIncrement) >> 16))                            
-                            >= sample.getRepeatEnd()) && (j < nSamples) ) {
-                            
-                            //int a = (mChn.sampleOffset + ((mChn.sampleOffsetFrac + mChn.sampleIncrement) >> 16));
-                            //int b = sample.getRepeatEnd();
-                            //if ( a == b )   std::cout << " !!! " << std::endl;
-                            //else            std::cout << a << " >= ? " << b << std::endl;
-                            
-                            
-                            // last sample
-                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
-                            int s2;
-                            if ( sample.isRepeatSample() ) {
-                                if ( !sample.isPingpongSample() )
-                                {
-                                    s2 = sample.getData()[sample.getRepeatOffset()];
-                                } else {
-                                    s2 = sample.getData()[sample.getRepeatEnd() - 1];
-                                }
-                            } else {
-                                s2 = 0;
-                            }
-                            int xd = (mChn.sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
-                            int yd = s2 - s1;                                // sample delta
-                            s1 += (xd * yd) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            mChn.sampleOffsetFrac += mChn.sampleIncrement;
-                            mixOffset += 2;
-                            j++;
-
-                            mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
-                            */
-
                         if( mChn.sampleOffset >= sample.getRepeatEnd() ) {
                             if ( sample.isRepeatSample() ) {
                                 if ( !sample.isPingpongSample() )
@@ -797,19 +511,6 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 j = nSamples; // quit loop, we're done here
                             }
                         }
-                        /*
-                        for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
-                            int smpIdx = (sampleOffsetFrac >> 16);
-                            MixBufferType s1 = smpDataPTR[smpIdx];
-                            MixBufferType s2 = smpDataPTR[smpIdx + 1];
-                            int xd = (sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
-                            int yd = s2 - s1;                           // sample delta
-                            s1 += (xd * yd) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            sampleOffsetFrac += sampleIncrement;
-                        }
-                        */
 
                     // ********************************************************
                     // ********************************************************
@@ -1088,24 +789,10 @@ END;
     }
 }
 
-// C4 SPeed should be implemented in period calc???
-unsigned Mixer::periodToFrequency(unsigned period /*, unsigned c4Speed */) {
-    if (module->useLinearFrequencies()) {
-        return (unsigned)(8363 * // could keep it 8363, s3m uses amiga freq
-            pow(2, 
-                ((4608.0 - (double)period) / 768.0)
-            )); 
-        //return (unsigned)(14317056 / period);  
-    } else {
-        //return (period ? (unsigned)(PAL_CALC / (period << 1)) : 0);
-        return (period ? 
-            ((8363 * (unsigned)1712) / period )
-            //((8363 * (unsigned)1712) / ( (8363 * period) / c4Speed ))  
-            //(8363 * (unsigned)1712 * 4) / ((8363 * 4 * period) / c4Speed)
-            //(1712 * c4Speed) / period
-            : 
-            0);
-    }
+unsigned Mixer::periodToFrequency(unsigned period) {
+    return module->useLinearFrequencies() ?
+        (unsigned)(8363 * pow(2, ((4608.0 - (double)period) / 768.0)))
+    :   (period ? ((8363 * 1712) / period ) : 0);
 }
 
 int Mixer::setMixerVolume(unsigned fromChannel) {
@@ -1310,7 +997,7 @@ int Mixer::updateNotes () {
 #endif
 
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel     *channel = channels[iChannel];
+        Channel&    channel = *channels[iChannel];
         unsigned    note, instrument, sample, effect, argument;
         bool        isNewNote;
         bool        isNewInstrument;
@@ -1323,29 +1010,12 @@ int Mixer::updateNotes () {
         int         finetune = 0;
 
 
-        channel->sampleOffset = 0;
-        /*
-        channel->volume;
-        channel->panning; 
-        */
-
+        channel.sampleOffset = 0;
         note       = iNote->note;
-
-        /*
-        //debug for bluishbg.xm:
-        if ( note > (MAXIMUM_NOTES + 1) ) { // + 1 for the key off
-            std::cout << "!";
-            note = 0;
-        }
-        */
-
-        //std::cout << noteStrings[note];
-        //std::cout << channel->volume << " ";
-
         instrument = iNote->instrument;
 
         if (note) {
-            channel->lastNote = note;
+            channel.lastNote = note;
             if (note == KEY_OFF) {
                 isNewNote = false;
                 keyedOff = true;
@@ -1354,21 +1024,21 @@ int Mixer::updateNotes () {
             isNewNote = false;
         }
         
-        oldInstrument = channel->instrumentNo;
+        oldInstrument = channel.instrumentNo;
         if (instrument) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
-            channel->pInstrument = module->getInstrument(instrument - 1); 
-            if (channel->pInstrument) {
-                if (channel->lastNote) {
-                    sample = channel->pInstrument->getSampleForNote
-                        (channel->lastNote - 1);
-                    channel->pSample = 
-                        channel->pInstrument->getSample(sample);
+            channel.pInstrument = module->getInstrument(instrument - 1); 
+            if (channel.pInstrument) {
+                if (channel.lastNote) {
+                    sample = channel.pInstrument->getSampleForNote
+                        (channel.lastNote - 1);
+                    channel.pSample = 
+                        channel.pInstrument->getSample(sample);
                 }
-                if (channel->pSample) {
-                    channel->volume = 
-                        channel->pSample->getVolume();
+                if (channel.pSample) {
+                    channel.volume = 
+                        channel.pSample->getVolume();
                     isValidInstrument = true;
                 } else {
                     isValidInstrument = false;
@@ -1376,32 +1046,23 @@ int Mixer::updateNotes () {
             }
         } else {
             isNewInstrument = false;
-            channel->pInstrument = 
+            channel.pInstrument = 
                 module->getInstrument(oldInstrument - 1);
-            if (channel->pInstrument) {
-                if (channel->lastNote) {               
-                    sample = channel->pInstrument->getSampleForNote
-                        (channel->lastNote - 1);
-                    channel->pSample = 
-                        channel->pInstrument->getSample(sample); 
+            if (channel.pInstrument) {
+                if (channel.lastNote) {               
+                    sample = channel.pInstrument->getSampleForNote
+                        (channel.lastNote - 1);
+                    channel.pSample = 
+                        channel.pInstrument->getSample(sample); 
                 }
             }
         }
-/*
-        if (isNewNote) {
-            if (isNewInstrument) {
-                channel->instrumentNo = instrument;
-                if (isValidInstrument) replay = true;                
-            }
-            channel->oldNote = channel->newNote;
-        }
-*/
-        if (isNewInstrument) channel->instrumentNo = instrument;
+
+        if (isNewInstrument) channel.instrumentNo = instrument;
         if (isNewNote) replay = true;
-        channel->oldNote = channel->newNote;
+        channel.oldNote = channel.newNote;
 
-
-        channel->newNote = *iNote;
+        channel.newNote = *iNote;
 
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
             effect   = iNote->effects[fxloop].effect;
@@ -1410,61 +1071,61 @@ int Mixer::updateNotes () {
                 case ARPEGGIO :
                     {
                         if (argument) {
-                            channel->arpeggioCount = 0;
-                            channel->arpeggioNote1  = channel->arpeggioNote2 
-                                                    = channel->lastNote;
-                            channel->arpeggioNote1 += argument >> 4;
-                            channel->arpeggioNote2 += argument & 0xF;
+                            channel.arpeggioCount = 0;
+                            channel.arpeggioNote1  = channel.arpeggioNote2 
+                                                    = channel.lastNote;
+                            channel.arpeggioNote1 += argument >> 4;
+                            channel.arpeggioNote2 += argument & 0xF;
                         }
                         break;
                     }
                 case PORTAMENTO_UP :
                     {
-                        if (argument) channel->lastPortamentoUp = argument;
+                        if (argument) channel.lastPortamentoUp = argument;
                         break;
                     }
                 case PORTAMENTO_DOWN :
                     {
-                        if (argument) channel->lastPortamentoDown = argument;
+                        if (argument) channel.lastPortamentoDown = argument;
                         break;
                     }
                 case TONE_PORTAMENTO :
                     {
-                        if (argument) channel->lastTonePortamento = argument;
+                        if (argument) channel.lastTonePortamento = argument;
                         break;
                     }
                 case VIBRATO :
                     {
-                        unsigned lv = channel->lastVibrato;
+                        unsigned lv = channel.lastVibrato;
                         if (argument & 0xF0) 
                              lv = (lv & 0xF) + (argument & 0xF0);
                         if (argument & 0xF) 
                              lv = (lv & 0xF0) + (argument & 0xF);
-                        channel->lastVibrato = lv;
+                        channel.lastVibrato = lv;
                         break;
                     }
                 case TREMOLO : 
                     {
-                        unsigned lt = channel->lastTremolo;
+                        unsigned lt = channel.lastTremolo;
                         if (argument & 0xF0) 
                              lt = (lt & 0xF) + (argument & 0xF0);
                         if (argument & 0xF) 
                              lt = (lt & 0xF0) + (argument & 0xF);
-                        channel->lastTremolo = lt;
+                        channel.lastTremolo = lt;
                         break;
                     }
                 case SET_FINE_PANNING : 
                     {
-                        channel->panning = argument;                       
+                        channel.panning = argument;                       
                         break;
                     }
                 case SET_SAMPLE_OFFSET : 
                     {                   
-                        if (channel->pSample) {
+                        if (channel.pSample) {
                             argument <<= 8;
                             
-                            if (argument < (channel->pSample->getLength())) {
-                                channel->sampleOffset = argument;
+                            if (argument < (channel.pSample->getLength())) {
+                                channel.sampleOffset = argument;
                                 if (isNewNote) replay = true;
                             } else {
                                 replay = false;
@@ -1477,9 +1138,29 @@ int Mixer::updateNotes () {
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
                     {
-                        if (argument) channel->lastVolumeSlide = argument;
+                        if (argument) channel.lastVolumeSlide = argument;
                         break;
                     }
+                /*
+                case S3M_VOLUME_SLIDE :
+                    {
+                        if ( argument ) channel.lastVolumeSlide = argument;
+                        unsigned&   v = channel.volume;
+                        unsigned& arg = channel.lastVolumeSlide;
+                        unsigned    slide1 = arg >> 4;
+                        unsigned    slide2 = arg & 0xF;
+                        // fine slides:
+                        if (slide1 == 0xF) // fine volume down
+                        {
+                            if ( slide2 > v ) v = 0;
+                            else              v -= slide2;
+                        } else if ( slide2 == 0xF ) { // fine volume up
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        }
+                        break;
+                    }
+                */
                 case POSITION_JUMP :
                     {
                         patternBreak = true;
@@ -1489,7 +1170,7 @@ int Mixer::updateNotes () {
                     }
                 case SET_VOLUME :
                     {
-                        channel->volume = argument;
+                        channel.volume = argument;
                         break;
                     }
                 case PATTERN_BREAK :
@@ -1528,7 +1209,7 @@ int Mixer::updateNotes () {
                                 }
                             case NOTE_RETRIG : 
                                 {
-                                    if (argument) channel->retrigCount = 0;//argument;
+                                    if (argument) channel.retrigCount = 0;//argument;
                                     else {
                                         iNote->effects[fxloop].effect = 0;
                                         iNote->effects[fxloop].argument = 0;
@@ -1537,14 +1218,14 @@ int Mixer::updateNotes () {
                                 }
                             case NOTE_CUT : 
                                 {
-                                    if (!argument) channel->volume = 0;
+                                    if (!argument) channel.volume = 0;
                                     break;
                                 }
                             case NOTE_DELAY : 
                                 {
                                     if( argument < tempo )
                                     {
-                                        channel->delayCount = argument;
+                                        channel.delayCount = argument;
                                         isNoteDelayed = true;
                                     }
                                     break;
@@ -1557,14 +1238,15 @@ int Mixer::updateNotes () {
                         }
                         break;
                     }
-                case SET_TEMPO_BPM :
+                case SET_TEMPO :
                     {
-                        if (argument > 0x1F) {
-                            bpm = argument;
-                            setBpm();
-                        } else {
-                            tempo = argument;
-                        }
+                        tempo = argument;
+                        break;
+                    }
+                case SET_BPM :
+                    {
+                        bpm = argument;
+                        setBpm();
                         break;
                     }
                 case SET_GLOBAL_VOLUME :
@@ -1575,7 +1257,7 @@ int Mixer::updateNotes () {
                 case GLOBAL_VOLUME_SLIDE :
                     {
                         if (argument) 
-                            channel->lastGlobalVolumeSlide = argument;
+                            channel.lastGlobalVolumeSlide = argument;
                         break;
                     }
                 case SET_ENVELOPE_POSITION :
@@ -1584,12 +1266,12 @@ int Mixer::updateNotes () {
                     }
                 case PANNING_SLIDE :
                     {
-                        if (argument) channel->lastPanningSlide = argument;
+                        if (argument) channel.lastPanningSlide = argument;
                         break;
                     }
                 case MULTI_NOTE_RETRIG :
                     {
-                        if (argument) channel->lastMultiNoteRetrig = argument;
+                        if (argument) channel.lastMultiNoteRetrig = argument;
                         break;
                     }
                 case TREMOR :
@@ -1599,17 +1281,16 @@ int Mixer::updateNotes () {
             }
         }
         // valid sample for replay ? -> replay sample if new note
-        if (replay && channel->pSample && (!isNoteDelayed)) {
-            playSample(iChannel, channel->pSample, 
-                       channel->sampleOffset, FORWARD);
-            if(!finetune) finetune = channel->pSample->getFinetune();
+        if (replay && channel.pSample && (!isNoteDelayed)) {
+            playSample(iChannel, channel.pSample, 
+                       channel.sampleOffset, FORWARD);
+            if(!finetune) finetune = channel.pSample->getFinetune();
 
             setFrequency(iChannel, 
                 periodToFrequency(
                     noteToPeriod(note + 
-                        channel->pSample->getRelativeNote(), 
+                        channel.pSample->getRelativeNote(), 
                         finetune)
-                    //,channel->pSample->getC4Speed()
                 )
             );
         } 
@@ -1687,45 +1368,68 @@ int Mixer::updateNotes () {
         }
         pattern = module->getPattern(module->getPatternTable(iPatternTable));
         iNote = pattern->getRow(patternStartRow);
-        //std::cout << "\nPlaying pattern # " << module->getPatternTable(iPatternTable) << ", order # " << iPatternTable; // debug
+#ifdef debug_mixer
+        std::cout << "\nPlaying pattern # " << module->getPatternTable(iPatternTable) << ", order # " << iPatternTable; // debug
+#endif
     }
     return 0;
 }
 
 int Mixer::updateEffects () {
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel     *channel = channels[iChannel];
+        Channel&     channel = *channels[iChannel];
 
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            Note        *note = &(channel->newNote);
-            unsigned    effect   = note->effects[fxloop].effect;
-            unsigned    argument = note->effects[fxloop].argument;
+            Note&       note = channel.newNote;
+            unsigned    effect   = note.effects[fxloop].effect;
+            unsigned    argument = note.effects[fxloop].argument;
 
             switch (effect) {
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
                     {
-                        unsigned    *v = &(channel->volume);
-                        unsigned    arg = channel->lastVolumeSlide;
+                        unsigned&   v = channel.volume;
+                        unsigned    arg = channel.lastVolumeSlide;
                         unsigned    slide = (arg & 0xF0) >> 4;                      
                         if (slide) { // slide up
-                            *v += slide;
-                            if (*v > MAX_VOLUME) *v = MAX_VOLUME;
+                            v += slide;
+                            if (v > MAX_VOLUME) v = MAX_VOLUME;
                         } else {     // slide down
                             slide = arg & 0x0F;
-                            if (slide > *v) *v = 0;
-                            else            *v -= slide;
+                            if (slide > v)  v = 0;
+                            else            v -= slide;
                         }
                         break;
                     }
+                    /*
+                case S3M_VOLUME_SLIDE:
+                    {
+                        unsigned&   v = channel.volume;
+                        unsigned    arg = channel.lastVolumeSlide;
+                        unsigned    slide1 = arg >> 4;
+                        unsigned    slide2 = arg & 0xF;
+                        // exclude fine slides:
+                        if ( (slide1 < 0xF) && (slide2 < 0xF) )
+                        {
+                            if ( slide1 ) { // slide up
+                                v += slide1;
+                                if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                            } else {        // slide down
+                                if ( slide2 > v ) v = 0;
+                                else              v -= slide2;
+                            }
+                        }
+                        break;
+                    }
+                    */
             }
 
             switch (effect) {
                 case ARPEGGIO :
                     {
                         if (argument) {
-                            switch (channel->arpeggioCount) {
+                            switch (channel.arpeggioCount) {
                                 case 0 : 
                                     {
 
@@ -1745,6 +1449,7 @@ int Mixer::updateEffects () {
                     }
                 case PORTAMENTO_UP :
                     {
+
                         break;
                     }
                 case PORTAMENTO_DOWN :
@@ -1772,21 +1477,20 @@ int Mixer::updateEffects () {
                         switch (effect) {
                             case NOTE_RETRIG : 
                                 {
-                                    channel->retrigCount++;
-                                    if (channel->retrigCount >= argument) { 
-                                        channel->retrigCount = 0;
-                                        if (channel->pSample) { 
+                                    channel.retrigCount++;
+                                    if (channel.retrigCount >= argument) { 
+                                        channel.retrigCount = 0;
+                                        if (channel.pSample) { 
                                             playSample(iChannel, 
-                                                       channel->pSample, 
-                                                       channel->sampleOffset, 
+                                                       channel.pSample, 
+                                                       channel.sampleOffset, 
                                                        FORWARD);
                                             setFrequency( iChannel,
                                                 periodToFrequency(
                                                     noteToPeriod(
-                                                        channel->lastNote +
-                                                        channel->pSample->getRelativeNote(),
-                                                        channel->pSample->getFinetune() )
-                                                    //,channel->pSample->getC4Speed()
+                                                        channel.lastNote +
+                                                        channel.pSample->getRelativeNote(),
+                                                        channel.pSample->getFinetune() )
                                                 )
                                             );
                                         }
@@ -1796,36 +1500,35 @@ int Mixer::updateEffects () {
                             case NOTE_CUT : 
                                 {
                                     if (tick > argument) {
-                                        channel->volume = 0;
-                                        //setVolume(iChannel, channel->volume);
-                                        note->effects[fxloop].effect   = 0;
-                                        note->effects[fxloop].argument = 0;
+                                        channel.volume = 0;
+                                        //setVolume(iChannel, channel.volume);
+                                        note.effects[fxloop].effect   = 0;
+                                        note.effects[fxloop].argument = 0;
                                     }
                                     break;
                                 }
                             case NOTE_DELAY : 
                                 {                                    
-                                    if (channel->delayCount <= tick) {
+                                    if (channel.delayCount <= tick) {
                                         // valid sample for replay ? -> replay sample if new note
-                                        if (channel->pSample) { 
+                                        if (channel.pSample) { 
                                             playSample(iChannel, 
-                                                       channel->pSample, 
-                                                       channel->sampleOffset, 
+                                                       channel.pSample, 
+                                                       channel.sampleOffset, 
                                                        FORWARD);
                                             setFrequency(iChannel, 
                                                 periodToFrequency(
                                                     noteToPeriod(
-                                                        channel->lastNote + 
-                                                            channel->pSample->getRelativeNote(), 
-                                                        channel->pSample->getFinetune())
-                                                    //,channel->pSample->getC4Speed()
+                                                        channel.lastNote + 
+                                                            channel.pSample->getRelativeNote(), 
+                                                        channel.pSample->getFinetune())
                                                 )
                                             );
                                         }
-                                        note->effects[fxloop].effect   = 0;
-                                        note->effects[fxloop].argument = 0;
-                                        //setPanning(iChannel, channel->panning);  // temp
-                                        //setVolume(iChannel, channel->volume);    // temp
+                                        note.effects[fxloop].effect   = 0;
+                                        note.effects[fxloop].argument = 0;
+                                        //setPanning(iChannel, channel.panning);  // temp
+                                        //setVolume(iChannel, channel.volume);    // temp
                                     }                                   
                                     break;
                                 }
@@ -1838,7 +1541,7 @@ int Mixer::updateEffects () {
                     }
                 case GLOBAL_VOLUME_SLIDE :
                     {
-                        unsigned    arg = channel->lastGlobalVolumeSlide;
+                        unsigned    arg = channel.lastGlobalVolumeSlide;
                         unsigned    slide = (arg & 0xF0) >> 4;                      
                         if (slide) { // slide up
                             globalVolume_ += slide;
@@ -1854,8 +1557,8 @@ int Mixer::updateEffects () {
                     }
                 case PANNING_SLIDE :
                     {
-                        unsigned    panning = channel->panning;
-                        unsigned    arg = channel->lastPanningSlide;
+                        unsigned    panning = channel.panning;
+                        unsigned    arg = channel.lastPanningSlide;
                         unsigned    slide = (arg & 0xF0) >> 4;                      
                         if (slide) { // slide up
                             panning += slide;
@@ -1867,52 +1570,50 @@ int Mixer::updateEffects () {
                                  panning = PANNING_FULL_LEFT;
                             else panning -= slide;
                         }
-                        //setPanning(iChannel, panning);
-                        channel->panning = panning;
+                        channel.panning = panning;
                         break;
                     }
                 case MULTI_NOTE_RETRIG :
                     {  /* R + interval + Volume change */
-                        int    *v = (int *)(&(channel->volume));
+                        int v = channel.volume;
                         switch (argument & 0xF) {
-                            case 1 : { (*v) --;                  break; }
-                            case 2 : { (*v) -= 2;                break; }
-                            case 3 : { (*v) -= 4;                break; }
-                            case 4 : { (*v) -= 8;                break; }
-                            case 5 : { (*v) -= 16;               break; }
-                            case 6 : { (*v) <<= 1; (*v) /= 3;    break; }
-                            case 7 : { (*v) >>= 1;               break; }
-                            case 9 : { (*v) ++;                  break; }
-                            case 10: { (*v) += 2;                break; }
-                            case 11: { (*v) += 4;                break; }
-                            case 12: { (*v) += 8;                break; }
-                            case 13: { (*v) += 16;               break; }
-                            case 14: { (*v) *= 3; (*v) >>= 1;    break; }
-                            case 15: { (*v) >>= 1;               break; }
+                            case 1 : { v --;            break; }
+                            case 2 : { v -= 2;          break; }
+                            case 3 : { v -= 4;          break; }
+                            case 4 : { v -= 8;          break; }
+                            case 5 : { v -= 16;         break; }
+                            case 6 : { v <<= 1; v /= 3; break; }
+                            case 7 : { v >>= 1;         break; }
+                            case 9 : { v++;             break; }
+                            case 10: { v += 2;          break; }
+                            case 11: { v += 4;          break; }
+                            case 12: { v += 8;          break; }
+                            case 13: { v += 16;         break; }
+                            case 14: { v *= 3; v >>= 1; break; }
+                            case 15: { v >>= 1;         break; }
                         }
-                        if (*v < 0) *v = 0;
-                        if (*v > MAX_VOLUME) *v = MAX_VOLUME;
+                        if (v < 0) v = 0;
+                        if (v > MAX_VOLUME) v = MAX_VOLUME;
+                        channel.volume = (unsigned)v;
 
-                        channel->retrigCount++;
-                        if (channel->retrigCount >= (argument >> 4)) {
-                            channel->retrigCount = 0;
-                            if (channel->pSample) { 
+                        channel.retrigCount++;
+                        if (channel.retrigCount >= (argument >> 4)) {
+                            channel.retrigCount = 0;
+                            if (channel.pSample) { 
                                 playSample(iChannel, 
-                                           channel->pSample, 
-                                           channel->sampleOffset, 
+                                           channel.pSample, 
+                                           channel.sampleOffset, 
                                            FORWARD);
                                 setFrequency(iChannel, 
                                     periodToFrequency(
                                         noteToPeriod(
-                                            channel->lastNote + 
-                                                channel->pSample->getRelativeNote(), 
-                                            channel->pSample->getFinetune())
-                                        //,channel->pSample->getC4Speed()
+                                            channel.lastNote + 
+                                                channel.pSample->getRelativeNote(), 
+                                            channel.pSample->getFinetune())
                                     )
                                 );
                             }
                         }
-                        //setVolume(iChannel, channel->volume);    // temp
                         break;
                     }
                 case TREMOR :
@@ -1929,11 +1630,11 @@ int Mixer::updateEffects () {
 
 int Mixer::updateImmediateEffects () {
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel     *channel = channels[iChannel];
+        Channel&     channel = *channels[iChannel];
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            Note        *note = &(channel->newNote);
-            unsigned    effect   = note->effects[fxloop].effect;
-            unsigned    argument = note->effects[fxloop].argument;
+            Note&       note = channel.newNote;
+            unsigned    effect   = note.effects[fxloop].effect;
+            unsigned    argument = note.effects[fxloop].argument;
 
             switch (effect) {
                 case EXTENDED_EFFECTS :
@@ -1944,34 +1645,34 @@ int Mixer::updateImmediateEffects () {
                             case FINE_PORTAMENTO_UP :
                                 {
                                     if (argument) 
-                                        channel->lastFinePortamentoUp = argument;
+                                        channel.lastFinePortamentoUp = argument;
                                     break;
                                 }
                             case FINE_PORTAMENTO_DOWN :
                                 {
                                     if (argument) 
-                                        channel->lastFinePortamentoDown = argument;
+                                        channel.lastFinePortamentoDown = argument;
                                     break;
                                 }
                             case FINE_VOLUME_SLIDE_UP :
                                 {
                                     if (argument) 
-                                        channel->lastFineVolumeSlideUp = argument;
-                                    channel->volume += 
-                                        channel->lastFineVolumeSlideUp;
-                                    if (channel->volume > MAX_VOLUME) 
-                                        channel->volume = MAX_VOLUME;
+                                        channel.lastFineVolumeSlideUp = argument;
+                                    channel.volume += 
+                                        channel.lastFineVolumeSlideUp;
+                                    if (channel.volume > MAX_VOLUME) 
+                                        channel.volume = MAX_VOLUME;
                                     break;
                                 }
                             case FINE_VOLUME_SLIDE_DOWN :
                                 {
                                     if (argument) 
-                                        channel->lastFineVolumeSlideDown = argument;
-                                    if (channel->lastFineVolumeSlideDown >= 
-                                        channel->volume) 
-                                            channel->volume = 0;
-                                    else channel->volume -= 
-                                            channel->lastFineVolumeSlideDown;
+                                        channel.lastFineVolumeSlideDown = argument;
+                                    if (channel.lastFineVolumeSlideDown >= 
+                                        channel.volume) 
+                                            channel.volume = 0;
+                                    else channel.volume -= 
+                                            channel.lastFineVolumeSlideDown;
                                     break;
                                 }
                         }
@@ -1984,12 +1685,12 @@ int Mixer::updateImmediateEffects () {
                         switch (effect) {
                             case EXTRA_FINE_PORTAMENTO_UP :
                                 {
-                                    if (argument) channel->lastExtraFinePortamentoUp = argument;
+                                    if (argument) channel.lastExtraFinePortamentoUp = argument;
                                     break;
                                 }
                             case EXTRA_FINE_PORTAMENTO_DOWN :
                                 {
-                                    if (argument) channel->lastExtraFinePortamentoDown = argument;
+                                    if (argument) channel.lastExtraFinePortamentoDown = argument;
                                     break;
                                 }
                         }
@@ -2171,14 +1872,14 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
@@ -2187,7 +1888,7 @@ int main(int argc, char *argv[])  {
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track2.s3m",
@@ -2256,6 +1957,14 @@ int main(int argc, char *argv[])  {
 
     std::cout << (negative_val / 2) << std::endl; // rondt af naar BOVEN!
     std::cout << (negative_val >> 1) << std::endl; // rondt af naar beneden
+    std::cout << std::endl
+        << "finetunes: " << std::endl;
+    for ( int i = 0; i < 16; i++ ) {
+        std::cout << "Fine tune for i = " << std::setw(2) << i << ": " 
+            << std::setw( 2 )
+            << (int)((signed char)( i > 7 ? (i | 0xF0) : i )) << std::endl;
+    }
+    std::cout << std::endl;
     _getch();
     */
     if (argc > 1) {
@@ -2284,8 +1993,6 @@ int main(int argc, char *argv[])  {
 
 
     for (unsigned i = 0; i < filePaths.size(); i++) {
-        //const char *moduleFilename = filePaths[i].c_str();
-        //Module      sourceFile( moduleFilename );
         Module      sourceFile( filePaths[i] );
         Mixer       mixer;
 
@@ -2294,15 +2001,13 @@ int main(int argc, char *argv[])  {
 
         if (sourceFile.isLoaded ()) {
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
-            std::cout << "\nCompiling module " 
-                      //<< sourceFile.getSongName()  
-                      << " into " << (s / 60) << "m "
+            std::cout << "\nCompiling module \"" 
+                      << sourceFile.getSongTitle().c_str()  
+                      << "\" into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data"  << std::endl 
                       << "Hit any key to start mixing." << std::endl;
             _getch();
-
-            mixer.initialise( &sourceFile );
-           
+            mixer.initialise( &sourceFile );          
             double benchTime = 0.0L;
             benchTime = DoBench( mixer ) / BENCHMARK_REPEAT_ACTION; // only for staging
 

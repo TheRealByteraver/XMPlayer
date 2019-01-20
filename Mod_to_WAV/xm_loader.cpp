@@ -184,19 +184,7 @@ int Module::loadXmFile()
         delete [] buf;
         return 0;
     }
-    /*
-    songTitle_ = new char[XM_MAX_SONG_NAME_LENGTH + 1];
-    for (int i = 0; i < XM_MAX_SONG_NAME_LENGTH; i++) {
-        songTitle_[i] = header->songTitle[i];
-    }
-    songTitle_[XM_MAX_SONG_NAME_LENGTH] = '\0';
-
-    trackerTag_ = new char[XM_TRACKER_NAME_LENGTH + 1];
-    for (int i = 0; i < XM_TRACKER_NAME_LENGTH; i++) {
-        trackerTag_[i] = header->trackerName[i];
-    }
-    trackerTag_[XM_TRACKER_NAME_LENGTH] = '\0';  
-    */
+    trackerType_ = TRACKER_FT2;
     songTitle_ = "";
     for ( int i = 0; i < XM_MAX_SONG_NAME_LENGTH; i++ ) {
         songTitle_ += header->songTitle[i];
@@ -205,7 +193,6 @@ int Module::loadXmFile()
     for ( int i = 0; i < XM_TRACKER_NAME_LENGTH; i++ ) {
         trackerTag_ += header->trackerName[i];
     }
-
     header->id              = 0; // use as zero terminator
     useLinearFrequencies_   = (bool)(header->flags & XM_LINEAR_FREQUENCIES_FLAG);
     isCustomRepeat_         = true;
@@ -431,10 +418,14 @@ int Module::loadXmFile()
                                 iNote->effects[fxloop].argument = MAX_VOLUME;
                             break;
                         }
-                    case SET_TEMPO_BPM :
+                    case SET_TEMPO :
                         {
                             if (!iNote->effects[fxloop].argument) {
                                 iNote->effects[fxloop].effect = 0;
+                            } else { 
+                                if ( iNote->effects[fxloop].argument > 0x1F ) {
+                                    iNote->effects[fxloop].effect = SET_BPM;
+                                }
                             }
                             break;
                         }
@@ -521,12 +512,6 @@ int Module::loadXmFile()
             cout << "\nSample Header Size       = " << instrumentHeader2->sampleHeaderSize;          
 #endif
         if (instrument.nSamples) { 
-            /*
-            SHORT           oldSample16;
-            SHORT           newSample16;
-            signed char     oldSample8;
-            signed char     newSample8;            
-            */
             unsigned        sampleOffset;
             SampleHeader    samples[MAX_SAMPLES];
             char            sampleNames[MAX_SAMPLES][XM_MAX_SAMPLE_NAME_LENGTH + 1];

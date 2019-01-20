@@ -85,11 +85,12 @@ int nBadComment(char *comment) {
 }
 
 // this fn returns the number of channels based on the format tag (0 on error)
-int tagID(std::string tagID, bool &flt8Err) {
-    int     chn; // chn = number of channels
+int tagID(std::string tagID, bool &flt8Err, unsigned& trackerType) {
+    int     chn;     
+    trackerType = TRACKER_PROTRACKER;
     flt8Err = false;
     if ( tagID == "M.K." ) chn = 4;
-    else if ( tagID == "M!K!" ) chn = 4;
+    else if ( tagID == "M!K!" ) chn = 4; 
     else if ( tagID == "FLT4" ) chn = 4;
     else if ( tagID == "FLT8" ) { chn = 8; flt8Err = true; } 
     else if ( tagID == "OCTA" ) chn = 8;
@@ -98,34 +99,16 @@ int tagID(std::string tagID, bool &flt8Err) {
         chn = ((unsigned char)tagID[0] - 48) * 10 +
                (unsigned char)tagID[1] - 48;
         if ( (chn > 32) || (chn < 10) ) chn = 0;
+        else trackerType = TRACKER_FT2;
     } else if ( (tagID[0] == 'T') && (tagID[1] == 'D') && (tagID[2] == 'Z') ) {
         chn = (unsigned char)tagID[3] - 48;
         if ( (chn < 1) || (chn > 3) ) chn = 0; // only values 1..3 are valid
+        else trackerType = TRACKER_FT2;
     } else if ( (tagID[1] == 'C') && (tagID[2] == 'H') && (tagID[3] == 'N') ) {
         chn = (unsigned char)tagID[0] - 48;
         if ( (chn < 5) || (chn > 9) ) chn = 0; // only values 5..9 are valid
+        else trackerType = TRACKER_FT2;
     } else chn = 0;
-    /*
-    if      (!strcmp(dstr, "M.K.")) chn = 4;
-    else if (!strcmp(dstr, "M!K!")) chn = 4;
-    else if (!strcmp(dstr, "FLT4")) chn = 4;
-    else if (!strcmp(dstr, "FLT8")) { chn = 8; flt8Err = true; }
-    else if (!strcmp(dstr, "OCTA")) chn = 8;
-    else if (!strcmp(dstr, "CD81")) chn = 8;
-    else if ((dstr[2] == 'C') && (dstr[3] == 'H')) {
-            chn = ((unsigned char)dstr[0] - 48) * 10 +
-                   (unsigned char)dstr[1] - 48;
-            if ((chn > 32) || (chn < 10)) chn = 0; 
-    }
-    else if ((dstr[0] == 'T') && (dstr[1] == 'D') && (dstr[2] == 'Z')) {
-            chn = (unsigned char)dstr[3] - 48;
-            if ((chn < 1) || (chn > 3)) chn = 0; // only values 1..3 are valid
-    }
-    else if ((dstr[1] == 'C') && (dstr[2] == 'H') && (dstr[3] == 'N')) {
-            chn = (unsigned char)dstr[0] - 48;
-            if ((chn < 5) || (chn > 9)) chn = 0; // only values 5..9 are valid
-    } else chn = 0;
-    */
     return chn;
 }
 
@@ -168,18 +151,12 @@ int Module::loadModFile() {
     // check extension for the wow factor ;)
     wowFile = isWowFile(fileName_);
     // check if a valid tag is present
-    /*
-    trackerTag_ = new char[4 + 1];
-    trackerTag_[4] = '\0';
-    strncpy_s(trackerTag_, 5, headerMK->tag, 4);
-    nChannels_ = tagID(trackerTag_, flt8Err);
-    */  
     trackerTag_ = "";
     trackerTag_ += headerMK->tag[0];
     trackerTag_ += headerMK->tag[1];
     trackerTag_ += headerMK->tag[2];
     trackerTag_ += headerMK->tag[3];
-    nChannels_ = tagID( trackerTag_,flt8Err );
+    nChannels_ = tagID( trackerTag_,flt8Err,trackerType_ );
     if (!nChannels_) tagErr = true;
     // read sample names, this is how we differentiate a 31 instruments file 
     // from an old format 15 instruments file
@@ -194,7 +171,6 @@ int Module::loadModFile() {
     if (tagErr && nstErr && (!smpErr)) { 
         nstFile = true; 
         nChannels_ = 4; 
-        //strncpy_s(trackerTag_, 5, "NST", _TRUNCATE);
         trackerTag_ = "NST";
     }
     patternCalc = (unsigned)fileSize; 
@@ -208,7 +184,6 @@ int Module::loadModFile() {
         headerMK->samples[i].repeatOffset = SwapW(headerMK->samples[i].repeatOffset);
         headerMK->samples[i].repeatLength = SwapW(headerMK->samples[i].repeatLength);
         sampleDataSize += ((unsigned)headerMK->samples[i].length) << 1;
-        //sampleDataSize += ((unsigned)SwapW(headerMK->samples[i].length)) << 1;
     }
     patternCalc -= sampleDataSize;
     if (nChannels_) {
@@ -285,11 +260,6 @@ int Module::loadModFile() {
 #endif
         while (missingData && lastInstrument) {
             ModSampleHeader *sample = &(headerMK->samples[lastInstrument - 1]);
-            /*
-            unsigned length       = ((unsigned)SwapW(sample->length      ) << 1);
-            unsigned repeatOffset = ((unsigned)SwapW(sample->repeatOffset) << 1);
-            unsigned repeatLength = ((unsigned)SwapW(sample->repeatLength) << 1);
-            */
             unsigned length       = ((unsigned)sample->length      ) << 1;
             unsigned repeatOffset = ((unsigned)sample->repeatOffset) << 1;
             unsigned repeatLength = ((unsigned)sample->repeatLength) << 1;
@@ -324,18 +294,29 @@ int Module::loadModFile() {
             return 0;
         }
     }  
+    // take care of default panning positions:
+    for ( unsigned i = 0; i < nChannels_; i++ )
+    {
+        switch ( i & 3 )
+        {
+            case 0:
+            case 3:
+            {
+                defaultPanPositions_[i] = PANNING_FULL_LEFT;
+                break;
+            }
+            case 1:
+            case 2:
+            {
+                defaultPanPositions_[i] = PANNING_FULL_RIGHT;
+                break;
+            }
+        }
+    }
     // Now start with copying the data
     // we start with the song title :)
-
-    /*
-    songTitle_ = new char[MOD_MAX_SONGNAME_LENGTH + 1];
-    songTitle_[MOD_MAX_SONGNAME_LENGTH] = '\0';
-    strncpy_s(songTitle_, MOD_MAX_SONGNAME_LENGTH + 1, headerMK->songTitle, MOD_MAX_SONGNAME_LENGTH);
-    */
     songTitle_ = ""; 
-    //for (int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++) { songTitle_[i] = headerMK->songTitle[i]; }
     for ( int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++ ) songTitle_ += headerMK->songTitle[i]; 
-
     // now, the sample headers & sample data.
     fileOffset = sampleDataOffset;
     for (unsigned i = 0; i < nInstruments_; i++) {
@@ -347,15 +328,6 @@ int Module::loadModFile() {
         strncpy_s(sampleName, MAX_SAMPLENAME_LENGTH + 1, headerMK->samples[i].name, MAX_SAMPLENAME_LENGTH);
         sample.name     = sampleName;
         instrument.name = sampleName; 
-/*
-        sample.length       = 
-            ((unsigned)SwapW(headerMK->samples[i].length))       << 1;
-        sample.repeatOffset = 
-            ((unsigned)SwapW(headerMK->samples[i].repeatOffset)) << 1;
-        sample.repeatLength = 
-            ((unsigned)SwapW(headerMK->samples[i].repeatLength)) << 1;
-        sample.volume       = headerMK->samples[i].linearVolume;
-*/
         sample.length       = 
             ((unsigned)headerMK->samples[i].length)       << 1;
         sample.repeatOffset = 
@@ -504,13 +476,6 @@ int Module::loadModFile() {
 		}
 #endif
     }
-    for ( unsigned i = 0; i < nChannels_; i += 4 )
-    {
-        defaultPanPositions_[i + 0] = PANNING_FULL_LEFT;
-        defaultPanPositions_[i + 1] = PANNING_FULL_RIGHT;
-        defaultPanPositions_[i + 2] = PANNING_FULL_RIGHT;
-        defaultPanPositions_[i + 3] = PANNING_FULL_LEFT;
-    }
     // read the patterns now
     bufp = buf + patternDataOffset;
     // convert 8 chn startrekker patterns to regular ones
@@ -561,49 +526,23 @@ int Module::loadModFile() {
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
                 else                      iNote->note = j + 1 - 24; // two octaves down
             }
-            /*
-            // done in memset in pattern initialize function
-            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++ ) {
-                iNote->effects[fxloop].effect   = 0; 
-                iNote->effects[fxloop].argument = 0; // not used in mod files
-            }
-            */
             // do some error checking & effect remapping:
             switch ( iNote->effects[0].effect ) {
-/*
-                case    0x0 :
-                    {
-                        if (iNote->effects[0].argument)
-                            iNote->effects[0].effect = ARPEGGIO;
-                        break;
-                    }
-*/
-/*
-                case    EXTENDED_EFFECTS : 
-                    {
-                        iNote->effects[0].effect = 0xE0 + 
-                        (iNote->effects[0].argument >> 4);
-                        iNote->effects[0].argument &= 0xF;
-                        // correct MTM panning
-                        if (iNote->effects[0].effect == 0xE8) {
-                            iNote->effects[0].effect = 0x8;
-                            iNote->effects[0].argument <<= 4;
-                        }
-                        break;
-                    }
-*/
                 case    SET_VOLUME :
                     {
                         if (iNote->effects[0].argument > MAX_VOLUME)
                             iNote->effects[0].argument = MAX_VOLUME;
                         break;
                     }
-                case    VOLUME_SLIDE :
-                case    SET_TEMPO_BPM :
-//                case    SET_SAMPLE_OFFSET :
+                //case    VOLUME_SLIDE :
+                case    SET_TEMPO :
                     {
-                        if (!iNote->effects[0].argument) {
+                        if ( iNote->effects[0].argument == 0 ) {
                             iNote->effects[0].effect = 0;
+                        } else {
+                            if ( iNote->effects[0].argument > 0x1F ) {
+                                iNote->effects[0].effect = SET_BPM;
+                            }
                         }
                         break;
                     }
