@@ -1015,12 +1015,14 @@ int Mixer::updateNotes () {
         note       = iNote->note;
         instrument = iNote->instrument;
 
-        if (note) {
-            channel.lastNote = note;
+        if ( note ) {            
             if (note == KEY_OFF) {
                 isNewNote = false;
                 keyedOff = true;
-            } else isNewNote = true;
+            } else {
+                channel.lastNote = note;
+                isNewNote = true;
+            }
         } else {
             isNewNote = false;
         }
@@ -1068,31 +1070,29 @@ int Mixer::updateNotes () {
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
             effect   = iNote->effects[fxloop].effect;
             argument = iNote->effects[fxloop].argument;
-            switch (effect) {
+            switch ( effect ) {
                 case ARPEGGIO :
                     {
-                        if (argument) {
+                        if ( argument ) {
                             channel.arpeggioCount = 0;
-                            channel.arpeggioNote1  = channel.arpeggioNote2 
-                                                    = channel.lastNote;
-                            channel.arpeggioNote1 += argument >> 4;
-                            channel.arpeggioNote2 += argument & 0xF;
+                            channel.arpeggioNote1 = channel.lastNote + (argument >> 4);
+                            channel.arpeggioNote2 = channel.lastNote + (argument & 0xF);
                         }
                         break;
                     }
                 case PORTAMENTO_UP :
                     {
-                        if (argument) channel.lastPortamentoUp = argument;
+                        if ( argument ) channel.lastPortamentoUp = argument;
                         break;
                     }
                 case PORTAMENTO_DOWN :
                     {
-                        if (argument) channel.lastPortamentoDown = argument;
+                        if ( argument ) channel.lastPortamentoDown = argument;
                         break;
                     }
                 case TONE_PORTAMENTO :
                     {
-                        if (argument) channel.lastTonePortamento = argument;
+                        if ( argument ) channel.lastTonePortamento = argument;
                         break;
                     }
                 case VIBRATO :
@@ -1120,15 +1120,15 @@ int Mixer::updateNotes () {
                         channel.panning = argument;                       
                         break;
                     }
-                case SET_SAMPLE_OFFSET :   // memory!!!
+                case SET_SAMPLE_OFFSET :   
                     {                   
-                        if (channel.pSample) {
+                        if ( channel.pSample ) {
                             if ( argument ) channel.lastSampleOffset = argument;
                             else argument = channel.lastSampleOffset;
                             argument <<= 8;                            
                             if (argument < (channel.pSample->getLength())) {
                                 channel.sampleOffset = argument;
-                                if (isNewNote) replay = true;
+                                if ( isNewNote ) replay = true;
                             } else {
                                 replay = false;
                             }                            
@@ -1385,48 +1385,50 @@ int Mixer::updateEffects () {
                         }
                         break;
                     }
-                    /*
-                case S3M_VOLUME_SLIDE:
-                    {
-                        unsigned&   v = channel.volume;
-                        unsigned    arg = channel.lastVolumeSlide;
-                        unsigned    slide1 = arg >> 4;
-                        unsigned    slide2 = arg & 0xF;
-                        // exclude fine slides:
-                        if ( (slide1 < 0xF) && (slide2 < 0xF) )
-                        {
-                            if ( slide1 ) { // slide up
-                                v += slide1;
-                                if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                            } else {        // slide down
-                                if ( slide2 > v ) v = 0;
-                                else              v -= slide2;
-                            }
-                        }
-                        break;
-                    }
-                    */
             }
 
-            switch (effect) {
+            switch ( effect ) {
                 case ARPEGGIO :
                     {
-                        if (argument) {
-                            switch (channel.arpeggioCount) {
+                        if ( argument ) {
+                            //std::cout << "!";
+                            switch ( channel.arpeggioCount & 0x3 ) {
                                 case 0 : 
                                     {
-
+                                        channel.period = noteToPeriod(
+                                                channel.lastNote +
+                                                channel.pSample->getRelativeNote(),
+                                                channel.pSample->getFinetune()
+                                        );
                                         break;
                                     }
                                 case 1 :
                                     {
+                                        channel.period = noteToPeriod(
+                                                channel.arpeggioNote1 +
+                                                channel.pSample->getRelativeNote(),
+                                                channel.pSample->getFinetune() 
+                                        );
                                         break;
                                     }
                                 case 2 : 
                                     {
+                                        channel.period = noteToPeriod(
+                                                channel.arpeggioNote2 +
+                                                channel.pSample->getRelativeNote(),
+                                                channel.pSample->getFinetune() 
+                                        );
                                         break;
                                     }
                             }
+                            playSample( iChannel,
+                                channel.pSample,
+                                channel.sampleOffset,
+                                FORWARD );
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) 
+                            );
+                            channel.arpeggioCount++;
                         }
                         break;
                     }
