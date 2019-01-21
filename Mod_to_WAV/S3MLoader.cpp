@@ -710,7 +710,7 @@ int Module::loadS3mFile() {
             */
             iNote->effects[1].argument = unPackedNote->fxp;
             switch ( unPackedNote->fx ) {
-                case 1:  // set Speed
+                case 1:  // A: set Speed
                 {
                     iNote->effects[1].effect = SET_TEMPO; 
                     if ( !unPackedNote->fxp ) 
@@ -720,17 +720,17 @@ int Module::loadS3mFile() {
                     }
                     break;
                 }
-                case 2:
+                case 2: // B
                 {
                     iNote->effects[1].effect = POSITION_JUMP;
                     break;
                 }
-                case 3:
+                case 3: // C
                 {
                     iNote->effects[1].effect = PATTERN_BREAK;
                     break;
                 }
-                case 4: // all kinds of (fine) volume slide
+                case 4: // D: all kinds of (fine) volume slide
                 /*
                     So, apparently:
                     D01 = volume slide down by 1
@@ -757,7 +757,7 @@ int Module::loadS3mFile() {
                     } 
                     break;
                 }
-                case 5: // all kinds of (extra) (fine) portamento down
+                case 5: // E: all kinds of (extra) (fine) portamento down
                 {
                     int xfx = iNote->effects[1].argument >> 4;
                     int xfxArg = iNote->effects[1].argument & 0xF;
@@ -786,7 +786,7 @@ int Module::loadS3mFile() {
                     }
                     break;
                 }
-                case 6: // all kinds of (extra) (fine) portamento up
+                case 6: // F: all kinds of (extra) (fine) portamento up
                 {
                     int xfx = iNote->effects[1].argument >> 4;
                     int xfxArg = iNote->effects[1].argument & 0xF;
@@ -815,49 +815,49 @@ int Module::loadS3mFile() {
                     }
                     break;
                 }
-                case 7:
+                case 7: // G
                 {
                     iNote->effects[1].effect = TONE_PORTAMENTO;
                     break;
                 }
-                case 8:
+                case 8: // H
                 {
                     iNote->effects[1].effect = VIBRATO;
                     break;
                 }
-                case 9:
+                case 9: // I
                 {
                     iNote->effects[1].effect = TREMOR;
                     break;
                 }
-                case 10:
+                case 10: // J
                 {
                     iNote->effects[1].effect = ARPEGGIO;
                     break;
                 }
-                case 11:
+                case 11: // K
                 {
                     iNote->effects[1].effect = VIBRATO_AND_VOLUME_SLIDE;
                     break;
                 }
-                case 12:
+                case 12: // L
                 {
                     iNote->effects[1].effect = TONE_PORTAMENTO_AND_VOLUME_SLIDE;
                     break;
                 }
                 // skip effects 'M' and 'N' here which are not used
-                case 15:
+                case 15: // O
                 {
                     iNote->effects[1].effect = SET_SAMPLE_OFFSET;
                     break;
                 }
                 // skip effect 'P'
-                case 17:
+                case 17: // Q
                 {
                     iNote->effects[1].effect = MULTI_NOTE_RETRIG; // retrig + volslide supposedly
                     break;
                 }
-                case 18:
+                case 18: // R
                 {
                     iNote->effects[1].effect = TREMOLO;
                         break;
@@ -946,7 +946,7 @@ int Module::loadS3mFile() {
                     }                    
                     break;
                 }
-                case 20: 
+                case 20: // T
                 {
                     iNote->effects[1].effect = SET_BPM; 
                     if ( unPackedNote->fxp < 0x20 )
@@ -956,14 +956,46 @@ int Module::loadS3mFile() {
                     }
                     break;
                 }
-                case 21:  
+                case 21: // U 
                 {
                     iNote->effects[1].effect = FINE_VIBRATO;
                     break;
                 }
-                case 22:
+                case 22: // V
                 {
                     iNote->effects[1].effect = SET_GLOBAL_VOLUME;
+                    break;
+                }
+                case 23: // W
+                {
+                    iNote->effects[1].effect = GLOBAL_VOLUME_SLIDE;
+                    break;
+                }            
+                case 24: // X
+                {
+                    /*
+                        XA4 = surround:
+                        Enables surround playback on this channel. When using 
+                        stereo playback, the right channel of a sample is 
+                        played with inversed phase (Pro Logic Surround). When 
+                        using quad playback, the rear channels are used for 
+                        playing this channel. Surround mode can be disabled by 
+                        executing a different panning command on the same 
+                        channel. 
+
+                    */
+                    // surround not supported yet:
+                    if ( iNote->effects[1].argument == 0xA4 ) break; 
+                    iNote->effects[1].effect = SET_FINE_PANNING;
+                    iNote->effects[1].argument <<= 1;
+                    if ( iNote->effects[1].argument > 0xFF )
+                        iNote->effects[1].argument = 0xFF;
+                    break;
+                }
+                default: // unknown effect command
+                {
+                    iNote->effects[1].effect = 0;
+                    iNote->effects[1].argument = 0;
                     break;
                 }
             }

@@ -847,19 +847,11 @@ int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
     for (int i = 0; i < MAX_SAMPLES; i++) {
         unsigned    mc = channels[fromChannel]->mixerChannelsTable[i];
         if (mc) {
-            MixerChannel    *pmc = &mixerChannels[mc];
-            if (pmc->isPrimary) {
-                /*
-                double f;
-                if (module->useLinearFrequencies()) {
-                    f = 8363.0 * pow(2, ((4608.0 - (double)period) / 768.0));
-                } else {
-                    f = (period ? (PAL_CALC / (double)(period << 1)) : 0);
-                } 
-                */
+            MixerChannel&    pmc = mixerChannels[mc];
+            if (pmc.isPrimary) {
                 //double f = ((double)frequency * 65536.0) / (double)MIXRATE;
                 double f = ((double)frequency * 32768.0) / (double)MIXRATE;
-                pmc->sampleIncrement = (unsigned) f;
+                pmc.sampleIncrement = (unsigned) f;
                 return 0;
             }
         }
@@ -1139,7 +1131,7 @@ int Mixer::updateNotes () {
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
                     {
-                        if (argument) channel.lastVolumeSlide = argument;
+                        if ( argument ) channel.lastVolumeSlide = argument;
                         break;
                     }
                 case POSITION_JUMP :
@@ -1269,14 +1261,16 @@ int Mixer::updateNotes () {
                        channel.sampleOffset, FORWARD);
             if(!finetune) finetune = channel.pSample->getFinetune();
 
-            setFrequency(iChannel, 
-                periodToFrequency(
-                    noteToPeriod(note + 
-                        channel.pSample->getRelativeNote(), 
-                        finetune)
-                )
+            /*
+            channel.period = periodToFrequency(
+                noteToPeriod( note + channel.pSample->getRelativeNote(),finetune )
             );
-        } 
+            setFrequency( iChannel,channel.period );
+            */
+            setFrequency( iChannel,periodToFrequency(
+                noteToPeriod( note + channel.pSample->getRelativeNote(),finetune ) )
+            );
+        }
 
         if (!isNoteDelayed) { 
             /*
@@ -1287,8 +1281,11 @@ int Mixer::updateNotes () {
             //setVolume(iChannel, channel->volume);    // temp
         }
 #ifdef debug_mixer
-        if (note) std::cout << noteStrings[note /* + 12 */];
+        /*
+        if (note) std::cout << noteStrings[note];
         else std::cout << "---";
+        */
+
 /*        
         if (channel->volume < 10)    std::cout << " ";
         else                    std::cout << (channel->volume / 10);
@@ -1319,13 +1316,14 @@ int Mixer::updateNotes () {
             std::cout << (channel->volume % 10) << ")";
         }
         */
-        /*
-        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            std::cout  << "." << hex[iNote->effects[fxloop].effect];
-            std::cout << hex[iNote->effects[fxloop].argument >> 4];
-            std::cout << hex[iNote->effects[fxloop].argument & 0xF]; 
+        
+        for (unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
+            std::cout // << "." 
+                << hex[iNote->effects[fxloop].effect]
+                << hex[iNote->effects[fxloop].argument >> 4]
+                << hex[iNote->effects[fxloop].argument & 0xF]; 
         }
-        */
+        
         std::cout << "|";
 #endif
         iNote++;
@@ -1390,8 +1388,7 @@ int Mixer::updateEffects () {
             switch ( effect ) {
                 case ARPEGGIO :
                     {
-                        if ( argument ) {
-                            //std::cout << "!";
+                        if ( argument && channel.pSample ) {
                             switch ( channel.arpeggioCount & 0x3 ) {
                                 case 0 : 
                                     {
@@ -1434,7 +1431,12 @@ int Mixer::updateEffects () {
                     }
                 case PORTAMENTO_UP :
                     {
-
+                        /*
+                        channel.period -= argument * 4;
+                        setFrequency( iChannel,
+                            periodToFrequency( channel.period )
+                        );
+                        */
                         break;
                     }
                 case PORTAMENTO_DOWN :
@@ -1480,7 +1482,6 @@ int Mixer::updateEffects () {
                                             );
                                         }
                                     }
-                                    //std::cout << "!";
                                     break;
                                 }
                             case NOTE_CUT : 
@@ -1591,6 +1592,7 @@ int Mixer::updateEffects () {
                                             channel.pSample, 
                                             channel.sampleOffset, 
                                             FORWARD);
+                                
                                 setFrequency(iChannel, 
                                     periodToFrequency(
                                         noteToPeriod(
@@ -1599,6 +1601,7 @@ int Mixer::updateEffects () {
                                             channel.pSample->getFinetune())
                                     )
                                 );
+                                
                             }
                         }
                         break;
@@ -1859,8 +1862,8 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
