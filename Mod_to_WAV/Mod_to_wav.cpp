@@ -16,6 +16,9 @@
 
 #include "Module.h"
 
+//#define debug_mixer
+
+
 //extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 /*
@@ -41,9 +44,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 
 
 #define BUFFER_LENGTH_IN_MINUTES   4
-#define BENCHMARK_REPEAT_ACTION    4
-
-//#define debug_mixer
+#define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
 
@@ -364,7 +365,10 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
             Sample&         sample = *mChn.sample;
             unsigned        mixOffset = mixIndex;
             int             leftGain  = (gain * mChn.leftVolume) >> 12;   
-            int             rightGain = (gain * mChn.rightVolume) >> 12;  
+            int             rightGain = (gain * mChn.rightVolume) >> 12;
+
+            // div by zero safety. Probably because of portamento over/under flow
+            if ( !mChn.sampleIncrement ) continue; 
 
             mChn.age++;
             nActiveMixChannels++;
@@ -956,28 +960,8 @@ int Mixer::updateNotes () {
     int             nextPatternDelta = 1;
 
     if (patternDelay_) { patternDelay_--; return 0; }       
-
-/*
-    std::cout << "\n";
-    for (int f = -127; f < -120; f++) {
-        std::cout << "finetune " << f << "\n";
-        for (unsigned n = 0; n < MAXIMUM_NOTES; n++) {
-            unsigned r = noteToPeriod(n + 1, f);
-            if (r < 100000000 ) std::cout << " ";
-            if (r < 10000000  ) std::cout << " ";
-            if (r < 1000000   ) std::cout << " ";
-            if (r < 100000    ) std::cout << " ";
-            if (r < 10000     ) std::cout << " ";
-            if (r < 1000      ) std::cout << " ";
-            if (r < 100       ) std::cout << " ";
-            if (r < 10        ) std::cout << " ";
-            std::cout << r << " ";
-        }
-        std::cout << "\n";
-    }
-    _getch();
-*/
 #ifdef debug_mixer
+    /*
     char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     unsigned p = module->getPatternTable(iPatternTable);
     std::cout << "\n";
@@ -987,6 +971,7 @@ int Mixer::updateNotes () {
     if (p < 10) std::cout << " ";
     else        std::cout << (p / 10);
     std::cout << (p % 10) << "|";
+    */
 #endif
 
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
@@ -1157,7 +1142,7 @@ int Mixer::updateNotes () {
                     {
                         effect = argument >> 4;
                         argument &= 0xF;
-                        switch (effect) {
+                        switch ( effect ) {
                             case SET_GLISSANDO_CONTROL :
                                 {
                                     break;
@@ -1182,13 +1167,12 @@ int Mixer::updateNotes () {
                                 }
                             case NOTE_RETRIG : 
                                 {
-                                    /*
-                                    if ( argument ) channel.retrigCount = 0;//argument;
+                                    // ignore effect command 0xE90
+                                    if ( argument ) channel.retrigCount = 0;
                                     else {
                                         iNote->effects[fxloop].effect = 0;
                                         iNote->effects[fxloop].argument = 0;
-                                    }
-                                    */
+                                    }                                   
                                     break;
                                 }
                             case NOTE_CUT : 
@@ -1260,16 +1244,17 @@ int Mixer::updateNotes () {
             playSample(iChannel, channel.pSample, 
                        channel.sampleOffset, FORWARD);
             if(!finetune) finetune = channel.pSample->getFinetune();
-
-            /*
-            channel.period = periodToFrequency(
-                noteToPeriod( note + channel.pSample->getRelativeNote(),finetune )
+            
+            channel.period = noteToPeriod( 
+                note + channel.pSample->getRelativeNote(),
+                finetune 
             );
-            setFrequency( iChannel,channel.period );
-            */
+            setFrequency( iChannel,periodToFrequency( channel.period ) );
+            /*
             setFrequency( iChannel,periodToFrequency(
                 noteToPeriod( note + channel.pSample->getRelativeNote(),finetune ) )
             );
+            */
         }
 
         if (!isNoteDelayed) { 
@@ -1281,50 +1266,59 @@ int Mixer::updateNotes () {
             //setVolume(iChannel, channel->volume);    // temp
         }
 #ifdef debug_mixer
-        /*
-        if (note) std::cout << noteStrings[note];
-        else std::cout << "---";
-        */
+#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
+#define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
+#define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
+#define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
+#define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
+#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
+#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
+        if ( iChannel < 8 )
+        {            
+            // **************************************************
+            // colors in console requires weird shit in windows
+            HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
+            HANDLE hStdout = GetStdHandle( STD_OUTPUT_HANDLE );
+            CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
+            COORD dwCursorPosition;
+            GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
+            /*
+            dwCursorPosition.X = 0;
+            dwCursorPosition.Y = 0;
+            SetConsoleCursorPosition( hStdout,dwCursorPosition );
+            */
+            // **************************************************
 
-/*        
-        if (channel->volume < 10)    std::cout << " ";
-        else                    std::cout << (channel->volume / 10);
-        std::cout << (channel->volume % 10) << "|";
-*/
-/*
-        if (replay) {
-            if(note < 10) std::cout << " ";
-            std::cout << note << "|";
-            if(channel->pSample->getRelativeNote() < 10) std::cout << " ";
-            std::cout << channel->pSample->getRelativeNote() << "|";
+            // display note
+            SetConsoleTextAttribute( hStdout, FOREGROUND_LIGHTCYAN );
+            if (note) std::cout << noteStrings[note];
+            else std::cout << "---";
 
-            std::cout << noteToPeriod(note + 
-                channel->pSample->getRelativeNote(), finetune) << "|";
-        } else std::cout << "     ";
-*/
+            // display instrument
+            SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
+            std::cout << std::dec
+                << std::setw( 2 ) << instrument;
 
-        /*
-        if (instrument < 10)    std::cout << " ";
-        else                    std::cout << (instrument / 10);
-        std::cout << (instrument % 10);
-        */
-        /*
-        if(iChannel == 0) {
-            std::cout << "(";
-            if (channel->volume < 10)   std::cout << " ";
-            else                        std::cout << (channel->volume / 10);
-            std::cout << (channel->volume % 10) << ")";
-        }
-        */
-        
-        for (unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            std::cout // << "." 
-                << hex[iNote->effects[fxloop].effect]
-                << hex[iNote->effects[fxloop].argument >> 4]
-                << hex[iNote->effects[fxloop].argument & 0xF]; 
-        }
-        
-        std::cout << "|";
+            /*
+                    if (channel->volume < 10)    std::cout << " ";
+                    else                    std::cout << (channel->volume / 10);
+                    std::cout << (channel->volume % 10) << "|";
+            */
+
+            // effect
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++ ) {
+                std::cout 
+                    << std::hex << std::uppercase 
+                    << std::setw( 1 ) << iNote->effects[fxloop].effect
+                    << std::setw( 1 ) << (iNote->effects[fxloop].argument >> 4)
+                    << std::setw( 1 ) << (iNote->effects[fxloop].argument & 0xF)
+                    << std::dec;
+
+            }
+        } else if ( iChannel == 8 ) std::cout << std::endl;
 #endif
         iNote++;
     }  
@@ -1350,7 +1344,11 @@ int Mixer::updateNotes () {
         pattern = module->getPattern(module->getPatternTable(iPatternTable));
         iNote = pattern->getRow(patternStartRow);
 #ifdef debug_mixer
-        std::cout << "\nPlaying pattern # " << module->getPatternTable(iPatternTable) << ", order # " << iPatternTable; // debug
+        std::cout << std::endl
+            << "Playing pattern # " 
+            << module->getPatternTable(iPatternTable) 
+            << ", order # " << iPatternTable
+            << std::endl;
 #endif
     }
     return 0;
@@ -1430,17 +1428,19 @@ int Mixer::updateEffects () {
                         break;
                     }
                 case PORTAMENTO_UP :
-                    {
-                        /*
+                    {                        
                         channel.period -= argument * 4;
                         setFrequency( iChannel,
                             periodToFrequency( channel.period )
-                        );
-                        */
+                        );                        
                         break;
                     }
                 case PORTAMENTO_DOWN :
                     {
+                        channel.period += argument * 4;
+                        setFrequency( iChannel,
+                            periodToFrequency( channel.period )
+                        );                        
                         break;
                     }
                 case TONE_PORTAMENTO :
@@ -1464,25 +1464,17 @@ int Mixer::updateEffects () {
                         switch (effect) {
                             case NOTE_RETRIG : 
                                 {
+                                if ( channel.pSample ) {
                                     channel.retrigCount++;
-                                    if (channel.retrigCount >= argument) { 
+                                    if ( channel.retrigCount >= argument ) {
                                         channel.retrigCount = 0;
-                                        if (channel.pSample) { 
-                                            playSample(iChannel, 
-                                                       channel.pSample, 
-                                                       channel.sampleOffset, 
-                                                       FORWARD);
-                                            setFrequency( iChannel,
-                                                periodToFrequency(
-                                                    noteToPeriod(
-                                                        channel.lastNote +
-                                                        channel.pSample->getRelativeNote(),
-                                                        channel.pSample->getFinetune() )
-                                                )
-                                            );
-                                        }
+                                        playSample( iChannel,
+                                            channel.pSample,
+                                            channel.sampleOffset,
+                                            FORWARD );
                                     }
-                                    break;
+                                }
+                                break;
                                 }
                             case NOTE_CUT : 
                                 {
@@ -1592,16 +1584,6 @@ int Mixer::updateEffects () {
                                             channel.pSample, 
                                             channel.sampleOffset, 
                                             FORWARD);
-                                
-                                setFrequency(iChannel, 
-                                    periodToFrequency(
-                                        noteToPeriod(
-                                            channel.lastNote + 
-                                                channel.pSample->getRelativeNote(), 
-                                            channel.pSample->getFinetune())
-                                    )
-                                );
-                                
                             }
                         }
                         break;
@@ -1862,24 +1844,25 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land2.s3m",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
+        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",

@@ -113,7 +113,7 @@ struct S3mInstHeader {
     char            tag[4];         // "SCRS"
 };
 
-struct UnpackedNote {
+struct S3mUnpackedNote {
     unsigned char note;
     unsigned char inst;
     unsigned char volc;
@@ -141,7 +141,7 @@ const char *notetable[] = {
 #endif
 
 int Module::loadS3mFile() {
-    char                *buf;
+    char                    *buf;
     std::ifstream::pos_type  fileSize = 0;
     std::ifstream            s3mFile( 
         fileName_,std::ios::in | std::ios::binary | std::ios::ate );
@@ -276,11 +276,11 @@ int Module::loadS3mFile() {
         << "Number of Patterns: " << nPatterns_ << std::endl;
 #endif
     bufOffset += s3mFileHeader.songLength;
-    unsigned short *instrParaPtrs = (unsigned short *)(buf + bufOffset);
+    const unsigned short *instrParaPtrs = (unsigned short *)(buf + bufOffset);
     bufOffset += s3mFileHeader.nInstruments * 2; // sizeof( unsigned short ) == 2
-    unsigned short *ptnParaPtrs = (unsigned short *)(buf + bufOffset);
+    const unsigned short *ptnParaPtrs = (unsigned short *)(buf + bufOffset);
     bufOffset += s3mFileHeader.nPatterns    * 2; // sizeof( unsigned short ) == 2
-    unsigned char *defPanPositions = (unsigned char *)(buf + bufOffset); // 32 bytes
+    const unsigned char *defPanPositions = (unsigned char *)(buf + bufOffset); // 32 bytes
     if ( (bufOffset + 32) > fileSize ) { 
 #ifdef debug_s3m_loader
         std::cout << std::endl
@@ -289,25 +289,27 @@ int Module::loadS3mFile() {
         delete[] buf;
         return 0;
     }
+    // to be reviewed (ugly code) --------------------------
     if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
     {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-            defPanPositions[i] = (defPanPositions[i] & 0xF) * 17; // convert to 8 bit pan
+            defaultPanPositions_[i] = (defPanPositions[i] & 0xF) * 17; // convert to 8 bit pan
     } else {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-            defPanPositions[i] = S3M_DEFAULT_PAN_CENTER;
+            defaultPanPositions_[i] = S3M_DEFAULT_PAN_CENTER;
     }
     if ( s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT )
     {
         for ( unsigned i = 0; i < nChannels_; i++ )
         {                       
-            chnPanVals[i] = defPanPositions[chnBackmap[i]];
+            chnPanVals[i] = defaultPanPositions_[chnBackmap[i]];
         }
-    }
+    }    
     for ( unsigned i = 0; i < nChannels_; i++ )
     {
         defaultPanPositions_[i] = chnPanVals[i];
     }
+    // end "to be reviewed" marker -------------------------
 #ifdef debug_s3m_loader
     std::cout << std::endl << "Instrument pointers: ";
     for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
@@ -582,12 +584,12 @@ int Module::loadS3mFile() {
 #endif
     }
     // Now load the patterns:
-    UnpackedNote *unPackedPtn = new UnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
-    for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ )
+    S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
+    for ( unsigned iPtn = 0; iPtn < /*s3mFileHeader.nPatterns*/nPatterns_; iPtn++ )
     {
-        memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( UnpackedNote ) );
-        char *s3mPtn = buf + 16 * ptnParaPtrs[iPtn];
-        unsigned packedSize = ((unsigned short *)s3mPtn)[0];
+        memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
+        char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
+        unsigned packedSize = *((unsigned short *)s3mPtn);
         if( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
         {
 #ifdef debug_s3m_loader
@@ -598,35 +600,111 @@ int Module::loadS3mFile() {
             delete[] buf;
             return 0;
         }
-        unsigned char *ptnPtr = (unsigned char *)(s3mPtn + 2);
+        unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
         int row = 0;
-        for ( ; (ptnPtr < (unsigned char *)(s3mPtn + packedSize)) &&
+        /*
+        // DEBUG -----------------------------------------------        
+        #define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
+        #define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
+        #define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
+        #define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
+        #define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+        #define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
+        #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
+        #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
+        #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
+        HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
+        HANDLE hStdout = GetStdHandle( STD_OUTPUT_HANDLE );
+        CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
+        GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
+        if ( iPtn == 11 ) std::cout << std::endl;
+        // DEBUG -----------------------------------------------
+        */
+
+        for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
                 (row < S3M_ROWS_PER_PATTERN); ) {
             char pack = *ptnPtr++;
+
+            /*
+            // debug
+            if ( iPtn == 11 && row < 10 ) {
+                std::cout << std::dec << std::setw( 3 ) << (int)((unsigned char)pack) << ",";
+                if ( pack == S3M_PTN_END_OF_ROW_MARKER ) std::cout << std::endl << std::endl;
+            } // end debug
+            */
+
             if ( pack == S3M_PTN_END_OF_ROW_MARKER ) row++;                
             else { 
-                unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK];                
+                unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK]; // may return 255               
                 unsigned char note = 0;
                 unsigned char inst = 0;
                 unsigned char volc = 0;
                 unsigned char fx   = 0;
                 unsigned char fxp  = 0;
+                bool newNote = false;
                 if ( pack & S3M_PTN_NOTE_INST_FLAG )
                 {
+                    newNote = true;
                     note = *ptnPtr++;
                     inst = *ptnPtr++;
-                    if ( note == 255 ) note = 0;
+                    /*
+                    // DEBUG -----------------------------------------------
+                    if ( iPtn == 11 && row < 10 ) {
+                        std::cout << std::dec << "chn" << std::setw( 2 ) << chn << ":";
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTCYAN );
+                        std::cout << std::hex << std::setw( 3 ) << (unsigned int)note;
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
+                        std::cout << std::dec << std::setw( 2 ) << (unsigned int)inst;
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                    }
+                    // END DEBUG --------------------------------------------
+                    */
+                    //if ( note == 255 ) note = 0; // ?
                 }
                 // we add 0x10 to the volume column so we now an effect is there
                 if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
+                /*
+                // DEBUG -----------------------------------------------
+                if ( iPtn == 11 && row < 10 ) {
+                    if ( volc ) {
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
+                        std::cout << std::dec << std::setw( 2 )
+                            << (int)((unsigned char)(volc - 0x10)) << std::dec;
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                    } else std::cout << "  ";
+                }
+                // END DEBUG --------------------------------------------
+                */
                 if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
                 {
                     fx = *ptnPtr++;
                     fxp = *ptnPtr++;
+                    /*
+                    // DEBUG -----------------------------------------------
+                    if ( iPtn == 11 && row < 10 )
+                    {
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_RED );
+                        std::cout << std::hex << std::setw( 1 ) << (char)(fx + 32)
+                            << std::setw( 2 ) << (unsigned)fx;
+                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                    }
+                    // END DEBUG --------------------------------------------
+                    */
                 }
                 if ( chn < nChannels_ )
                 {
-                    UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
+                    S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
+                    if ( newNote )
+                    {
+                        if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
+                        else if ( note != 0xFF ) 
+                        {
+                            unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
+                            if ( unpackedNote.note > S3M_MAX_NOTE )
+                                unpackedNote.note = 0;
+                        }
+                    }
+                    /*
                     if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
                     else {    
                         if( note )
@@ -634,7 +712,9 @@ int Module::loadS3mFile() {
                         else unpackedNote.note = 0;
                         if ( unpackedNote.note > S3M_MAX_NOTE )
                             unpackedNote.note = 0;
+
                     }
+                    */
                     unpackedNote.inst = inst;
                     unpackedNote.volc = volc;
                     unpackedNote.fx = fx;
@@ -649,7 +729,7 @@ int Module::loadS3mFile() {
         {
             std::cout << std::endl << std::hex << std::setw( 2 ) << row << ":" << std::dec;
             for ( unsigned chn = 0; chn < nChannels_; chn++ )
-                if ( chn < 16 )
+                if ( chn < 8 )
                 {
                     UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
                     if ( unpackedNote.note ) {
@@ -691,7 +771,7 @@ int Module::loadS3mFile() {
 #endif
         // read the pattern into the internal format:
         Note        *iNote,*patternData;
-        UnpackedNote* unPackedNote = unPackedPtn;
+        S3mUnpackedNote* unPackedNote = unPackedPtn;
         patterns_[iPtn] = new Pattern;
         patternData = new Note[nChannels_ * S3M_ROWS_PER_PATTERN];
         patterns_[iPtn]->Initialise( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
@@ -699,10 +779,32 @@ int Module::loadS3mFile() {
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
+
+            /*
             if ( unPackedNote->volc && (unPackedNote->volc <= (S3M_MAX_VOLUME + 0x10)) )
             {
                 iNote->effects[0].effect = SET_VOLUME;
                 iNote->effects[0].argument = unPackedNote->volc - 0x10;
+            }
+            */
+            if ( unPackedNote->volc )
+            {
+                unPackedNote->volc -= 0x10;
+                if ( unPackedNote->volc <= S3M_MAX_VOLUME )
+                {
+                    iNote->effects[0].effect = SET_VOLUME;
+                    iNote->effects[0].argument = unPackedNote->volc;
+                } else {
+                    if ( unPackedNote->volc >= 128 &&
+                         unPackedNote->volc <= 192 )
+                    {
+                        iNote->effects[0].effect = SET_FINE_PANNING;
+                        iNote->effects[0].argument =
+                            (unPackedNote->volc - 128) << 4;
+                        if ( iNote->effects[0].argument > 0xFF )
+                            iNote->effects[0].argument = 0xFF;
+                    } 
+                }
             }
             /*
                 S3M effect A = 1, B = 2, etc
@@ -854,7 +956,7 @@ int Module::loadS3mFile() {
                 // skip effect 'P'
                 case 17: // Q
                 {
-                    iNote->effects[1].effect = MULTI_NOTE_RETRIG; // retrig + volslide supposedly
+                    iNote->effects[1].effect = MULTI_NOTE_RETRIG; // retrig + volslide
                     break;
                 }
                 case 18: // R
