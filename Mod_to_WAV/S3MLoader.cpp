@@ -145,6 +145,9 @@ int Module::loadS3mFile() {
     std::ifstream::pos_type  fileSize = 0;
     std::ifstream            s3mFile( 
         fileName_,std::ios::in | std::ios::binary | std::ios::ate );
+    // initialize s3m specific variables:
+    minPeriod_ = 56;    // periods[9 * 12 - 1]
+    maxPeriod_ = 27392; // periods[0]
     // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
     if ( !s3mFile.is_open() ) return 0; // exit on I/O error
@@ -602,37 +605,9 @@ int Module::loadS3mFile() {
         }
         unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
         int row = 0;
-        /*
-        // DEBUG -----------------------------------------------        
-        #define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
-        #define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
-        #define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
-        #define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
-        #define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
-        #define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
-        #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
-        #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
-        #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
-        HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
-        HANDLE hStdout = GetStdHandle( STD_OUTPUT_HANDLE );
-        CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
-        GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
-        if ( iPtn == 11 ) std::cout << std::endl;
-        // DEBUG -----------------------------------------------
-        */
-
         for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
                 (row < S3M_ROWS_PER_PATTERN); ) {
             char pack = *ptnPtr++;
-
-            /*
-            // debug
-            if ( iPtn == 11 && row < 10 ) {
-                std::cout << std::dec << std::setw( 3 ) << (int)((unsigned char)pack) << ",";
-                if ( pack == S3M_PTN_END_OF_ROW_MARKER ) std::cout << std::endl << std::endl;
-            } // end debug
-            */
-
             if ( pack == S3M_PTN_END_OF_ROW_MARKER ) row++;                
             else { 
                 unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK]; // may return 255               
@@ -647,49 +622,14 @@ int Module::loadS3mFile() {
                     newNote = true;
                     note = *ptnPtr++;
                     inst = *ptnPtr++;
-                    /*
-                    // DEBUG -----------------------------------------------
-                    if ( iPtn == 11 && row < 10 ) {
-                        std::cout << std::dec << "chn" << std::setw( 2 ) << chn << ":";
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTCYAN );
-                        std::cout << std::hex << std::setw( 3 ) << (unsigned int)note;
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
-                        std::cout << std::dec << std::setw( 2 ) << (unsigned int)inst;
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
-                    }
-                    // END DEBUG --------------------------------------------
-                    */
                     //if ( note == 255 ) note = 0; // ?
                 }
                 // we add 0x10 to the volume column so we now an effect is there
                 if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
-                /*
-                // DEBUG -----------------------------------------------
-                if ( iPtn == 11 && row < 10 ) {
-                    if ( volc ) {
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
-                        std::cout << std::dec << std::setw( 2 )
-                            << (int)((unsigned char)(volc - 0x10)) << std::dec;
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
-                    } else std::cout << "  ";
-                }
-                // END DEBUG --------------------------------------------
-                */
                 if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
                 {
                     fx = *ptnPtr++;
                     fxp = *ptnPtr++;
-                    /*
-                    // DEBUG -----------------------------------------------
-                    if ( iPtn == 11 && row < 10 )
-                    {
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_RED );
-                        std::cout << std::hex << std::setw( 1 ) << (char)(fx + 32)
-                            << std::setw( 2 ) << (unsigned)fx;
-                        SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
-                    }
-                    // END DEBUG --------------------------------------------
-                    */
                 }
                 if ( chn < nChannels_ )
                 {
@@ -704,17 +644,6 @@ int Module::loadS3mFile() {
                                 unpackedNote.note = 0;
                         }
                     }
-                    /*
-                    if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
-                    else {    
-                        if( note )
-                            unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
-                        else unpackedNote.note = 0;
-                        if ( unpackedNote.note > S3M_MAX_NOTE )
-                            unpackedNote.note = 0;
-
-                    }
-                    */
                     unpackedNote.inst = inst;
                     unpackedNote.volc = volc;
                     unpackedNote.fx = fx;
@@ -780,13 +709,6 @@ int Module::loadS3mFile() {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
 
-            /*
-            if ( unPackedNote->volc && (unPackedNote->volc <= (S3M_MAX_VOLUME + 0x10)) )
-            {
-                iNote->effects[0].effect = SET_VOLUME;
-                iNote->effects[0].argument = unPackedNote->volc - 0x10;
-            }
-            */
             if ( unPackedNote->volc )
             {
                 unPackedNote->volc -= 0x10;
@@ -817,8 +739,8 @@ int Module::loadS3mFile() {
                     iNote->effects[1].effect = SET_TEMPO; 
                     if ( !unPackedNote->fxp ) 
                     { 
-                        iNote->effects[1].effect = 0;
-                        iNote->effects[1].argument = 0;
+                        iNote->effects[1].effect = NO_EFFECT;
+                        iNote->effects[1].argument = NO_EFFECT;
                     }
                     break;
                 }
@@ -829,7 +751,7 @@ int Module::loadS3mFile() {
                 }
                 case 3: // C
                 {
-                    iNote->effects[1].effect = PATTERN_BREAK;
+                    iNote->effects[1].effect = PATTERN_BREAK; // recalc argument?
                     break;
                 }
                 case 4: // D: all kinds of (fine) volume slide
@@ -1053,8 +975,8 @@ int Module::loadS3mFile() {
                     iNote->effects[1].effect = SET_BPM; 
                     if ( unPackedNote->fxp < 0x20 )
                     {
-                        iNote->effects[1].effect = 0;
-                        iNote->effects[1].argument = 0;
+                        iNote->effects[1].effect = NO_EFFECT;
+                        iNote->effects[1].argument = NO_EFFECT;
                     }
                     break;
                 }
@@ -1086,7 +1008,7 @@ int Module::loadS3mFile() {
                         channel. 
 
                     */
-                    // surround not supported yet:
+                    // surround is not supported yet:
                     if ( iNote->effects[1].argument == 0xA4 ) break; 
                     iNote->effects[1].effect = SET_FINE_PANNING;
                     iNote->effects[1].argument <<= 1;
@@ -1096,8 +1018,8 @@ int Module::loadS3mFile() {
                 }
                 default: // unknown effect command
                 {
-                    iNote->effects[1].effect = 0;
-                    iNote->effects[1].argument = 0;
+                    iNote->effects[1].effect = NO_EFFECT;
+                    iNote->effects[1].argument = NO_EFFECT;
                     break;
                 }
             }

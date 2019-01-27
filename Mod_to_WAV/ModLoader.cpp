@@ -46,16 +46,16 @@ struct ModSampleHeader {
     unsigned char   linearVolume;
     AMIGAWORD       repeatOffset;   // Big-End Word; * 2 = RepeatOffset in bytes
     AMIGAWORD       repeatLength;   // Big-End Word; * 2 = RepeatLength in bytes 
-};
+};  // size == 30 bytes
 
 // NST header layout:
 struct HeaderNST {
     char            songTitle[MOD_MAX_SONGNAME_LENGTH];          
-    ModSampleHeader samples[15];            // 15 * (22+2+6)  = 15 * 30 = 450
-    unsigned char   songLength;             // 1
-    unsigned char   restartPosition;        // 1
-    unsigned char   patternTable[128];      // 128 -> total = 472+128 = 600
-};
+    ModSampleHeader samples[15];            // 15 * 30 = 450
+    unsigned char   songLength;             
+    unsigned char   restartPosition;        
+    unsigned char   patternTable[128];      
+}; // size ==  22 + 15 * 30 + 2 + 128 = 600
 
 // M.K. header layout:
 struct HeaderMK {
@@ -64,20 +64,27 @@ struct HeaderMK {
     unsigned char   songLength;
     unsigned char   restartPosition;
     unsigned char   patternTable[128];
-    char            tag[4];                 // total = 600 + 4 + 16 * 30 = 604 + 480 = 1084
-};
+    char            tag[4];     
+};  // size == 600 + 16 * 30 + 4 = 1084
 
 // restore default alignment
 #pragma pack (8)                            
 
 // this fn swaps a 16 bit word's low and high order bytes
 inline AMIGAWORD SwapW(AMIGAWORD d) {
-    return (d >> 8) + (d << 8);
+    return (d >> 8) | (d << 8);
 }
 
-// this fn returns the number of unprobable characters for a sample comment
+/* 
+    this fn returns the number of unprobable characters for a sample comment.
+    In the olden days, the  ASCII control characters 13 and 14 (D and E in 
+    hexadecimal) represented single and double music notes, and some BBS's 
+    inserted these in the sample name strings to show the mod was downloaded 
+    from there.
+*/
 int nBadComment(char *comment) {
-    char allowed[] = "abcdefghijklmnopqrstuvwxyz 0123456789&@$*#!?:;.,/=+-~()[]{}\\";
+    char allowed[] =    "\xD\xE !\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`" \
+                        "abcdefghijklmnopqrstuvwxyz{|}~";
     int r = 0;
     for (int i = 0; i < MAX_SAMPLENAME_LENGTH; i++)
                                 if (!strchr(allowed, tolower(comment[i]))) r++;
@@ -137,6 +144,10 @@ int Module::loadModFile() {
     HeaderMK    *headerMK;
     ifstream::pos_type  fileSize = 0;
     ifstream            modFile(fileName_, ios::in|ios::binary|ios::ate);
+
+    // initialize mod specific variables:
+    minPeriod_ = 14;    // periods[11 * 12 - 1]
+    maxPeriod_ = 27392; // periods[0]  // ?
 
     // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
@@ -511,41 +522,59 @@ int Module::loadModFile() {
             j2 = *((unsigned char *)bufp++);
             j3 = *((unsigned char *)bufp++);
             j4 = *((unsigned char *)bufp++);
-            iNote->effects[0].effect = j3 & 0xF;
-            iNote->effects[0].argument = j4;
-            iNote->period = j2;
+            iNote->effects[1].effect = j3 & 0xF;
+            iNote->effects[1].argument = j4;
+            //iNote->period = j2;
+            unsigned period = j2;
             j4 = (j1 & 0xF0) + (j3 >> 4);
             iNote->instrument = j4 & 0x1F;
-            iNote->period += ((j1 & 0xF) << 8) + ((j4 >> 5) << 12);
+            /* iNote-> */period += ((j1 & 0xF) << 8) + ((j4 >> 5) << 12);
             iNote->note = 0;
-            if (iNote->period) {
+            if ( /* iNote-> */ period ) {
                 unsigned j;
                 for (j = 0; j < (MAXIMUM_NOTES); j++) {
-                  if (iNote->period >= periods[j]) break;
+                  if ( /* iNote-> */ period >= periods[j]) break;
                 }
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
                 else                      iNote->note = j + 1 - 24; // two octaves down
             }
             // do some error checking & effect remapping:
-            switch ( iNote->effects[0].effect ) {
-                case    SET_VOLUME :
+            switch ( iNote->effects[1].effect ) {
+                case 0: // arpeggio
+                {
+                    if ( iNote->effects[1].argument )
+                        iNote->effects[1].effect = ARPEGGIO;
+                    break;
+                }
+                case PORTAMENTO_UP:
+                case PORTAMENTO_DOWN:
+                {
+                    // MOD's have no portamento memory
+                    if ( !iNote->effects[1].argument )
                     {
-                        if (iNote->effects[0].argument > MAX_VOLUME)
-                            iNote->effects[0].argument = MAX_VOLUME;
-                        break;
+                        iNote->effects[1].effect = 0;
+                        iNote->effects[1].argument = 0;
                     }
+                    break;
+                }
+                case SET_VOLUME :
+                {
+                    if ( iNote->effects[1].argument > MAX_VOLUME )
+                            iNote->effects[1].argument = MAX_VOLUME;
+                    break;
+                }
                 //case    VOLUME_SLIDE :
-                case    SET_TEMPO :
-                    {
-                        if ( iNote->effects[0].argument == 0 ) {
-                            iNote->effects[0].effect = 0;
-                        } else {
-                            if ( iNote->effects[0].argument > 0x1F ) {
-                                iNote->effects[0].effect = SET_BPM;
-                            }
+                case SET_TEMPO :
+                {
+                    if ( iNote->effects[1].argument == 0 ) {
+                        iNote->effects[1].effect = 0;
+                    } else {
+                        if ( iNote->effects[1].argument > 0x1F ) {
+                            iNote->effects[1].effect = SET_BPM;
                         }
-                        break;
                     }
+                    break;
+                }
             }
 #ifdef debug_mod_loader
             if (i == 0) {
@@ -558,11 +587,11 @@ int Module::loadModFile() {
                 if (iNote->instrument < 10) cout << "0";
                 cout << iNote->instrument;
 
-                if (iNote->effects[0].effect > 0xF) 
-                        cout << (char)(iNote->effects[0].effect + 55);
-                else    cout << hex[iNote->effects[0].effect];
-                cout << hex[iNote->effects[0].argument >> 4];
-                cout << hex[iNote->effects[0].argument & 0xF];
+                if (iNote->effects[1].effect > 0xF) 
+                        cout << (char)(iNote->effects[1].effect + 55);
+                else    cout << hex[iNote->effects[1].effect];
+                cout << hex[iNote->effects[1].argument >> 4];
+                cout << hex[iNote->effects[1].argument & 0xF];
             }
 #endif
             iNote++;

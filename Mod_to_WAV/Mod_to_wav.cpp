@@ -23,7 +23,7 @@
 
 /*
 bugs:
-
+    starsmuz.s3m pans full left
 
 */
 
@@ -43,7 +43,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 };
 
 
-#define BUFFER_LENGTH_IN_MINUTES   4
+#define BUFFER_LENGTH_IN_MINUTES   10
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -92,17 +92,20 @@ public:
     /*
     effect memory:
     */
-    unsigned        lastSampleOffset;
-    unsigned        vibratoWave;
-    unsigned        tremoloWave;
-    unsigned        retrigCount;
-    unsigned        delayCount;
+    unsigned        lastNonZeroFXArg;
+    unsigned        lastArpeggio;
     unsigned        arpeggioCount;
     unsigned        arpeggioNote1;
     unsigned        arpeggioNote2;
+    unsigned        lastSampleOffset;
+    unsigned        vibratoWaveForm;
+    unsigned        tremoloWaveForm;
+    unsigned        retrigCount;
+    unsigned        delayCount;
     unsigned        lastPortamentoUp;
     unsigned        lastPortamentoDown;
     unsigned        lastTonePortamento;
+    unsigned        portaDestPeriod;
     unsigned        lastVibrato;
     unsigned        lastTremolo;
     unsigned        lastVolumeSlide;
@@ -113,6 +116,7 @@ public:
     unsigned        lastGlobalVolumeSlide;
     unsigned        lastPanningSlide;
     unsigned        lastMultiNoteRetrig;
+    unsigned        lastTremor;
     unsigned        lastExtraFinePortamentoUp;
     unsigned        lastExtraFinePortamentoDown;
 
@@ -152,9 +156,13 @@ public:
 class Mixer {
 public: // debug
     bool            isInitialised;
+    bool            st300FastVolSlides_;
+    bool            st3StyleEffectMemory_;
+    bool            ft2StyleEffects_;
+    bool            pt35StyleEffects_;
     Module          *module;
     MixBufferType   *mixBuffer;
-    Channel         *channels[PLAYER_MAX_CHANNELS];
+    Channel         channels[PLAYER_MAX_CHANNELS];
     MixerChannel    mixerChannels[MIXER_MAX_CHANNELS]; // not a pointer, too slow
     unsigned        nActiveMixChannels; 
     unsigned        mixIndex;
@@ -216,14 +224,14 @@ public:
 
 void Mixer::resetSong()
 {
-    mixCount = 0; // added for debugging!!!
+    mixCount = 0; // added for debugging!!!    should NOT be here
     mixIndex = 0;
     for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) {
         mixerChannels[i].init();
     }
     for ( unsigned i = 0; i < nChannels; i++ ) {
-        channels[i]->init();
-        channels[i]->panning = module->getDefaultPanPosition( i );
+        channels[i].init();
+        channels[i].panning = module->getDefaultPanPosition( i );
         /*
         switch ( module->getPanningStyle() ) {
             case PANNING_STYLE_MOD:
@@ -310,11 +318,35 @@ int Mixer::initialise(Module *m) {
     if (!m->isLoaded ()) return 0;
     module = m;
     nChannels = module->getnChannels ();
-
+    switch ( module->getTrackerType() )
+    {
+        case TRACKER_PROTRACKER:
+        {
+            break;
+        }
+        case TRACKER_ST300:
+        {
+            st300FastVolSlides_ = true;
+            st3StyleEffectMemory_ = true;
+            break;
+        }
+        case TRACKER_ST321:
+        {
+            st3StyleEffectMemory_ = true;
+            break;
+        }
+        case TRACKER_FT2:
+        {
+            ft2StyleEffects_ = true;
+            break;
+        }
+    }
+    /*
     for (unsigned i = 0; i < nChannels; i++) {
         if ( channels[i] == nullptr )
             channels[i] = new Channel;             
     }
+    */
     resetSong();
     isInitialised = true;
     return 0;
@@ -375,7 +407,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
             // quick hack for first tests
             if ( mChn.isFadingOut) {
                 mChn.isActive = false;
-                //chn->isVolumeRampActive = true;
+                //mChn.isVolumeRampActive = true;
             }
             if (!mChn.isVolumeRampActive   //     && (i == 16) 
                 ) {                
@@ -511,9 +543,9 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
                                 for ( k = 0; k < MAX_SAMPLES; k++ ) {
-                                    if ( channels[mChn.fromChannel]->mixerChannelsTable[k] == i ) break;
+                                    if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
                                 }
-                                channels[mChn.fromChannel]->mixerChannelsTable[k] = 0;
+                                channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
                                 j = nSamples; // quit loop, we're done here
                             }
                         }
@@ -558,7 +590,6 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         }
                         mixOffset += nrLoops << 1;
                         j += nrLoops;
-
                        
                         if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
                             if ( sample.isRepeatSample() )
@@ -571,9 +602,9 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
                                 for ( k = 0; k < MAX_SAMPLES; k++ ) {
-                                    if ( channels[mChn.fromChannel]->mixerChannelsTable[k] == i ) break;
+                                    if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
                                 }
-                                channels[mChn.fromChannel]->mixerChannelsTable[k] = 0;
+                                channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
                                 j = nSamples; // quit loop, we're done here
                             }
                         }
@@ -587,7 +618,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
 }
 
 Mixer::~Mixer() {
-    for (unsigned i = 0; i < PLAYER_MAX_CHANNELS; i++) delete channels[i];
+    //for (unsigned i = 0; i < PLAYER_MAX_CHANNELS; i++) delete channels[i];
     //for (unsigned i = 0; i < MIXER_MAX_CHANNELS; i++) delete mixerChannels[i];
     delete waveHeaders;
     delete mixBuffer;
@@ -613,7 +644,6 @@ static void CALLBACK waveOutProc(
     LeaveCriticalSection(&waveCriticalSection);
 }
 
-//int Mixer::startReplay () {
 void Mixer::startReplay() {
         MMRESULT        mmResult;
 
@@ -807,25 +837,25 @@ int Mixer::setMixerVolume(unsigned fromChannel) {
     unsigned        soften = (invchn ? (PANNING_FULL_RIGHT - gp) : gp);
 
     for (int i = 0; i < MAX_SAMPLES; i++) {
-        unsigned    mc = channels[fromChannel]->mixerChannelsTable[i];
-        if (mc) {
-            MixerChannel    *pmc = &mixerChannels[mc];
-            if (pmc->isActive) {
-                unsigned        p = channels[fromChannel]->panning;
-                unsigned        v = channels[fromChannel]->volume
+        unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
+        if ( mc ) {
+            MixerChannel& pmc = mixerChannels[mc];
+            if (pmc.isActive) {
+                unsigned        p = channels[fromChannel].panning;
+                unsigned        v = channels[fromChannel].volume
                                         * globalVolume_;
 
                 p = soften + ((p * (PANNING_MAX_STEPS - (soften << 1))) >> PANNING_SHIFT);
                 if (invchn) p = PANNING_FULL_RIGHT - p;                 
-                pmc->leftVolume  = ((PANNING_FULL_RIGHT - p) * v) >> PANNING_SHIFT; 
-                pmc->rightVolume = ( p                       * v) >> PANNING_SHIFT; 
+                pmc.leftVolume  = ((PANNING_FULL_RIGHT - p) * v) >> PANNING_SHIFT; 
+                pmc.rightVolume = ( p                       * v) >> PANNING_SHIFT; 
                 if (balance_ < 0) {
-                    pmc->rightVolume *= (100 + balance_);
-                    pmc->rightVolume /= 100;
+                    pmc.rightVolume *= (100 + balance_);
+                    pmc.rightVolume /= 100;
                 }
                 if (balance_ > 0) {
-                    pmc->leftVolume  *= (100 - balance_);
-                    pmc->leftVolume /= 100;
+                    pmc.leftVolume  *= (100 - balance_);
+                    pmc.leftVolume /= 100;
                 }
             }
         }
@@ -849,7 +879,7 @@ int Mixer::setPanning  (unsigned fromChannel, unsigned panning) {
 */
 int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
     for (int i = 0; i < MAX_SAMPLES; i++) {
-        unsigned    mc = channels[fromChannel]->mixerChannelsTable[i];
+        unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
         if (mc) {
             MixerChannel&    pmc = mixerChannels[mc];
             if (pmc.isPrimary) {
@@ -893,11 +923,11 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
     // stop previous note in same logical Channel
     
     for (unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++) {
-        unsigned j = channels[fromChannel]->mixerChannelsTable[i]; 
+        unsigned j = channels[fromChannel].mixerChannelsTable[i]; 
         if (j) {
             if (mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel)) {
                 mixerChannels[j].isPrimary = false;
-                channels[fromChannel]->mixerChannelsTable[i] = 0;
+                channels[fromChannel].mixerChannelsTable[i] = 0;
                 // temp: 
                 mixerChannels[j].isFadingOut = true;
                 mixerChannels[j].isActive = false;
@@ -906,13 +936,13 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
         }
     }
     /*
-    mixerChannels[channels[fromChannel]->iPrimary].isPrimary = false;
-    mixerChannels[channels[fromChannel]->iPrimary].isActive = false;
-    channels[fromChannel]->mixerChannelsTable[channels[fromChannel]->iPrimary] = 0;
+    mixerChannels[channels[fromChannel].iPrimary].isPrimary = false;
+    mixerChannels[channels[fromChannel].iPrimary].isActive = false;
+    channels[fromChannel].mixerChannelsTable[channels[fromChannel].iPrimary] = 0;
     */
     // find an empty slot in mixer channels table
     for (emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++) {
-        if(!channels[fromChannel]->mixerChannelsTable[emptySlot]) break;
+        if(!channels[fromChannel].mixerChannelsTable[emptySlot]) break;
     }
     // None found, remove oldest sample (the longest playing one)
     // and use it's channel for the new sample
@@ -920,7 +950,7 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
         oldestSlot = 0;
         age = 0;
         for (unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++) {
-            mcIndex = channels[fromChannel]->mixerChannelsTable[i];
+            mcIndex = channels[fromChannel].mixerChannelsTable[i];
             if (mixerChannels[mcIndex].age > age) {
                 age = mixerChannels[mcIndex].age;
                 oldestSlot = i;
@@ -948,8 +978,8 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
             // temp hack
         mixerChannels[newMc].isVolumeRampActive = false;
         mixerChannels[newMc].sampleOffset = sampleOffset;
-        channels[fromChannel]->mixerChannelsTable[emptySlot] = newMc; 
-        channels[fromChannel]->iPrimary = emptySlot;
+        channels[fromChannel].mixerChannelsTable[emptySlot] = newMc; 
+        channels[fromChannel].iPrimary = emptySlot;
     }
     return 0;
 }
@@ -959,7 +989,8 @@ int Mixer::updateNotes () {
     unsigned        patternStartRow = 0;
     int             nextPatternDelta = 1;
 
-    if (patternDelay_) { patternDelay_--; return 0; }       
+    if (patternDelay_) { patternDelay_--; return 0; }
+
 #ifdef debug_mixer
     /*
     char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -975,8 +1006,8 @@ int Mixer::updateNotes () {
 #endif
 
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel&    channel = *channels[iChannel];
-        unsigned    note, instrument, sample, effect, argument;
+        Channel&    channel = channels[iChannel];
+        unsigned    note,instrument,sample;
         bool        isNewNote;
         bool        isNewInstrument;
         bool        isValidInstrument;
@@ -999,6 +1030,8 @@ int Mixer::updateNotes () {
             } else {
                 channel.lastNote = note;
                 isNewNote = true;
+                replay = true;
+                channel.retrigCount = 0;
             }
         } else {
             isNewNote = false;
@@ -1010,13 +1043,13 @@ int Mixer::updateNotes () {
             isDifferentInstrument = (oldInstrument != instrument);
             channel.pInstrument = module->getInstrument(instrument - 1); 
             if (channel.pInstrument) {
-                if (channel.lastNote) {
+                if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                         (channel.lastNote - 1);
                     channel.pSample = 
-                        channel.pInstrument->getSample(sample);
+                        channel.pInstrument->getSample( sample );
                 }
-                if (channel.pSample) {
+                if ( channel.pSample ) {
                     channel.volume = 
                         channel.pSample->getVolume();
                     isValidInstrument = true;
@@ -1028,235 +1061,395 @@ int Mixer::updateNotes () {
             isNewInstrument = false;
             channel.pInstrument = 
                 module->getInstrument(oldInstrument - 1);
-            if (channel.pInstrument) {
-                if (channel.lastNote) {               
+            if ( channel.pInstrument ) {
+                if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
                         (channel.lastNote - 1);
                     channel.pSample = 
-                        channel.pInstrument->getSample(sample); 
+                        channel.pInstrument->getSample( sample ); 
                 }
             }
         }
 
-        if (isNewInstrument) channel.instrumentNo = instrument;
-        if (isNewNote) replay = true;
-        channel.oldNote = channel.newNote;
+        if ( isNewInstrument ) channel.instrumentNo = instrument;
 
+        //if ( isNewNote ) replay = true;
+        channel.oldNote = channel.newNote;
         channel.newNote = *iNote;
 
-        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-            effect   = iNote->effects[fxloop].effect;
-            argument = iNote->effects[fxloop].argument;
+        // valid sample for replay ? -> replay sample if new note
+        if ( replay && channel.pSample && (!isNoteDelayed) ) {
+            finetune = channel.pSample->getFinetune();
+            channel.period = noteToPeriod(
+                note + channel.pSample->getRelativeNote(),
+                finetune );
+        }
+        for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) 
+        {
+            unsigned effect = iNote->effects[fxloop].effect;
+            if ( (effect == TONE_PORTAMENTO) || 
+                 (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) )
+                replay = false;  // temp hack
+        }
+
+        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
+        {
+            unsigned effect   = iNote->effects[fxloop].effect;
+            unsigned argument = iNote->effects[fxloop].argument;
+            // ScreamTracker uses very little effect memory:
+            if ( (fxloop == (MAX_EFFECT_COLUMNS - 1)) &&
+                st3StyleEffectMemory_ && argument )
+            {
+                channel.lastNonZeroFXArg = argument;
+                channel.lastArpeggio = argument;
+                channel.lastPortamentoUp = argument;
+                channel.lastPortamentoDown = argument;
+                channel.lastExtraFinePortamentoUp = argument & 0xF;
+                channel.lastExtraFinePortamentoDown = argument & 0xF;
+                channel.lastMultiNoteRetrig = argument;
+                channel.lastTremor = argument;
+                channel.lastTremolo = argument;
+                channel.lastMultiNoteRetrig = argument;               
+            }
             switch ( effect ) {
                 case ARPEGGIO :
-                    {
-                        if ( argument ) {
-                            channel.arpeggioCount = 0;
-                            channel.arpeggioNote1 = channel.lastNote + (argument >> 4);
-                            channel.arpeggioNote2 = channel.lastNote + (argument & 0xF);
-                        }
-                        break;
+                {
+                    if ( st3StyleEffectMemory_ && (argument == 0) )
+                        argument = channel.lastArpeggio;
+                    if ( argument ) {
+                        if ( ft2StyleEffects_ ) // not exactly like FT2, quick hack
+                            argument = (argument >> 4) | ((argument & 0xF) << 4);
+                        channel.arpeggioCount = 0;
+                        channel.arpeggioNote1 = channel.lastNote + (argument >> 4);
+                        channel.arpeggioNote2 = channel.lastNote + (argument & 0xF);
                     }
+                    break;
+                }
                 case PORTAMENTO_UP :
-                    {
-                        if ( argument ) channel.lastPortamentoUp = argument;
-                        break;
-                    }
+                {
+                    if ( argument ) channel.lastPortamentoUp = argument;
+                    break;
+                }
                 case PORTAMENTO_DOWN :
-                    {
-                        if ( argument ) channel.lastPortamentoDown = argument;
-                        break;
-                    }
+                {
+                    if ( argument ) channel.lastPortamentoDown = argument;
+                    break;
+                }
                 case TONE_PORTAMENTO :
-                    {
-                        if ( argument ) channel.lastTonePortamento = argument;
-                        break;
-                    }
+                {
+                    if ( argument ) channel.lastTonePortamento = argument;
+                    if ( isNewNote ) channel.portaDestPeriod = 
+                        noteToPeriod(
+                            note + channel.pSample->getRelativeNote(),
+                            finetune
+                        );                    
+                    break;
+                }
+                case SET_VIBRATO_SPEED : // XM volume column command
+                case FINE_VIBRATO :
                 case VIBRATO :
-                    {
-                        unsigned lv = channel.lastVibrato;
-                        if (argument & 0xF0) 
-                             lv = (lv & 0xF) + (argument & 0xF0);
-                        if (argument & 0xF) 
-                             lv = (lv & 0xF0) + (argument & 0xF);
-                        channel.lastVibrato = lv;
-                        break;
-                    }
+                {
+                    unsigned& lv = channel.lastVibrato;
+                    if (argument & 0xF0) 
+                            lv = (lv & 0xF) + (argument & 0xF0);
+                    if (argument & 0xF) 
+                            lv = (lv & 0xF0) + (argument & 0xF);
+                    //channel.lastVibrato = lv;
+                    break;
+                }
                 case TREMOLO : 
-                    {
-                        unsigned lt = channel.lastTremolo;
-                        if (argument & 0xF0) 
-                             lt = (lt & 0xF) + (argument & 0xF0);
-                        if (argument & 0xF) 
-                             lt = (lt & 0xF0) + (argument & 0xF);
-                        channel.lastTremolo = lt;
-                        break;
-                    }
+                {
+                    unsigned& lt = channel.lastTremolo;
+                    if (argument & 0xF0) 
+                            lt = (lt & 0xF) + (argument & 0xF0);
+                    if (argument & 0xF) 
+                            lt = (lt & 0xF0) + (argument & 0xF);
+                    //channel.lastTremolo = lt;
+                    break;
+                }
                 case SET_FINE_PANNING : 
-                    {
-                        channel.panning = argument;                       
-                        break;
-                    }
+                {
+                    channel.panning = argument;                       
+                    break;
+                }
                 case SET_SAMPLE_OFFSET :   
-                    {                   
-                        if ( channel.pSample ) {
-                            if ( argument ) channel.lastSampleOffset = argument;
-                            else argument = channel.lastSampleOffset;
-                            argument <<= 8;                            
-                            if (argument < (channel.pSample->getLength())) {
-                                channel.sampleOffset = argument;
-                                if ( isNewNote ) replay = true;
-                            } else {
-                                replay = false;
-                            }                            
-                        } 
-                        break;
-                    }
+                {                   
+                    if ( channel.pSample ) {
+                        if ( argument ) channel.lastSampleOffset = argument;
+                        else argument = channel.lastSampleOffset;
+                        argument <<= 8;                            
+                        if (argument < (channel.pSample->getLength())) {
+                            channel.sampleOffset = argument;
+                            if ( isNewNote ) replay = true;
+                        } else {
+                            replay = false;
+                        }                            
+                    } 
+                    break;
+                }
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
+                {
+                    if ( argument ) channel.lastVolumeSlide = argument;
+                    if ( st300FastVolSlides_ )
                     {
-                        if ( argument ) channel.lastVolumeSlide = argument;
-                        break;
-                    }
-                case POSITION_JUMP :
-                    {
-                        patternBreak = true;
-                        patternStartRow = 0;
-                        nextPatternDelta = argument - iPatternTable;
-                        break;
-                    }
-                case SET_VOLUME :
-                    {
-                        channel.volume = argument;
-                        break;
-                    }
-                case PATTERN_BREAK :
-                    {
-                        patternBreak = true;
-                        patternStartRow = ((argument & 0xF0) >> 4) * 10 +
-                                           (argument & 0x0F);
-                        break;
-                    }
-                case EXTENDED_EFFECTS : 
-                    {
-                        effect = argument >> 4;
-                        argument &= 0xF;
-                        switch ( effect ) {
-                            case SET_GLISSANDO_CONTROL :
-                                {
-                                    break;
-                                }
-                            case SET_VIBRATO_CONTROL : 
-                                {
-                                    break;
-                                }
-                            case SET_FINETUNE :
-                                {
-                                    finetune = argument;
-                                    if (finetune & 8) finetune |= 0xFFFFFFF0;
-                                    break;
-                                }
-                            case SET_PATTERN_LOOP : 
-                                {
-                                    break;
-                                }
-                            case SET_TREMOLO_CONTROL :
-                                {
-                                    break;
-                                }
-                            case NOTE_RETRIG : 
-                                {
-                                    // ignore effect command 0xE90
-                                    if ( argument ) channel.retrigCount = 0;
-                                    else {
-                                        iNote->effects[fxloop].effect = 0;
-                                        iNote->effects[fxloop].argument = 0;
-                                    }                                   
-                                    break;
-                                }
-                            case NOTE_CUT : 
-                                {
-                                    if (!argument) channel.volume = 0;
-                                    break;
-                                }
-                            case NOTE_DELAY : 
-                                {
-                                    if( argument < tempo )
-                                    {
-                                        channel.delayCount = argument;
-                                        isNoteDelayed = true;
-                                    }
-                                    break;
-                                }
-                            case PATTERN_DELAY :
-                                {
-                                    if (argument) patternDelay_ = argument /* + 1 */;  // + 1 removed for inside.mod
-                                    break;
-                                }
+                        unsigned&   v = channel.volume;
+                        unsigned    arg = channel.lastVolumeSlide;
+                        unsigned    slide = arg >> 4;
+                        if ( slide ) { // slide up
+                            v += slide;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        } else {     // slide down
+                            slide = arg & 0xF;
+                            if ( slide > v ) v = 0;
+                            else             v -= slide;
                         }
-                        break;
                     }
+                    break;
+                }
+                case POSITION_JUMP :
+                {
+                    patternBreak = true;
+                    patternStartRow = 0;
+                    nextPatternDelta = argument - iPatternTable;
+                    break;
+                }
+                case SET_VOLUME :
+                {
+                    channel.volume = argument;
+                    break;
+                }
+                case PATTERN_BREAK :
+                {
+                    patternBreak = true;
+                    patternStartRow = (argument >> 4) * 10 +
+                                      (argument & 0x0F);
+                    break;
+                }
+                case EXTENDED_EFFECTS : 
+                {
+                    effect = argument >> 4;
+                    argument &= 0xF;
+                    switch ( effect ) {                            
+                        case FINE_PORTAMENTO_UP:
+                        {
+                            unsigned arg = argument << 2;
+                            if ( channel.period > arg )
+                            {
+                                channel.period -= arg;
+                                if ( channel.period < module->getMinPeriod() )
+                                    channel.period = module->getMinPeriod();
+                            } else channel.period = module->getMinPeriod();
+                            setFrequency(
+                                iChannel,
+                                periodToFrequency( channel.period ) );
+                            break;
+                        }
+                        case FINE_PORTAMENTO_DOWN:
+                        {
+                            channel.period += argument << 2;
+                            if ( channel.period > module->getMaxPeriod() )
+                                channel.period = module->getMaxPeriod();
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );
+                            break;
+                        }
+                        case SET_GLISSANDO_CONTROL :
+                        {
+                            break;
+                        }
+                        case SET_VIBRATO_CONTROL : 
+                        {
+                            break;
+                        }
+                        case SET_FINETUNE :
+                        {
+                            finetune = argument;
+                            if (finetune & 8) finetune |= 0xFFFFFFF0;
+                            break;
+                        }
+                        case SET_PATTERN_LOOP : 
+                        {
+                            break;
+                        }
+                        case SET_TREMOLO_CONTROL :
+                        {
+                            break;
+                        }
+                        case NOTE_RETRIG : 
+                        {
+                            /*
+                                Note Retrig effect details for .MOD, reference:
+                                OpenMPT 1.28.02.00
+                                Tick 0 == row itself, where note is processed
+                                Tick 1 == after first row, where we process 
+                                            volume slide etc.
+
+                                ** speed 1: **
+                                E9x: Ignored completely, for every value of x, even 
+                                for x == 0. Subsequent E9x commands immediately
+                                afterwards the previous E9x command are also 
+                                ignored, even if no sample is playing.
+                                Bottom line: don't process E9x when speed == 1.
+
+                                ** speed 2: **
+                                E90: retrigs sample 1x on tick 1
+                                E91: retrigs sample 1x on tick 1
+                                E92 alone: does nothing
+                                E92 followed by another E92, E91 or E90,
+                                not necessarily on the next row but
+                                simply on a later row: retrigs the sample on tick 1
+
+                                E92 followed by E90,
+                                E92 followed by E91,
+                                E92 followed by E92: retrigs sample 1x on tick 1 
+                                after the row on which the second retrig occurs (!)
+                                E92 followed by E93: no retrig 
+
+                                ** speed 3: **
+                                E90: retrigs sample 2x
+
+                                A lone E9x command with x < speed retrigs the sample
+
+                                E96
+                                E96
+                                E96
+                                E96
+                                E96
+                                E96 <-- retrig here on tick 1
+
+                                E97
+                                (..)
+                                E95
+                                (..)
+                                E94
+                                (..)
+                                E98
+                                (..)
+                                E96
+                                (..)
+                                E96 <-- retrig sample here on tick 1
+
+                                Bottom line:
+                                - when the effect occurs on the row:
+                                    --> set retriglimit to argument
+                                - increase retrig tick counter on all ticks except 
+                                    tick 0 (the row)
+                                - if retrig tick counter >= argument then:
+                                    - reset retrig tick counter
+                                    - retrig sample
+                                - a new note action resets the retrig tick counter
+                                - an instrument change without any note doesn't
+                            */
+                            /*
+                                FT2 ignores the effect if the argument is 
+                                greater than or equal to the nr of ticks per 
+                                row
+                            */
+                            if ( ft2StyleEffects_ && (argument >= tempo ) )
+                            {
+                                iNote->effects[fxloop].effect = 0;
+                                iNote->effects[fxloop].argument = 0;
+                            }                                     
+                            break;
+                        }
+                        case NOTE_CUT : 
+                        {
+                            if ( !argument ) channel.volume = 0;
+                            break;
+                        }
+                        case NOTE_DELAY : 
+                        {
+                            if( argument < tempo )
+                            {
+                                channel.delayCount = argument;
+                                isNoteDelayed = true;
+                            }
+                            break;
+                        }
+                        case PATTERN_DELAY :
+                        {
+                            if ( argument ) patternDelay_ = argument;
+                            break;
+                        }
+                    }
+                    break;
+                } // end of extended effects
                 case SET_TEMPO :
-                    {
-                        tempo = argument;
-                        break;
-                    }
+                {
+                    tempo = argument;
+                    break;
+                }
                 case SET_BPM :
-                    {
-                        bpm = argument;
-                        setBpm();
-                        break;
-                    }
+                {
+                    bpm = argument;
+                    setBpm();
+                    break;
+                }
                 case SET_GLOBAL_VOLUME :
-                    {
-                        globalVolume_ = argument;
-                        break;
-                    }
+                {
+                    globalVolume_ = argument;
+                    break;
+                }
                 case GLOBAL_VOLUME_SLIDE :
-                    {
-                        if (argument) 
-                            channel.lastGlobalVolumeSlide = argument;
-                        break;
-                    }
+                {
+                    if ( argument ) 
+                        channel.lastGlobalVolumeSlide = argument;
+                    break;
+                }
                 case SET_ENVELOPE_POSITION :
-                    {
-                        break;
-                    }
+                {
+                    break;
+                }
                 case PANNING_SLIDE :
-                    {
-                        if (argument) channel.lastPanningSlide = argument;
-                        break;
-                    }
+                {
+                    if (argument) channel.lastPanningSlide = argument;
+                    break;
+                }
                 case MULTI_NOTE_RETRIG :
-                    {
-                        if( argument ) channel.lastMultiNoteRetrig = argument;                        
-                        break;
-                    }
+                {
+                    if( argument ) channel.lastMultiNoteRetrig = argument;                        
+                    break;
+                }
                 case TREMOR :
-                    {
-                        break;
+                {
+                    break;
+                }
+                /*
+                case EXTRA_FINE_PORTAMENTO :
+                {
+                    effect = argument >> 4;
+                    argument &= 0xF;
+                    switch ( effect ) {
+                        case EXTRA_FINE_PORTAMENTO_UP:
+                        {
+                            if ( argument ) channel.lastExtraFinePortamentoUp = argument;
+                            break;
+                        }
+                        case EXTRA_FINE_PORTAMENTO_DOWN:
+                        {
+                            if ( argument ) channel.lastExtraFinePortamentoDown = argument;
+                            break;
+                        }
                     }
+                    break;
+                }            
+                */
             }
         }
         // valid sample for replay ? -> replay sample if new note
-        if (replay && channel.pSample && (!isNoteDelayed)) {
-            playSample(iChannel, channel.pSample, 
-                       channel.sampleOffset, FORWARD);
-            if(!finetune) finetune = channel.pSample->getFinetune();
-            
-            channel.period = noteToPeriod( 
+        if ( replay && channel.pSample && (!isNoteDelayed) ) {
+            playSample( iChannel,channel.pSample,
+                channel.sampleOffset,FORWARD );
+            channel.period = noteToPeriod(
                 note + channel.pSample->getRelativeNote(),
-                finetune 
+                finetune
             );
-            setFrequency( iChannel,periodToFrequency( channel.period ) );
-            /*
-            setFrequency( iChannel,periodToFrequency(
-                noteToPeriod( note + channel.pSample->getRelativeNote(),finetune ) )
-            );
-            */
+            setFrequency( 
+                iChannel,
+                periodToFrequency( channel.period ) );
         }
-
         if (!isNoteDelayed) { 
             /*
                channel->panning = channel->newpanning;
@@ -1309,7 +1502,7 @@ int Mixer::updateNotes () {
 
             // effect
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
-            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMS; fxloop++ ) {
+            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
                 std::cout 
                     << std::hex << std::uppercase 
                     << std::setw( 1 ) << iNote->effects[fxloop].effect
@@ -1322,7 +1515,6 @@ int Mixer::updateNotes () {
 #endif
         iNote++;
     }  
-
     // prepare for next row / next function call
     if (!patternBreak) {
         patternRow++;
@@ -1356,254 +1548,281 @@ int Mixer::updateNotes () {
 
 int Mixer::updateEffects () {
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel&     channel = *channels[iChannel];
+        Channel&     channel = channels[iChannel];
 
-        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
+        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) {
             Note&       note = channel.newNote;
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
 
-            switch (effect) {
+            switch ( effect ) {
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
-                    {
-                        unsigned&   v = channel.volume;
-                        unsigned    arg = channel.lastVolumeSlide;
-                        unsigned    slide = (arg & 0xF0) >> 4;                      
-                        if (slide) { // slide up
-                            v += slide;
-                            if (v > MAX_VOLUME) v = MAX_VOLUME;
-                        } else {     // slide down
-                            slide = arg & 0x0F;
-                            if (slide > v)  v = 0;
-                            else            v -= slide;
-                        }
-                        break;
+                {
+                    unsigned&   v = channel.volume;
+                    unsigned    arg = channel.lastVolumeSlide;
+                    unsigned    slide = (arg & 0xF0) >> 4;                      
+                    if (slide) { // slide up
+                        v += slide;
+                        if (v > MAX_VOLUME) v = MAX_VOLUME;
+                    } else {     // slide down
+                        slide = arg & 0x0F;
+                        if (slide > v)  v = 0;
+                        else            v -= slide;
                     }
+                    break;
+                }
             }
-
             switch ( effect ) {
                 case ARPEGGIO :
-                    {
-                        if ( argument && channel.pSample ) {
-                            switch ( channel.arpeggioCount & 0x3 ) {
-                                case 0 : 
-                                    {
-                                        channel.period = noteToPeriod(
-                                                channel.lastNote +
-                                                channel.pSample->getRelativeNote(),
-                                                channel.pSample->getFinetune()
-                                        );
-                                        break;
-                                    }
-                                case 1 :
-                                    {
-                                        channel.period = noteToPeriod(
-                                                channel.arpeggioNote1 +
-                                                channel.pSample->getRelativeNote(),
-                                                channel.pSample->getFinetune() 
-                                        );
-                                        break;
-                                    }
-                                case 2 : 
-                                    {
-                                        channel.period = noteToPeriod(
-                                                channel.arpeggioNote2 +
-                                                channel.pSample->getRelativeNote(),
-                                                channel.pSample->getFinetune() 
-                                        );
-                                        break;
-                                    }
+                {
+                    if ( channel.pSample ) {
+                        switch ( channel.arpeggioCount & 0x3 ) {
+                            case 0 : 
+                            {
+                                channel.period = noteToPeriod(
+                                        channel.lastNote +
+                                        channel.pSample->getRelativeNote(),
+                                        channel.pSample->getFinetune()
+                                );
+                                break;
                             }
-                            playSample( iChannel,
-                                channel.pSample,
-                                channel.sampleOffset,
-                                FORWARD );
-                            setFrequency( iChannel,
-                                periodToFrequency( channel.period ) 
-                            );
-                            channel.arpeggioCount++;
+                            case 1 :
+                            {
+                                channel.period = noteToPeriod(
+                                        channel.arpeggioNote1 +
+                                        channel.pSample->getRelativeNote(),
+                                        channel.pSample->getFinetune() 
+                                );
+                                break;
+                            }
+                            case 2 : 
+                            {
+                                channel.period = noteToPeriod(
+                                        channel.arpeggioNote2 +
+                                        channel.pSample->getRelativeNote(),
+                                        channel.pSample->getFinetune() 
+                                );
+                                break;
+                            }
                         }
-                        break;
+                        channel.arpeggioCount++;
+                        channel.arpeggioCount &= 0x3;
+                        playSample( 
+                            iChannel,
+                            channel.pSample,
+                            channel.sampleOffset,
+                            FORWARD );
+                        setFrequency( 
+                            iChannel,
+                            periodToFrequency( channel.period ) );                            
                     }
+                    break;
+                }
                 case PORTAMENTO_UP :
-                    {                        
-                        channel.period -= argument * 4;
-                        setFrequency( iChannel,
-                            periodToFrequency( channel.period )
-                        );                        
-                        break;
-                    }
-                case PORTAMENTO_DOWN :
+                {                        
+                    argument <<= 2;
+                    if ( channel.period > argument )
                     {
-                        channel.period += argument * 4;
-                        setFrequency( iChannel,
-                            periodToFrequency( channel.period )
-                        );                        
-                        break;
-                    }
+                        channel.period -= argument;
+                        if ( channel.period < module->getMinPeriod() )
+                            channel.period = module->getMinPeriod();
+                    } else channel.period = module->getMinPeriod();
+                    setFrequency(
+                        iChannel,
+                        periodToFrequency( channel.period ) );
+                    break;
+                }
+                case PORTAMENTO_DOWN :
+                {
+                    channel.period += argument << 2;
+                    if ( channel.period > module->getMaxPeriod() )
+                        channel.period = module->getMaxPeriod();
+                    setFrequency( iChannel,
+                        periodToFrequency( channel.period ) );
+                    break;
+                }
                 case TONE_PORTAMENTO :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
+                {
+                    argument = channel.lastTonePortamento << 2;
+                    if ( channel.portaDestPeriod )
                     {
-                        break;
+                        if ( channel.period < channel.portaDestPeriod )
+                        {
+                            channel.period += argument;
+                            if ( channel.period > channel.portaDestPeriod )
+                                channel.period = channel.portaDestPeriod;
+                        } else if ( channel.period > channel.portaDestPeriod )
+                        {
+                            if ( channel.period > argument )
+                                channel.period -= argument;
+                            else channel.period = channel.portaDestPeriod;
+                            if ( channel.period < channel.portaDestPeriod )
+                                channel.period = channel.portaDestPeriod;
+                        }
+                        setFrequency( iChannel,
+                            periodToFrequency( channel.period ) );
                     }
+                    break;
+                }
                 case VIBRATO :
                 case VIBRATO_AND_VOLUME_SLIDE :
-                    {
-                        break;
-                    }
+                {
+                    break;
+                }
                 case TREMOLO : 
-                    {
-                        break;
-                    }
+                {
+                    break;
+                }
                 case EXTENDED_EFFECTS :
-                    {
-                        effect = argument >> 4;
-                        argument &= 0xF;
-                        switch (effect) {
-                            case NOTE_RETRIG : 
-                                {
-                                if ( channel.pSample ) {
-                                    channel.retrigCount++;
-                                    if ( channel.retrigCount >= argument ) {
-                                        channel.retrigCount = 0;
-                                        playSample( iChannel,
-                                            channel.pSample,
-                                            channel.sampleOffset,
-                                            FORWARD );
-                                    }
+                {
+                    effect = argument >> 4;
+                    argument &= 0xF;
+                    switch ( effect ) {
+                        case NOTE_RETRIG :                             
+                        {
+                            if ( channel.pSample ) {
+                                channel.retrigCount++;
+                                if ( channel.retrigCount >= argument ) {
+                                    channel.retrigCount = 0;
+                                    playSample( iChannel,
+                                        channel.pSample,
+                                        channel.sampleOffset,
+                                        FORWARD );
                                 }
-                                break;
-                                }
-                            case NOTE_CUT : 
-                                {
-                                    if (tick > argument) {
-                                        channel.volume = 0;
-                                        //setVolume(iChannel, channel.volume);
-                                        note.effects[fxloop].effect   = 0;
-                                        note.effects[fxloop].argument = 0;
-                                    }
-                                    break;
-                                }
-                            case NOTE_DELAY : 
-                                {                                    
-                                    if (channel.delayCount <= tick) {
-                                        // valid sample for replay ? -> replay sample if new note
-                                        if (channel.pSample) { 
-                                            playSample(iChannel, 
-                                                       channel.pSample, 
-                                                       channel.sampleOffset, 
-                                                       FORWARD);
-                                            setFrequency(iChannel, 
-                                                periodToFrequency(
-                                                    noteToPeriod(
-                                                        channel.lastNote + 
-                                                            channel.pSample->getRelativeNote(), 
-                                                        channel.pSample->getFinetune())
-                                                )
-                                            );
-                                        }
-                                        note.effects[fxloop].effect   = 0;
-                                        note.effects[fxloop].argument = 0;
-                                        //setPanning(iChannel, channel.panning);  // temp
-                                        //setVolume(iChannel, channel.volume);    // temp
-                                    }                                   
-                                    break;
-                                }
-                            case FUNK_REPEAT : 
-                                {
-                                    break;
-                                }
-                        }
-                        break;
-                    }
-                case GLOBAL_VOLUME_SLIDE :
-                    {
-                        unsigned    arg = channel.lastGlobalVolumeSlide;
-                        unsigned    slide = (arg & 0xF0) >> 4;                      
-                        if (slide) { // slide up
-                            globalVolume_ += slide;
-                            if (globalVolume_ > MAX_VOLUME) 
-                                globalVolume_ = MAX_VOLUME;
-                        } else {     // slide down
-                            slide = arg & 0x0F;
-                            if (slide > globalVolume_) 
-                                 globalVolume_ = 0;
-                            else globalVolume_ -= slide;
-                        }
-                        break;
-                    }
-                case PANNING_SLIDE :
-                    {
-                        unsigned    panning = channel.panning;
-                        unsigned    arg = channel.lastPanningSlide;
-                        unsigned    slide = (arg & 0xF0) >> 4;                      
-                        if (slide) { // slide up
-                            panning += slide;
-                            if (panning > PANNING_FULL_RIGHT) 
-                                panning = PANNING_FULL_RIGHT;
-                        } else {     // slide down
-                            slide = arg & 0x0F;
-                            if (slide > panning) 
-                                 panning = PANNING_FULL_LEFT;
-                            else panning -= slide;
-                        }
-                        channel.panning = panning;
-                        break;
-                    }
-                case MULTI_NOTE_RETRIG : /* R + volume change + interval */   
-                    {  
-                        if ( channel.pSample ) {
-                            channel.retrigCount++;
-                            if ( (argument == 0) && 
-                                (channel.oldNote.effects[fxloop].effect == MULTI_NOTE_RETRIG) )
-                                argument = channel.lastMultiNoteRetrig;
-                            if ( channel.retrigCount >= (argument & 0xF) ) {
-                                channel.retrigCount = 0;                             
-                                int v = channel.volume;
-                                switch ( argument >> 4 ) {
-                                    case  1: { v--;             break; }
-                                    case  2: { v -= 2;          break; }
-                                    case  3: { v -= 4;          break; }
-                                    case  4: { v -= 8;          break; }
-                                    case  5: { v -= 16;         break; }
-                                    case  6: { v <<= 1; v /= 3; break; }
-                                    case  7: { v >>= 1;         break; }
-                                    case  9: { v++;             break; }
-                                    case 10: { v += 2;          break; }
-                                    case 11: { v += 4;          break; }
-                                    case 12: { v += 8;          break; }
-                                    case 13: { v += 16;         break; }
-                                    case 14: { v *= 3; v >>= 1; break; }
-                                    case 15: { v <<= 1;         break; }
-                                }
-                                if ( v < 0 )          channel.volume = 0;
-                                if ( v > MAX_VOLUME ) channel.volume = MAX_VOLUME;
-                                playSample(iChannel, 
-                                            channel.pSample, 
-                                            channel.sampleOffset, 
-                                            FORWARD);
                             }
+                            break;
                         }
-                        break;
+                        case NOTE_CUT : 
+                        {
+                            if (tick > argument) {
+                                channel.volume = 0;
+                                note.effects[fxloop].effect   = 0;
+                                note.effects[fxloop].argument = 0;
+                            }
+                            break;
+                        }
+                        case NOTE_DELAY : 
+                        {                                    
+                            if (channel.delayCount <= tick) {
+                                // valid sample for replay ? 
+                                //  -> replay sample if new note
+                                if (channel.pSample) { 
+                                    playSample(iChannel, 
+                                                channel.pSample, 
+                                                channel.sampleOffset, 
+                                                FORWARD);
+                                    setFrequency(iChannel, 
+                                        periodToFrequency(
+                                            noteToPeriod(
+                                                channel.lastNote + 
+                                                    channel.pSample->getRelativeNote(), 
+                                                channel.pSample->getFinetune())
+                                        )
+                                    );
+                                }
+                                note.effects[fxloop].effect   = 0;
+                                note.effects[fxloop].argument = 0;
+                            }                                   
+                            break;
+                        }
+                        case FUNK_REPEAT : 
+                        {
+                            break;
+                        }
                     }
+                    break;
+                }
+                case GLOBAL_VOLUME_SLIDE :
+                {
+                    unsigned    arg = channel.lastGlobalVolumeSlide;
+                    unsigned    slide = (arg & 0xF0) >> 4;                      
+                    if (slide) { // slide up
+                        globalVolume_ += slide;
+                        if (globalVolume_ > MAX_VOLUME) 
+                            globalVolume_ = MAX_VOLUME;
+                    } else {     // slide down
+                        slide = arg & 0x0F;
+                        if (slide > globalVolume_) 
+                                globalVolume_ = 0;
+                        else globalVolume_ -= slide;
+                    }
+                    break;
+                }
+                case PANNING_SLIDE :
+                {
+                    unsigned    panning = channel.panning;
+                    unsigned    arg = channel.lastPanningSlide;
+                    unsigned    slide = (arg & 0xF0) >> 4;                      
+                    if (slide) { // slide up
+                        panning += slide;
+                        if (panning > PANNING_FULL_RIGHT) 
+                            panning = PANNING_FULL_RIGHT;
+                    } else {     // slide down
+                        slide = arg & 0x0F;
+                        if (slide > panning) 
+                                panning = PANNING_FULL_LEFT;
+                        else panning -= slide;
+                    }
+                    channel.panning = panning;
+                    break;
+                }
+                case MULTI_NOTE_RETRIG : /* R + volume change + interval */   
+                {  
+                    if ( channel.pSample ) {
+                        channel.retrigCount++;
+                        /*
+                        if ( (argument == 0) && 
+                            (channel.oldNote.effects[fxloop].effect == MULTI_NOTE_RETRIG) )
+                            argument = channel.lastMultiNoteRetrig;
+                        */
+                        if ( channel.retrigCount >= 
+                            (channel.lastMultiNoteRetrig & 0xF) ) {
+                            channel.retrigCount = 0;                             
+                            int v = channel.volume;
+                            switch ( argument >> 4 ) {
+                                case  1: { v--;             break; }
+                                case  2: { v -= 2;          break; }
+                                case  3: { v -= 4;          break; }
+                                case  4: { v -= 8;          break; }
+                                case  5: { v -= 16;         break; }
+                                case  6: { v <<= 1; v /= 3; break; }
+                                case  7: { v >>= 1;         break; }
+                                case  9: { v++;             break; }
+                                case 10: { v += 2;          break; }
+                                case 11: { v += 4;          break; }
+                                case 12: { v += 8;          break; }
+                                case 13: { v += 16;         break; }
+                                case 14: { v *= 3; v >>= 1; break; }
+                                case 15: { v <<= 1;         break; }
+                            }
+                            if ( v < 0 )          channel.volume = 0;
+                            if ( v > MAX_VOLUME ) channel.volume = MAX_VOLUME;
+                            playSample(
+                                iChannel, 
+                                channel.pSample, 
+                                channel.sampleOffset, 
+                                FORWARD );
+                        }
+                    }
+                    break;
+                }
                 case TREMOR :
-                    {
-                        break;
-                    }
+                {
+                    break;
+                }
             }
         }
     }
-    
-    //setGlobalVolume(globalVolume_);
     return 0;
 }
 
 int Mixer::updateImmediateEffects () {
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        Channel&     channel = *channels[iChannel];
-        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
+        Channel&     channel = channels[iChannel];
+        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) {
             Note&       note = channel.newNote;
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
@@ -1616,14 +1835,29 @@ int Mixer::updateImmediateEffects () {
                         switch (effect) {
                             case FINE_PORTAMENTO_UP :
                                 {
-                                    if (argument) 
-                                        channel.lastFinePortamentoUp = argument;
+                                    if ( argument ) 
+                                        channel.lastFinePortamentoUp = argument; 
+                                    else argument = channel.lastFinePortamentoUp;
+                                    argument <<= 2;
+                                    if ( argument < channel.period )
+                                        channel.period -= argument;
+                                    if ( channel.period < module->getMinPeriod() )
+                                        channel.period = module->getMinPeriod();
+                                    setFrequency( iChannel,
+                                        periodToFrequency( channel.period ) );
                                     break;
                                 }
                             case FINE_PORTAMENTO_DOWN :
                                 {
-                                    if (argument) 
+                                    if ( argument )
                                         channel.lastFinePortamentoDown = argument;
+                                    else argument = channel.lastFinePortamentoDown;
+                                    argument <<= 2;
+                                    channel.period += argument;
+                                    if ( channel.period > module->getMaxPeriod() )
+                                        channel.period = module->getMaxPeriod();
+                                    setFrequency( iChannel,
+                                        periodToFrequency( channel.period ) );
                                     break;
                                 }
                             case FINE_VOLUME_SLIDE_UP :
@@ -1651,23 +1885,38 @@ int Mixer::updateImmediateEffects () {
                         break;
                     }
                 case EXTRA_FINE_PORTAMENTO :
-                    {
-                        effect = argument >> 4;
-                        argument &= 0xF;
-                        switch (effect) {
-                            case EXTRA_FINE_PORTAMENTO_UP :
-                                {
-                                    if (argument) channel.lastExtraFinePortamentoUp = argument;
-                                    break;
-                                }
-                            case EXTRA_FINE_PORTAMENTO_DOWN :
-                                {
-                                    if (argument) channel.lastExtraFinePortamentoDown = argument;
-                                    break;
-                                }
+                {
+                    effect = argument >> 4;
+                    argument &= 0xF;
+                    switch ( effect ) {
+                        case EXTRA_FINE_PORTAMENTO_UP :
+                        {
+                            if ( argument ) 
+                                channel.lastExtraFinePortamentoUp = argument;
+                            else argument = channel.lastExtraFinePortamentoUp;
+                            if ( argument < channel.period )
+                                channel.period -= argument;
+                            if ( channel.period < module->getMinPeriod() )
+                                channel.period = module->getMinPeriod();
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );
+                            break;
                         }
-                        break;
+                        case EXTRA_FINE_PORTAMENTO_DOWN :
+                        {
+                            if ( argument ) 
+                                channel.lastExtraFinePortamentoDown = argument;
+                            else argument = channel.lastExtraFinePortamentoDown;
+                            channel.period += argument;
+                            if ( channel.period > module->getMaxPeriod() )
+                                channel.period = module->getMaxPeriod();
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );
+                            break;
+                        }
                     }
+                    break;
+                }
             }
         }
     }
@@ -1844,7 +2093,11 @@ int main(int argc, char *argv[])  {
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
+        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\againstr.s3m",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\againstr.mod",
+        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land2.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
@@ -1864,6 +2117,7 @@ int main(int argc, char *argv[])  {
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
+        /*
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track2.s3m",
@@ -1874,13 +2128,14 @@ int main(int argc, char *argv[])  {
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track7.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track8.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track9.s3m",
+        */
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.xm",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
         "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
         
-        //"D:\\MODS\\MOD\\beastsong.mod",
+        "D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
         //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",

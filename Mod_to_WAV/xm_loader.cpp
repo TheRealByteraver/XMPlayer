@@ -135,7 +135,7 @@ int Module::loadXmFile()
     char                        *buf, *bufp;
     ifstream::pos_type          fileSize = 0;
     ifstream                    xmFile(fileName_, ios::in|ios::binary|ios::ate);
-
+    
     isLoaded_ = false;
     // load file into byte buffer and then work on that buffer only
     if ( !xmFile.is_open() ) {
@@ -225,6 +225,15 @@ int Module::loadXmFile()
     cout << "\nSize of XmSampleHeader               = " << sizeof(XmSampleHeader) << "\n";
     //_getch();
 #endif
+    // initialize xm specific variables:
+    if ( useLinearFrequencies_ )
+    {
+        minPeriod_ = 1600;  
+        maxPeriod_ = 7680;  
+    } else {
+        minPeriod_ = 113;
+        maxPeriod_ = 27392;
+    }
     for ( unsigned i = 0; i < nChannels_; i++ )
     {
         defaultPanPositions_[i] = PANNING_CENTER;
@@ -346,9 +355,9 @@ int Module::loadXmFile()
                 else if (volumeColumn > 0xC0)
                     iNote->effects[0].effect   = SET_FINE_PANNING;
                 else if (volumeColumn > 0xB0)
-                    iNote->effects[0].effect   = VIBRATO;
+                    iNote->effects[0].effect   = VIBRATO; 
                 else if (volumeColumn > 0xA0)
-                    iNote->effects[0].effect   = VIBRATO;
+                    iNote->effects[0].effect   = SET_VIBRATO_SPEED;
                 else if (volumeColumn > 0x90)
                     iNote->effects[0].effect   = EXTENDED_EFFECTS; //FINE_VOLUME_SLIDE_UP
                 else if (volumeColumn > 0x80)
@@ -366,69 +375,89 @@ int Module::loadXmFile()
                     iNote->effects[0].argument = volumeColumn & 0xF;
                 }
                 switch (iNote->effects[0].effect) {
+                    case TONE_PORTAMENTO :
+                    {
+                        iNote->effects[0].argument <<= 4;
+                        // emulate FT2 bug:
+                        if ( iNote->effects[1].effect == NOTE_DELAY )
+                        {
+                            iNote->effects[0].effect = NO_EFFECT;
+                            iNote->effects[0].argument = NO_EFFECT;
+                        }
+                        break;
+                    }
                     case EXTENDED_EFFECTS : 
-                        {
-                            if (volumeColumn > 0x80) {
-                                iNote->effects[0].argument += (FINE_VOLUME_SLIDE_DOWN << 4);
-                            } else {
-                                iNote->effects[0].argument += (FINE_VOLUME_SLIDE_UP << 4);
-                            }
-                            break;
+                    {
+                        if (volumeColumn > 0x80) {
+                            iNote->effects[0].argument += (FINE_VOLUME_SLIDE_DOWN << 4);
+                        } else {
+                            iNote->effects[0].argument += (FINE_VOLUME_SLIDE_UP << 4);
                         }
+                        break;
+                    }
                     case PANNING_SLIDE : 
-                        {
-                            if (volumeColumn > 0xE0) // slide right
-                                    iNote->effects[0].argument <<= 4;
-                            break;
-                        }
-                    case SET_FINE_PANNING : // rough panning, really
-                        {
-                            iNote->effects[0].argument <<= 4;
-                            break;
-                        }
-                    case VIBRATO :
-                        {
-                            if (volumeColumn < 0xB0)
+                    {
+                        if (volumeColumn > 0xE0) // slide right
                                 iNote->effects[0].argument <<= 4;
-                            break;
-                        }
-                    case VOLUME_SLIDE : 
+                        break;
+                    }
+                    case SET_FINE_PANNING : // rough panning, really
+                    {
+                        iNote->effects[0].argument <<= 4; // *= 17; // ?
+                        break;
+                    }
+                    case SET_VIBRATO_SPEED :
+                    {
+                        iNote->effects[0].argument <<= 4;
+                        break;
+                    }
+                    /*
+                    case VIBRATO :  
+                    {
+                        if ( volumeColumn < 0xB0 )
                         {
-                            if (volumeColumn > 0x70) // slide up
-                                    iNote->effects[0].argument <<= 4;                          
-                            break;
+                            iNote->effects[0].effect = SET_VIBRATO_SPEED;
+                            iNote->effects[0].argument <<= 4;
                         }
+                        break;
+                    }
+                    */
+                    case VOLUME_SLIDE : 
+                    {
+                        if (volumeColumn > 0x70) // slide up
+                                iNote->effects[0].argument <<= 4;                          
+                        break;
+                    }
                 }                
             }            
-/* unneccessary, is done with memset earlier
-#if MAX_EFFECT_COLUMS > 2
-            for (unsigned fxloop = 2; fxloop < MAX_EFFECT_COLUMS; fxloop++) {
-                iNote->effects[fxloop].effect   = 0; 
-                iNote->effects[fxloop].argument = 0; 
-            }
-#endif
-*/
             // do some error checking & effect remapping:
-            for (unsigned fxloop = 0; fxloop < 2; fxloop++) {
+            for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) {
                 switch (iNote->effects[fxloop].effect) {
+                    case 0: // arpeggio / no effect
+                    {
+                        if ( (fxloop == 1) &&
+                            iNote->effects[fxloop].argument )
+                            iNote->effects[fxloop].effect = ARPEGGIO;
+                        break;
+                    }
                     case SET_GLOBAL_VOLUME : 
                     case SET_VOLUME :
-                        {
-                            if (iNote->effects[fxloop].argument > MAX_VOLUME)
-                                iNote->effects[fxloop].argument = MAX_VOLUME;
-                            break;
-                        }
+                    {
+                        if (iNote->effects[fxloop].argument > MAX_VOLUME)
+                            iNote->effects[fxloop].argument = MAX_VOLUME;
+                        break;
+                    }
                     case SET_TEMPO :
-                        {
-                            if (!iNote->effects[fxloop].argument) {
-                                iNote->effects[fxloop].effect = 0;
-                            } else { 
-                                if ( iNote->effects[fxloop].argument > 0x1F ) {
-                                    iNote->effects[fxloop].effect = SET_BPM;
-                                }
+                    {
+                        if ( !iNote->effects[fxloop].argument ) {
+                            iNote->effects[fxloop].effect = NO_EFFECT;
+                        } else {
+                            if ( iNote->effects[fxloop].argument > 0x1F ) {
+                                iNote->effects[fxloop].effect = SET_BPM;
                             }
-                            break;
                         }
+                        break;
+                    }
                 }
             }
 #ifdef debug_xm_loader
@@ -606,8 +635,6 @@ int Module::loadXmFile()
                     SHORT           newSample16 = 0;
                     signed char     oldSample8 = 0;
                     signed char     newSample8 = 0;
-                    //oldSample16 = 0;
-                    //oldSample8  = 0;
                     nSamples_++;
                     samples[iSample].data = (SHORT *)(bufp + sampleOffset);                 
                     sampleOffset += samples[iSample].length;

@@ -8,9 +8,11 @@
 #define NTSC_CALC                           7159090.5   // not used 
 #define NTSC_C4_SPEED                       8363.42
 #define PAL_C4_SPEED                        8287.14
+
 #define PANNING_STYLE_MOD                   1   // LRRL etc
 #define PANNING_STYLE_XM                    2   // ALL CENTER
 #define PANNING_STYLE_S3M                   3   // LRLR etc
+
 #define MAX_VOLUME                          64
 #define MAX_SAMPLENAME_LENGTH               22
 #define MAX_INSTRUMENTNAME_LENGTH           (MAX_SAMPLENAME_LENGTH + 2)
@@ -20,7 +22,7 @@
 #define SIGNED_EIGHT_BIT_SAMPLE             1
 #define SIGNED_SIXTEEN_BIT_SAMPLE           2
 #define INTERPOLATION_SPACER                2
-#define MAX_EFFECT_COLUMS                   2
+#define MAX_EFFECT_COLUMNS                  2
 #define MAXIMUM_NOTES                       (11 * 12)
 #define PLAYER_MAX_CHANNELS                 32
 #define PANNING_FULL_LEFT                   0
@@ -31,14 +33,14 @@
 #define FORWARD                             false
 #define BACKWARD                            true
 
-// differentiate trackers, fro S3M compatibility mainly
+// differentiate trackers, for S3M compatibility mainly
 #define TRACKER_PROTRACKER                  1
 #define TRACKER_ST300                       2
 #define TRACKER_ST321                       3
 #define TRACKER_FT2                         4
 
 // effect nrs:
-#define ARPEGGIO                            0x0
+#define NO_EFFECT                           0x0 // ARPEGGIO is remapped to 0x25
 #define PORTAMENTO_UP                       0x1
 #define PORTAMENTO_DOWN                     0x2
 #define TONE_PORTAMENTO                     0x3
@@ -82,7 +84,9 @@
 
 // internal remapped effects for the player
 #define SET_BPM                             0x24  // after effect "Z" for XM safety
+#define ARPEGGIO                            0x25
 #define FINE_VIBRATO                        0x26  // S3M fine vibrato
+#define SET_VIBRATO_SPEED                   0x27  // XM Volc command
 #define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
 /*
@@ -137,8 +141,8 @@ class Note {
 public:
     unsigned        note;
     unsigned        instrument;
-    unsigned        period;
-    Effect          effects[MAX_EFFECT_COLUMS];
+    //unsigned        period;
+    Effect          effects[MAX_EFFECT_COLUMNS];
 };
 
 class Pattern {
@@ -167,21 +171,18 @@ public:
                     SampleHeader () 
                     { 
                         memset(this, 0, sizeof(SampleHeader)); 
-                        //c4Speed = (unsigned)NTSC_C4_SPEED;
                     }
-    //char            *name;
     std::string     name;
     unsigned        length;
     unsigned        repeatOffset;
     unsigned        repeatLength;
     bool            isRepeatSample;
     bool            isPingpongSample;
-    bool            isUsed;               // if the sample is used in the song
+    bool            isUsed;             // if the sample is used in the song
     int             volume;
     int             relativeNote;
     unsigned        panning;
     int             finetune;
-    //unsigned        c4Speed;
     int             dataType;           // 8 or 16 bit, compressed, etc
     SHORT           *data;              // only 16 bit samples allowed                    
 };
@@ -191,7 +192,6 @@ public:
                     Sample () 
                     { 
                         memset(this, 0, sizeof(Sample)); 
-                        //c4Speed_ = (unsigned)NTSC_C4_SPEED;
                     }
                     ~Sample ();
     bool            load (const SampleHeader &sampleHeader);
@@ -206,11 +206,9 @@ public:
     int             getRelativeNote ()  { return relativeNote_;     }
     unsigned        getPanning ()       { return panning_;          }
     int             getFinetune ()      { return finetune_;         }
-    //unsigned        getC4Speed()        { return c4Speed_;          }
     SHORT           *getData ()         { return data_ + INTERPOLATION_SPACER; }
 private:
     std::string     name_;
-    //char            *name_;
     unsigned        length_;
     unsigned        repeatOffset_;
     unsigned        repeatEnd_;
@@ -222,7 +220,6 @@ private:
     int             relativeNote_;
     unsigned        panning_;
     int             finetune_;
-    //unsigned        c4Speed_;
     SHORT           *data_;             // only 16 bit samples allowed
 };
 
@@ -265,9 +262,7 @@ public:
                     { memset(this, 0, sizeof(Instrument)); }    // still ok w/ std::string?
                     ~Instrument ();
     void            load(const InstrumentHeader &instrumentHeader);
-    //const char      *getName ()                     { return name_;  }
     std::string     getName() { return name_; }
-    //char            *getName (char *name);
     unsigned        getnSamples ()                  { return nSamples_;           }
     unsigned        getSampleForNote(unsigned n)    { return sampleForNote_[n];   }
     EnvelopePoint   getVolumeEnvelope (unsigned p)  { return volumeEnvelope_[p];  }
@@ -291,7 +286,6 @@ public:
                     { return ((sample < MAX_SAMPLES) ? samples_[sample] : 0);     }
 private:
     std::string     name_;
-    //char            *name_;
     unsigned        nSamples_;
     unsigned        sampleForNote_[MAXIMUM_NOTES];
     EnvelopePoint   volumeEnvelope_[12];
@@ -319,10 +313,6 @@ public:
                     Module ()               { memset(this, 0, sizeof(Module)); } 
                     Module( std::string &fileName ) : Module() { loadFile( fileName ); }
                     ~Module();
-                    //Module (const char *fileName);
-//    char            *getFileName (const char *fileName);
-    //void            setFileName (const char *fileName);
-    //int             loadFile (char *fileName)   
     std::string     getFileName()               { return fileName_;             }
     void            setFileName( std::string &fileName ) { fileName_ = fileName; }
     int             loadFile ();
@@ -331,6 +321,9 @@ public:
     bool            isLoaded ()                 { return isLoaded_;             }
     bool            useLinearFrequencies ()     { return useLinearFrequencies_; }
     bool            isCustomRepeat()            { return isCustomRepeat_;       }
+    unsigned        getTrackerType()            { return trackerType_;          }
+    unsigned        getMinPeriod()              { return minPeriod_;            }
+    unsigned        getMaxPeriod()              { return maxPeriod_;            }
     unsigned        getPanningStyle()           { return panningStyle_;         }
     unsigned        getnChannels ()             { return nChannels_;            }
     unsigned        getnInstruments ()          { return nInstruments_;         }
@@ -362,6 +355,8 @@ private:
     bool            isLoaded_;
     bool            useLinearFrequencies_;
     bool            isCustomRepeat_;
+    unsigned        minPeriod_;
+    unsigned        maxPeriod_;
     unsigned        panningStyle_;
     unsigned        nChannels_;
     unsigned        nInstruments_;
