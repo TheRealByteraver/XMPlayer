@@ -77,7 +77,7 @@ struct S3mFileHeader {
     unsigned char   id;             // 0x1A
     unsigned char   fileType;       // 0x1D for ScreamTracker 3
     unsigned short  reserved1;
-    unsigned short  songLength;     // actually songlength - 1
+    unsigned short  songLength;     // 
     unsigned short  nInstruments;
     unsigned short  nPatterns;      // including marker (unsaved) patterns
     unsigned short  flags;          // CWTV == 1320h -> ST3.20
@@ -260,6 +260,7 @@ int Module::loadS3mFile() {
     songLength_ = 0;
     int bufOffset = sizeof( S3mFileHeader );
     unsigned char *OrderList = (unsigned char *)(buf + bufOffset);
+    /*
     for ( int i = 0; i < s3mFileHeader.songLength; i++ )
     {
         unsigned order = OrderList[i];
@@ -267,10 +268,24 @@ int Module::loadS3mFile() {
             patternTable_[songLength_] = order;
             songLength_++;
             if (order > nPatterns_) nPatterns_ = order;
+
 #ifdef debug_s3m_loader
             std::cout << order << " ";
 #endif
         }
+    }
+    */
+    for ( int i = 0; i < s3mFileHeader.songLength; i++ )
+    {
+        unsigned order = OrderList[i];
+        if ( order >= S3M_MARKER_PATTERN ) order = MARKER_PATTERN;
+        else if ( order > nPatterns_ ) nPatterns_ = order;
+        patternTable_[songLength_] = order;
+        songLength_++;        
+#ifdef debug_s3m_loader
+        std::cout << order << " ";
+#endif
+        
     }
     nPatterns_++;
 #ifdef debug_s3m_loader
@@ -441,7 +456,7 @@ int Module::loadS3mFile() {
                 unsigned char *s = (unsigned char *)sample.data;
                 for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
             }            
-            // finetune + relative note recalc: to finish / debug
+            // finetune + relative note recalc
             unsigned int s3mPeriod = ((unsigned)8363 * periods[4 * 12]) / s3mInstHeader.c4Speed;
             unsigned j;
             for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
@@ -452,6 +467,9 @@ int Module::loadS3mFile() {
                 sample.finetune = (int)round(
                     ((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
                      * 128.0) - 128;
+            } else { 
+                sample.relativeNote = 0;
+                sample.finetune = 0;
             }
 #ifdef debug_s3m_loader
             std::cout 
@@ -642,7 +660,7 @@ int Module::loadS3mFile() {
                             unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
                             if ( unpackedNote.note > S3M_MAX_NOTE )
                                 unpackedNote.note = 0;
-                        }
+                        } else note = 0; // added: no note
                     }
                     unpackedNote.inst = inst;
                     unpackedNote.volc = volc;
@@ -783,6 +801,7 @@ int Module::loadS3mFile() {
                 }
                 case 5: // E: all kinds of (extra) (fine) portamento down
                 {
+                    /*
                     int xfx = iNote->effects[1].argument >> 4;
                     int xfxArg = iNote->effects[1].argument & 0xF;
                     switch ( xfx )
@@ -808,10 +827,13 @@ int Module::loadS3mFile() {
                             break;
                         }
                     }
+                    */
+                    iNote->effects[1].effect = PORTAMENTO_DOWN;
                     break;
                 }
                 case 6: // F: all kinds of (extra) (fine) portamento up
                 {
+                    /*
                     int xfx = iNote->effects[1].argument >> 4;
                     int xfxArg = iNote->effects[1].argument & 0xF;
                     switch ( xfx )
@@ -837,6 +859,8 @@ int Module::loadS3mFile() {
                             break;
                         }
                     }
+                    */
+                    iNote->effects[1].effect = PORTAMENTO_UP;
                     break;
                 }
                 case 7: // G

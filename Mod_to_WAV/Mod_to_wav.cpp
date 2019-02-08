@@ -23,7 +23,20 @@
 
 /*
 bugs:
-    starsmuz.s3m pans full left
+    - starsmuz.s3m pans full left
+    - ALGRHYTH.MOD: ghost notes / high pitched notes in 2nd half of song
+    - 2ND_PM.S3M: ghost notes / missing notes towards the end of the song
+    - arpeggio counter should not be reset when a new note occurs!
+    - aryx.s3m: too high notes in pattern data
+    - SSI.S3M: ghost notes towards the end
+    - menutune3.s3m: FF1 effect corrupts sample data (??)
+
+
+Fixed / cleared up:
+    - ssi2.s3m is read as 6 chn???  
+      --> channel was muted in modplug tracker
+    - SSI.S3M: weird deformed sample in 2nd part of the song (after start eastern type music)
+      --> portamento memory fixed (hopefully)
 
 */
 
@@ -614,6 +627,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
         }
     }
     mixIndex += (nSamples << 1); // *2 for stereo
+    //std::cout << "# active chn = " << nActiveMixChannels << std::endl;
     return 0;
 }
 
@@ -989,7 +1003,7 @@ int Mixer::updateNotes () {
     unsigned        patternStartRow = 0;
     int             nextPatternDelta = 1;
 
-    if (patternDelay_) { patternDelay_--; return 0; }
+    if ( patternDelay_ ) { patternDelay_--; return 0; }
 
 #ifdef debug_mixer
     /*
@@ -1020,7 +1034,7 @@ int Mixer::updateNotes () {
 
 
         channel.sampleOffset = 0;
-        note       = iNote->note;
+        note       = iNote->note;        
         instrument = iNote->instrument;
 
         if ( note ) {            
@@ -1028,6 +1042,7 @@ int Mixer::updateNotes () {
                 isNewNote = false;
                 keyedOff = true;
             } else {
+                if ( note > MAXIMUM_NOTES ) std::cout << "!";
                 channel.lastNote = note;
                 isNewNote = true;
                 replay = true;
@@ -1038,11 +1053,11 @@ int Mixer::updateNotes () {
         }
         
         oldInstrument = channel.instrumentNo;
-        if (instrument) {
+        if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
             channel.pInstrument = module->getInstrument(instrument - 1); 
-            if (channel.pInstrument) {
+            if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                         (channel.lastNote - 1);
@@ -1076,7 +1091,14 @@ int Mixer::updateNotes () {
         //if ( isNewNote ) replay = true;
         channel.oldNote = channel.newNote;
         channel.newNote = *iNote;
-
+        // check if a portamento effect occured:
+        for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ )
+        {
+            unsigned& effect = iNote->effects[fxloop].effect;
+            if ( (effect == TONE_PORTAMENTO) ||
+                (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) )
+                replay = false;  // temp hack
+        }
         // valid sample for replay ? -> replay sample if new note
         if ( replay && channel.pSample && (!isNoteDelayed) ) {
             finetune = channel.pSample->getFinetune();
@@ -1084,38 +1106,36 @@ int Mixer::updateNotes () {
                 note + channel.pSample->getRelativeNote(),
                 finetune );
         }
-        for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) 
-        {
-            unsigned effect = iNote->effects[fxloop].effect;
-            if ( (effect == TONE_PORTAMENTO) || 
-                 (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) )
-                replay = false;  // temp hack
-        }
 
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
         {
-            unsigned effect   = iNote->effects[fxloop].effect;
-            unsigned argument = iNote->effects[fxloop].argument;
-            // ScreamTracker uses very little effect memory:
-            if ( (fxloop == (MAX_EFFECT_COLUMNS - 1)) &&
-                st3StyleEffectMemory_ && argument )
+            unsigned& effect   = iNote->effects[fxloop].effect;
+            unsigned& argument = iNote->effects[fxloop].argument;
+            /* 
+                ScreamTracker uses very little effect memory. The Qxy command
+                (multi retrig) will use the argument of a previous Order jump
+                command (Bxx) if that happens to be the previous command. Or
+                Vibrato or something.
+                Weird.
+            */
+            if ( st3StyleEffectMemory_ && argument &&
+                (fxloop == (MAX_EFFECT_COLUMNS - 1)) )
             {
-                channel.lastNonZeroFXArg = argument;
+                channel.lastNonZeroFXArg = argument; 
                 channel.lastArpeggio = argument;
-                channel.lastPortamentoUp = argument;
-                channel.lastPortamentoDown = argument;
-                channel.lastExtraFinePortamentoUp = argument & 0xF;
-                channel.lastExtraFinePortamentoDown = argument & 0xF;
                 channel.lastMultiNoteRetrig = argument;
                 channel.lastTremor = argument;
                 channel.lastTremolo = argument;
-                channel.lastMultiNoteRetrig = argument;               
+                //channel.lastPortamentoUp = argument;
+                //channel.lastPortamentoDown = argument;
             }
             switch ( effect ) {
                 case ARPEGGIO :
                 {
+                    
                     if ( st3StyleEffectMemory_ && (argument == 0) )
-                        argument = channel.lastArpeggio;
+                        argument = channel.lastArpeggio; //?
+                    
                     if ( argument ) {
                         if ( ft2StyleEffects_ ) // not exactly like FT2, quick hack
                             argument = (argument >> 4) | ((argument & 0xF) << 4);
@@ -1128,11 +1148,73 @@ int Mixer::updateNotes () {
                 case PORTAMENTO_UP :
                 {
                     if ( argument ) channel.lastPortamentoUp = argument;
+                    if ( st3StyleEffectMemory_ )
+                    {
+                        //argument = channel.lastPortamentoUp;
+                        argument = channel.lastNonZeroFXArg;
+                        unsigned xfx = argument >> 4;
+                        unsigned xfxArg = argument & 0xF;
+                        Effect& fxRemap = channel.newNote.effects[fxloop];
+                        switch ( xfx )
+                        {
+                            case 0xE: // extra fine slide
+                            {                                
+                                fxRemap.effect = EXTRA_FINE_PORTAMENTO;
+                                fxRemap.argument = (EXTRA_FINE_PORTAMENTO_UP << 4) + xfxArg;
+                                channel.lastExtraFinePortamentoUp = xfxArg;                      
+                                break;
+                            }
+                            case 0xF: // fine slide
+                            {
+                                fxRemap.effect = EXTENDED_EFFECTS;
+                                fxRemap.argument = (FINE_PORTAMENTO_UP << 4) + xfxArg;
+                                channel.lastFinePortamentoUp = xfxArg; 
+                                break;
+                            }
+                            default: // normal portamento up
+                            {
+                                //std::cout << "^ arg = " << argument << std::endl;
+                                channel.lastPortamentoUp = argument;
+                                break;
+                            }
+                        }
+                    }
                     break;
                 }
                 case PORTAMENTO_DOWN :
                 {
                     if ( argument ) channel.lastPortamentoDown = argument;
+                    if ( st3StyleEffectMemory_ )
+                    {
+                        //argument = channel.lastPortamentoDown;
+                        argument = channel.lastNonZeroFXArg;
+                        unsigned xfx = argument >> 4;
+                        unsigned xfxArg = argument & 0xF;
+                        Effect& fxRemap = channel.newNote.effects[fxloop];
+                        switch ( xfx )
+                        {
+                            case 0xE: // extra fine slide
+                            {
+                                fxRemap.effect = EXTRA_FINE_PORTAMENTO;
+                                fxRemap.argument = (EXTRA_FINE_PORTAMENTO_DOWN << 4) + xfxArg;
+                                channel.lastExtraFinePortamentoDown = xfxArg;
+                                break;
+                            }
+                            case 0xF: // fine slide
+                            {
+                                fxRemap.effect = EXTENDED_EFFECTS;
+                                fxRemap.argument = (FINE_PORTAMENTO_DOWN << 4) + xfxArg;
+                                channel.lastFinePortamentoDown = xfxArg;
+                                break;
+                            }
+                            default: // normal portamento down
+                            {
+                                //std::cout << "^ arg = " << argument << std::endl;
+                                channel.lastPortamentoDown = argument;
+                                break;
+                            }
+                        }
+                    }
                     break;
                 }
                 case TONE_PORTAMENTO :
@@ -1141,8 +1223,8 @@ int Mixer::updateNotes () {
                     if ( isNewNote ) channel.portaDestPeriod = 
                         noteToPeriod(
                             note + channel.pSample->getRelativeNote(),
-                            finetune
-                        );                    
+                            channel.pSample->getFinetune()
+                        );   
                     break;
                 }
                 case SET_VIBRATO_SPEED : // XM volume column command
@@ -1177,9 +1259,9 @@ int Mixer::updateNotes () {
                     if ( channel.pSample ) {
                         if ( argument ) channel.lastSampleOffset = argument;
                         else argument = channel.lastSampleOffset;
-                        argument <<= 8;                            
-                        if (argument < (channel.pSample->getLength())) {
-                            channel.sampleOffset = argument;
+                        unsigned sOfs = argument << 8;
+                        if ( sOfs < (channel.pSample->getLength())) {
+                            channel.sampleOffset = sOfs;
                             if ( isNewNote ) replay = true;
                         } else {
                             replay = false;
@@ -1209,10 +1291,11 @@ int Mixer::updateNotes () {
                     break;
                 }
                 case POSITION_JUMP :
+                // Warning: position jumps takes s3m marker patterns into account
                 {
                     patternBreak = true;
                     patternStartRow = 0;
-                    nextPatternDelta = argument - iPatternTable;
+                    nextPatternDelta = (int)argument - (int)iPatternTable; 
                     break;
                 }
                 case SET_VOLUME :
@@ -1222,19 +1305,26 @@ int Mixer::updateNotes () {
                 }
                 case PATTERN_BREAK :
                 {
-                    patternBreak = true;
-                    patternStartRow = (argument >> 4) * 10 +
-                                      (argument & 0x0F);
+                    unsigned startRow = (argument >> 4) * 10 + (argument & 0xF);
+                    if ( startRow < 64 ) // quick s3m hack
+                    {
+                        patternBreak = true;
+                        patternStartRow = startRow;
+                    } 
                     break;
                 }
                 case EXTENDED_EFFECTS : 
                 {
-                    effect = argument >> 4;
-                    argument &= 0xF;
-                    switch ( effect ) {                            
+                    //effect = argument >> 4;
+                    //argument &= 0xF;
+                    unsigned xfx = argument >> 4;
+                    unsigned xfxArg = argument & 0xF;
+                    switch ( xfx ) {
                         case FINE_PORTAMENTO_UP:
                         {
-                            unsigned arg = argument << 2;
+                            if ( xfxArg ) channel.lastFinePortamentoUp = xfxArg;
+                            /*
+                            unsigned arg = argument << 2;  // ?
                             if ( channel.period > arg )
                             {
                                 channel.period -= arg;
@@ -1244,15 +1334,19 @@ int Mixer::updateNotes () {
                             setFrequency(
                                 iChannel,
                                 periodToFrequency( channel.period ) );
+                            */
                             break;
                         }
                         case FINE_PORTAMENTO_DOWN:
                         {
+                            if ( xfxArg ) channel.lastFinePortamentoDown = xfxArg;
+                            /*
                             channel.period += argument << 2;
                             if ( channel.period > module->getMaxPeriod() )
                                 channel.period = module->getMaxPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
+                            */
                             break;
                         }
                         case SET_GLISSANDO_CONTROL :
@@ -1265,7 +1359,7 @@ int Mixer::updateNotes () {
                         }
                         case SET_FINETUNE :
                         {
-                            finetune = argument;
+                            finetune = xfxArg;
                             if (finetune & 8) finetune |= 0xFFFFFFF0;
                             break;
                         }
@@ -1347,30 +1441,39 @@ int Mixer::updateNotes () {
                                 greater than or equal to the nr of ticks per 
                                 row
                             */
+
+                            /*
+                            // don't alter pattern data!
                             if ( ft2StyleEffects_ && (argument >= tempo ) )
                             {
                                 iNote->effects[fxloop].effect = 0;
                                 iNote->effects[fxloop].argument = 0;
-                            }                                     
+                            } 
+                            */
                             break;
                         }
                         case NOTE_CUT : 
                         {
-                            if ( !argument ) channel.volume = 0;
+                            if ( !xfxArg ) channel.volume = 0;
                             break;
                         }
                         case NOTE_DELAY : 
                         {
-                            if( argument < tempo )
+                            if( xfxArg < tempo )
                             {
-                                channel.delayCount = argument;
+                                channel.delayCount = xfxArg;
                                 isNoteDelayed = true;
                             }
                             break;
                         }
                         case PATTERN_DELAY :
                         {
-                            if ( argument ) patternDelay_ = argument;
+                            /* 
+                                mostLeft delay command prevails if multiple 
+                                pattern delay commands are found on the same
+                                row.
+                            */
+                            if ( !patternDelay_ ) patternDelay_ = xfxArg;
                             break;
                         }
                     }
@@ -1416,26 +1519,24 @@ int Mixer::updateNotes () {
                 {
                     break;
                 }
-                /*
                 case EXTRA_FINE_PORTAMENTO :
-                {
-                    effect = argument >> 4;
-                    argument &= 0xF;
-                    switch ( effect ) {
+                {           
+                    unsigned xfx = argument >> 4;
+                    unsigned xfxArg = argument & 0xF;
+                    switch ( xfx ) {
                         case EXTRA_FINE_PORTAMENTO_UP:
                         {
-                            if ( argument ) channel.lastExtraFinePortamentoUp = argument;
+                            if ( xfxArg ) channel.lastExtraFinePortamentoUp = xfxArg;
                             break;
                         }
                         case EXTRA_FINE_PORTAMENTO_DOWN:
                         {
-                            if ( argument ) channel.lastExtraFinePortamentoDown = argument;
+                            if ( xfxArg ) channel.lastExtraFinePortamentoDown = xfxArg;
                             break;
                         }
                     }
                     break;
                 }            
-                */
             }
         }
         // valid sample for replay ? -> replay sample if new note
@@ -1459,15 +1560,15 @@ int Mixer::updateNotes () {
             //setVolume(iChannel, channel->volume);    // temp
         }
 #ifdef debug_mixer
-#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
-#define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
-#define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
-#define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
-#define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
-#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
-#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
+        #define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
+        #define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
+        #define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
+        #define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
+        #define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+        #define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
+        #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
+        #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
+        #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
         if ( iChannel < 8 )
         {            
             // **************************************************
@@ -1475,70 +1576,94 @@ int Mixer::updateNotes () {
             HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
             HANDLE hStdout = GetStdHandle( STD_OUTPUT_HANDLE );
             CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
-            COORD dwCursorPosition;
             GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
-            /*
-            dwCursorPosition.X = 0;
-            dwCursorPosition.Y = 0;
-            SetConsoleCursorPosition( hStdout,dwCursorPosition );
-            */
             // **************************************************
 
             // display note
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+            std::cout << "|";
             SetConsoleTextAttribute( hStdout, FOREGROUND_LIGHTCYAN );
-            if (note) std::cout << noteStrings[note];
-            else std::cout << "---";
-
+            if ( note < (MAXIMUM_NOTES + 2)) std::cout << noteStrings[note];
+            else {
+                std::cout << std::hex << std::setw(3) << (unsigned)note << std::dec;
+            }
             // display instrument
             SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
-            std::cout << std::dec
-                << std::setw( 2 ) << instrument;
+            if( instrument )
+                std::cout << std::dec << std::setw( 2 ) << instrument;
+            else std::cout << "  ";
 
-            /*
-                    if (channel->volume < 10)    std::cout << " ";
-                    else                    std::cout << (channel->volume / 10);
-                    std::cout << (channel->volume % 10) << "|";
-            */
+            // display volume column
+            SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
+            if ( iNote->effects[0].effect )
+                std::cout << std::hex << std::uppercase
+                    << std::setw( 1 ) << iNote->effects[0].effect
+                    << std::setw( 2 ) << iNote->effects[0].argument;
+            else std::cout << "   ";
 
             // effect
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
             for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
-                std::cout 
-                    << std::hex << std::uppercase 
-                    << std::setw( 1 ) << iNote->effects[fxloop].effect
-                    << std::setw( 1 ) << (iNote->effects[fxloop].argument >> 4)
-                    << std::setw( 1 ) << (iNote->effects[fxloop].argument & 0xF)
+                if( iNote->effects[fxloop].effect )
+                    std::cout
+                        << std::hex << std::uppercase
+                        << std::setw( 2 ) << iNote->effects[fxloop].effect;
+                else std::cout << "--";
+                SetConsoleTextAttribute( hStdout,FOREGROUND_BROWN );
+                std::cout
+                    << std::setw( 2 ) << (iNote->effects[fxloop].argument >> 8) // T-E-M-P
                     << std::dec;
-
             }
-        } else if ( iChannel == 8 ) std::cout << std::endl;
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+        } 
 #endif
         iNote++;
-    }  
+    }
+#ifdef debug_mixer
+    std::cout << std::endl;
+#endif
     // prepare for next row / next function call
-    if (!patternBreak) {
+    if ( !patternBreak ) {
         patternRow++;
     } else {
         patternRow = pattern->getnRows();
     }
-    if (patternRow >= pattern->getnRows()) {
+
+    if ( patternRow >= pattern->getnRows() ) {
 #ifdef debug_mixer
         std::cout << "\n";
-        _getch();
+        //_getch();
 #endif
         patternRow = patternStartRow;
-        if(nextPatternDelta > 0) iPatternTable += nextPatternDelta; // Disable repeat!
+        /*
+        if( nextPatternDelta > 0 ) iPatternTable += nextPatternDelta; // Disable repeat!
         else                     iPatternTable++;
-        if (iPatternTable >= module->getSongLength()) {
-            // repeat song
-            iPatternTable = module->getSongRestartPosition();
+        */
+        int iPtnTable = (int)iPatternTable + nextPatternDelta;
+        if ( iPtnTable < 0 ) iPatternTable = 0; // should be impossible
+        else iPatternTable = iPtnTable;
+
+        // skip marker patterns:
+        for ( ; 
+            (iPatternTable < module->getSongLength()) && 
+            (module->getPatternTable( iPatternTable ) == MARKER_PATTERN)
+            ; iPatternTable++ 
+            );
+        if (iPatternTable >= module->getSongLength()) { 
+            iPatternTable = module->getSongRestartPosition(); // repeat song
+            // skip marker patterns:
+            for ( ;
+                (iPatternTable < module->getSongLength()) &&
+                (module->getPatternTable( iPatternTable ) == MARKER_PATTERN)
+                ; iPatternTable++
+            );
         }
-        pattern = module->getPattern(module->getPatternTable(iPatternTable));
-        iNote = pattern->getRow(patternStartRow);
+        pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+        iNote = pattern->getRow( patternStartRow );
 #ifdef debug_mixer
         std::cout << std::endl
             << "Playing pattern # " 
-            << module->getPatternTable(iPatternTable) 
+            << module->getPatternTable( iPatternTable ) 
             << ", order # " << iPatternTable
             << std::endl;
 #endif
@@ -1621,8 +1746,11 @@ int Mixer::updateEffects () {
                     break;
                 }
                 case PORTAMENTO_UP :
-                {                        
-                    argument <<= 2;
+                {       
+                    argument = channel.lastPortamentoUp << 2;
+
+                    //std::cout << "chn " << iChannel + 1 << " b4 ^: " << channel.period << ", arg = " << argument;
+
                     if ( channel.period > argument )
                     {
                         channel.period -= argument;
@@ -1632,20 +1760,29 @@ int Mixer::updateEffects () {
                     setFrequency(
                         iChannel,
                         periodToFrequency( channel.period ) );
+
+                    //std::cout << ", after ^: " << channel.period << std::endl;
+
                     break;
                 }
                 case PORTAMENTO_DOWN :
                 {
-                    channel.period += argument << 2;
+                    argument = channel.lastPortamentoDown << 2;
+
+                    //std::cout << "chn " << iChannel + 1 << " b4 v: " << channel.period << ", arg = " << argument;
+
+                    channel.period += argument;
                     if ( channel.period > module->getMaxPeriod() )
                         channel.period = module->getMaxPeriod();
                     setFrequency( iChannel,
                         periodToFrequency( channel.period ) );
+
+                    //std::cout << ", after v: " << channel.period << std::endl;
                     break;
                 }
                 case TONE_PORTAMENTO :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
-                {
+                {                    
                     argument = channel.lastTonePortamento << 2;
                     if ( channel.portaDestPeriod )
                     {
@@ -1684,6 +1821,7 @@ int Mixer::updateEffects () {
                         case NOTE_RETRIG :                             
                         {
                             if ( channel.pSample ) {
+                                if ( ft2StyleEffects_ && (argument >= tempo) ) break;
                                 channel.retrigCount++;
                                 if ( channel.retrigCount >= argument ) {
                                     channel.retrigCount = 0;
@@ -1723,8 +1861,8 @@ int Mixer::updateEffects () {
                                         )
                                     );
                                 }
-                                note.effects[fxloop].effect   = 0;
-                                note.effects[fxloop].argument = 0;
+                                note.effects[fxloop].effect   = 0; 
+                                note.effects[fxloop].argument = 0; 
                             }                                   
                             break;
                         }
@@ -1739,7 +1877,7 @@ int Mixer::updateEffects () {
                 {
                     unsigned    arg = channel.lastGlobalVolumeSlide;
                     unsigned    slide = (arg & 0xF0) >> 4;                      
-                    if (slide) { // slide up
+                    if ( slide ) { // slide up
                         globalVolume_ += slide;
                         if (globalVolume_ > MAX_VOLUME) 
                             globalVolume_ = MAX_VOLUME;
@@ -1756,13 +1894,13 @@ int Mixer::updateEffects () {
                     unsigned    panning = channel.panning;
                     unsigned    arg = channel.lastPanningSlide;
                     unsigned    slide = (arg & 0xF0) >> 4;                      
-                    if (slide) { // slide up
+                    if ( slide ) { // slide up
                         panning += slide;
                         if (panning > PANNING_FULL_RIGHT) 
                             panning = PANNING_FULL_RIGHT;
                     } else {     // slide down
                         slide = arg & 0x0F;
-                        if (slide > panning) 
+                        if  (slide > panning ) 
                                 panning = PANNING_FULL_LEFT;
                         else panning -= slide;
                     }
@@ -1835,29 +1973,35 @@ int Mixer::updateImmediateEffects () {
                         switch (effect) {
                             case FINE_PORTAMENTO_UP :
                                 {
-                                    if ( argument ) 
-                                        channel.lastFinePortamentoUp = argument; 
-                                    else argument = channel.lastFinePortamentoUp;
+                                    
+                                    /*if ( argument ) 
+                                        channel.lastFinePortamentoUp = argument;
+                                    else */argument = channel.lastFinePortamentoUp;
                                     argument <<= 2;
                                     if ( argument < channel.period )
                                         channel.period -= argument;
+                                    else channel.period = module->getMinPeriod();
                                     if ( channel.period < module->getMinPeriod() )
                                         channel.period = module->getMinPeriod();
                                     setFrequency( iChannel,
                                         periodToFrequency( channel.period ) );
+                                    
+                                    //std::cout << " F ^ by " << channel.lastFinePortamentoUp;
                                     break;
                                 }
                             case FINE_PORTAMENTO_DOWN :
                                 {
-                                    if ( argument )
-                                        channel.lastFinePortamentoDown = argument;
-                                    else argument = channel.lastFinePortamentoDown;
+                                    /*if ( argument )
+                                        channel.lastFinePortamentoDown = argument; // S3M?
+                                    else */argument = channel.lastFinePortamentoDown;
                                     argument <<= 2;
                                     channel.period += argument;
                                     if ( channel.period > module->getMaxPeriod() )
                                         channel.period = module->getMaxPeriod();
                                     setFrequency( iChannel,
                                         periodToFrequency( channel.period ) );
+
+                                    //std::cout << " F v by " << channel.lastFinePortamentoDown;
                                     break;
                                 }
                             case FINE_VOLUME_SLIDE_UP :
@@ -1889,29 +2033,34 @@ int Mixer::updateImmediateEffects () {
                     effect = argument >> 4;
                     argument &= 0xF;
                     switch ( effect ) {
-                        case EXTRA_FINE_PORTAMENTO_UP :
+                        case EXTRA_FINE_PORTAMENTO_UP : // increase pitch, decrease period
                         {
-                            if ( argument ) 
-                                channel.lastExtraFinePortamentoUp = argument;
-                            else argument = channel.lastExtraFinePortamentoUp;
+                            /*if ( argument ) 
+                                channel.lastExtraFinePortamentoUp = argument;  // ? S3M?
+                            else */argument = channel.lastExtraFinePortamentoUp;
                             if ( argument < channel.period )
                                 channel.period -= argument;
+                            else channel.period = module->getMinPeriod();
                             if ( channel.period < module->getMinPeriod() )
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
+
+                            //std::cout << " XF ^ by " << channel.lastExtraFinePortamentoUp;
                             break;
                         }
                         case EXTRA_FINE_PORTAMENTO_DOWN :
                         {
-                            if ( argument ) 
-                                channel.lastExtraFinePortamentoDown = argument;
-                            else argument = channel.lastExtraFinePortamentoDown;
+                            /*if ( argument ) 
+                                channel.lastExtraFinePortamentoDown = argument;// ? S3M?
+                            else*/ argument = channel.lastExtraFinePortamentoDown;
                             channel.period += argument;
                             if ( channel.period > module->getMaxPeriod() )
                                 channel.period = module->getMaxPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
+
+                            //std::cout << " XF v by " << channel.lastExtraFinePortamentoDown;
                             break;
                         }
                     }
@@ -2087,95 +2236,104 @@ vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.xm",
-        //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\china1-okt.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\2nd_pm.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\stardstm.mod",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\lchina.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        "D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
+        "D:\\MODS\\M2W_BUGTEST\\women2.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\ssi2.S3m",
+        "D:\\MODS\\M2W_BUGTEST\\menutune3.xm",
+        "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
+        "D:\\MODS\\dosprog\\mods\\menutune.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\ssi.S3m",
+        "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\againstr.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\againstr.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pullmax.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bluishbg2.xm",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land2.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-land.s3m",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-vectr.s3m",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\un-worm.s3m",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\theend.mod",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\women.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        "D:\\MODS\\dosprog\\mods\\women.s3m",
+        "D:\\MODS\\dosprog\\backward.s3m",
+        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
+        //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
+        //"D:\\MODS\\dosprog\\china1-okt.s3m",
+        //"D:\\MODS\\dosprog\\2nd_pm.xm",
+        //"D:\\MODS\\dosprog\\stardstm.mod",
+        //"D:\\MODS\\dosprog\\lchina.s3m",
+        //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
+        //"D:\\MODS\\dosprog\\mods\\againstr.mod",
+        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
+        //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
+        //"D:\\MODS\\dosprog\\mods\\un-land2.s3m",
+        "D:\\MODS\\dosprog\\mods\\un-land.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-worm.s3m",
+        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        //"D:\\MODS\\dosprog\\mods\\theend.mod",
+        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\music\\xm\\united_7.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
+        //"D:\\MODS\\dosprog\\music\\xm\\united_7.xm",
+        //"D:\\MODS\\dosprog\\ctstoast.xm",
+        //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\women.xm",
+        //"D:\\MODS\\dosprog\\women.xm",
         /*
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\menutune.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track1.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track2.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track3.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track4.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track5.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track6.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track7.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track8.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\track9.s3m",
+        "D:\\MODS\\dosprog\\mods\\menutune.s3m",
+        "D:\\MODS\\dosprog\\mods\\track1.s3m",
+        "D:\\MODS\\dosprog\\mods\\track2.s3m",
+        "D:\\MODS\\dosprog\\mods\\track3.s3m",
+        "D:\\MODS\\dosprog\\mods\\track4.s3m",
+        "D:\\MODS\\dosprog\\mods\\track5.s3m",
+        "D:\\MODS\\dosprog\\mods\\track6.s3m",
+        "D:\\MODS\\dosprog\\mods\\track7.s3m",
+        "D:\\MODS\\dosprog\\mods\\track8.s3m",
+        "D:\\MODS\\dosprog\\mods\\track9.s3m",
         */
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\ssi.xm",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\pori.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\tearhate.s3m",
-        "D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\starsmuz.s3m",
+        "D:\\MODS\\dosprog\\mods\\ssi.s3m",
+        "D:\\MODS\\dosprog\\mods\\ssi.xm",
+        "D:\\MODS\\dosprog\\mods\\pori.s3m",
+        "D:\\MODS\\dosprog\\mods\\tearhate.s3m",
+        "D:\\MODS\\dosprog\\mods\\starsmuz.s3m",
         
         "D:\\MODS\\MOD\\beastsong.mod",
-        //"D:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        //"d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
+        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
+        "D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
+        "D:\\MODS\\dosprog\\mods\\baska.mod",
+        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        "D:\\MODS\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
-//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\audiopls\\crmx-trm.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\ctstoast.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\dope.mod",
-//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeoutstripped.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\smokeout.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\KNGDMSKY.XM",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\KNGDMSKY-mpt.XM",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\myrieh.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\crain.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\toybox.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\etanol.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\sac09.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\1.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\bbobble.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\asm94.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\4ma.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\chipmod\\mental.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\over2bg.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\explorat.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\devlpr94.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bj-eyes.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\1993.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\1993.xm",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\demotune.mod", // xm = wrong, ptn loop tester
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\baska.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\bj-love.xm",
-//        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\3demon.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\veena.wow",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\flt8_1.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\nowwhat3.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\dosprog\\mods\\probmod\\xenolog1.mod",
+//        "D:\\MODS\\dosprog\\audiopls\\crmx-trm.mod",
+        "D:\\MODS\\dosprog\\ctstoast.xm",
+        "D:\\MODS\\dosprog\\dope.mod",
+//        "D:\\MODS\\dosprog\\smokeoutstripped.xm",
+        "D:\\MODS\\dosprog\\smokeout.xm",
+        "D:\\MODS\\dosprog\\KNGDMSKY.XM",
+        "D:\\MODS\\dosprog\\KNGDMSKY-mpt.XM",
+        "D:\\MODS\\dosprog\\myrieh.xm",
+        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        "D:\\MODS\\dosprog\\chipmod\\crain.mod",
+        "D:\\MODS\\dosprog\\chipmod\\toybox.mod",
+        "D:\\MODS\\dosprog\\chipmod\\etanol.mod",
+        "D:\\MODS\\dosprog\\chipmod\\sac09.mod",
+        "D:\\MODS\\dosprog\\chipmod\\1.mod",
+        "D:\\MODS\\dosprog\\chipmod\\bbobble.mod",
+        "D:\\MODS\\dosprog\\chipmod\\asm94.mod",
+        "D:\\MODS\\dosprog\\chipmod\\4ma.mod",
+        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        "D:\\MODS\\dosprog\\mods\\explorat.xm",
+        "D:\\MODS\\dosprog\\mods\\devlpr94.xm",
+        "D:\\MODS\\dosprog\\mods\\bj-eyes.xm",
+        "D:\\MODS\\dosprog\\mods\\1993.mod",
+        "D:\\MODS\\dosprog\\mods\\1993.xm",
+        "D:\\MODS\\dosprog\\mods\\demotune.mod", // xm = wrong, ptn loop tester
+        "D:\\MODS\\dosprog\\mods\\baska.mod",
+        "D:\\MODS\\dosprog\\mods\\bj-love.xm",
+//        "D:\\MODS\\dosprog\\mods\\probmod\\3demon.mod",
+        "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
+        "D:\\MODS\\dosprog\\mods\\probmod\\flt8_1.mod",
+        "D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
+        "D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         nullptr
     };
     /*

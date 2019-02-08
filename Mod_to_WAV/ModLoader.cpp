@@ -546,15 +546,29 @@ int Module::loadModFile() {
                         iNote->effects[1].effect = ARPEGGIO;
                     break;
                 }
+                /*
+                    These effects have no effect memory in this format but 
+                    they might have effect memory in different formats so
+                    we remove them here
+                */
                 case PORTAMENTO_UP:
                 case PORTAMENTO_DOWN:
+                case VOLUME_SLIDE: 
                 {
-                    // MOD's have no portamento memory
                     if ( !iNote->effects[1].argument )
-                    {
-                        iNote->effects[1].effect = 0;
-                        iNote->effects[1].argument = 0;
-                    }
+                        iNote->effects[1].effect = NO_EFFECT;
+                    break;
+                }
+                case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
+                {
+                    if ( !iNote->effects[1].argument )
+                        iNote->effects[1].effect = TONE_PORTAMENTO;
+                    break;
+                }
+                case VIBRATO_AND_VOLUME_SLIDE:
+                {
+                    if ( !iNote->effects[1].argument )
+                        iNote->effects[1].effect = VIBRATO;
                     break;
                 }
                 case SET_VOLUME :
@@ -563,11 +577,10 @@ int Module::loadModFile() {
                             iNote->effects[1].argument = MAX_VOLUME;
                     break;
                 }
-                //case    VOLUME_SLIDE :
                 case SET_TEMPO :
                 {
                     if ( iNote->effects[1].argument == 0 ) {
-                        iNote->effects[1].effect = 0;
+                        iNote->effects[1].effect = NO_EFFECT;
                     } else {
                         if ( iNote->effects[1].argument > 0x1F ) {
                             iNote->effects[1].effect = SET_BPM;
@@ -618,7 +631,7 @@ int Module::loadModFile() {
     cout << "\nTotal Samples Size   = " << sampleDataSize;
     cout << "\nptnHdr               = " << patternHeader;
     cout << "\nptnCalc              = " << patternCalc;
-    cout << "\nRest from Divide     = " << patternDivideRest; // should be 0
+    cout << "\nRest from Divide     = " << patternDivideRest << " (should be zero)";
 #endif
     return 0;
 }

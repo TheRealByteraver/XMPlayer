@@ -12,6 +12,7 @@
 #define PANNING_STYLE_MOD                   1   // LRRL etc
 #define PANNING_STYLE_XM                    2   // ALL CENTER
 #define PANNING_STYLE_S3M                   3   // LRLR etc
+#define MARKER_PATTERN                      0x10000 // S3M compatibility
 
 #define MAX_VOLUME                          64
 #define MAX_SAMPLENAME_LENGTH               22
@@ -155,8 +156,17 @@ public:
                     ~Pattern ()                 { delete data_;             }
     unsigned        getnRows ()                 { return nRows_;            }
     Note            getNote( unsigned n )       { return data_[n];          }
-    Note             *getRow (unsigned row)
-    { return (data_ ? (data_ + nChannels_ * row) : nullptr); }
+    /*
+        - returns a pointer to the beginning of the pattern if row exceeds the
+          maximum nr of rows in this particular pattern.
+        - returns nullptr if no pattern data is present.
+    */
+    Note             *getRow (unsigned row) 
+    { 
+        if ( !data_ ) return nullptr;
+        if ( row > nRows_ ) row = 0;
+        return data_ + nChannels_ * row; 
+    }
     void            Initialise(unsigned nChannels, unsigned nRows, Note *data)
                     { 
                         nChannels_ = nChannels; 
