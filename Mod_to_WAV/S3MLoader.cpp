@@ -640,7 +640,6 @@ int Module::loadS3mFile() {
                     newNote = true;
                     note = *ptnPtr++;
                     inst = *ptnPtr++;
-                    //if ( note == 255 ) note = 0; // ?
                 }
                 // we add 0x10 to the volume column so we now an effect is there
                 if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
@@ -660,7 +659,7 @@ int Module::loadS3mFile() {
                             unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
                             if ( unpackedNote.note > S3M_MAX_NOTE )
                                 unpackedNote.note = 0;
-                        } else note = 0; // added: no note
+                        } else note = 0; // added: 0 or 255 means no note
                     }
                     unpackedNote.inst = inst;
                     unpackedNote.volc = volc;
@@ -785,6 +784,7 @@ int Module::loadS3mFile() {
                 */
                 {   
                     iNote->effects[1].effect = VOLUME_SLIDE; // default
+                    /*
                     int slide1 = iNote->effects[1].argument >> 4;
                     int slide2 = iNote->effects[1].argument & 0xF;
                     if ( (slide2 == 0xF) && slide1 ) // fine volume up if arg non-zero
@@ -797,6 +797,7 @@ int Module::loadS3mFile() {
                         iNote->effects[1].argument = (FINE_VOLUME_SLIDE_DOWN << 4)
                             + slide2;
                     } 
+                    */
                     break;
                 }
                 case 5: // E: all kinds of (extra) (fine) portamento down

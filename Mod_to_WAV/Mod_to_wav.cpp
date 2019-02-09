@@ -1220,7 +1220,7 @@ int Mixer::updateNotes () {
                 case TONE_PORTAMENTO :
                 {
                     if ( argument ) channel.lastTonePortamento = argument;
-                    if ( isNewNote ) channel.portaDestPeriod = 
+                    if ( channel.pSample && isNewNote ) channel.portaDestPeriod =
                         noteToPeriod(
                             note + channel.pSample->getRelativeNote(),
                             channel.pSample->getFinetune()
@@ -1274,18 +1274,21 @@ int Mixer::updateNotes () {
                 case VIBRATO_AND_VOLUME_SLIDE :
                 {
                     if ( argument ) channel.lastVolumeSlide = argument;
-                    if ( st300FastVolSlides_ )
-                    {
-                        unsigned&   v = channel.volume;
-                        unsigned    arg = channel.lastVolumeSlide;
-                        unsigned    slide = arg >> 4;
-                        if ( slide ) { // slide up
-                            v += slide;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        } else {     // slide down
-                            slide = arg & 0xF;
-                            if ( slide > v ) v = 0;
-                            else             v -= slide;
+                    if ( st3StyleEffectMemory_ && st300FastVolSlides_ )
+                    { 
+                        unsigned& lastSlide = channel.lastVolumeSlide;
+                        unsigned slide1 = lastSlide >> 4;
+                        unsigned slide2 = lastSlide & 0xF;
+                        if ( !(slide1 && slide2) ) // these are fine slides
+                        {
+                            unsigned&   v = channel.volume;
+                            if ( slide1 ) { // slide up
+                                v += slide1;
+                                if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                            } else {       // slide down
+                                if ( slide2 > v ) v = 0;
+                                else             v -= slide2;
+                            }
                         }
                     }
                     break;
@@ -1315,38 +1318,17 @@ int Mixer::updateNotes () {
                 }
                 case EXTENDED_EFFECTS : 
                 {
-                    //effect = argument >> 4;
-                    //argument &= 0xF;
                     unsigned xfx = argument >> 4;
                     unsigned xfxArg = argument & 0xF;
                     switch ( xfx ) {
                         case FINE_PORTAMENTO_UP:
                         {
                             if ( xfxArg ) channel.lastFinePortamentoUp = xfxArg;
-                            /*
-                            unsigned arg = argument << 2;  // ?
-                            if ( channel.period > arg )
-                            {
-                                channel.period -= arg;
-                                if ( channel.period < module->getMinPeriod() )
-                                    channel.period = module->getMinPeriod();
-                            } else channel.period = module->getMinPeriod();
-                            setFrequency(
-                                iChannel,
-                                periodToFrequency( channel.period ) );
-                            */
                             break;
                         }
                         case FINE_PORTAMENTO_DOWN:
                         {
                             if ( xfxArg ) channel.lastFinePortamentoDown = xfxArg;
-                            /*
-                            channel.period += argument << 2;
-                            if ( channel.period > module->getMaxPeriod() )
-                                channel.period = module->getMaxPeriod();
-                            setFrequency( iChannel,
-                                periodToFrequency( channel.period ) );
-                            */
                             break;
                         }
                         case SET_GLISSANDO_CONTROL :
@@ -1371,87 +1353,12 @@ int Mixer::updateNotes () {
                         {
                             break;
                         }
+                        /*
                         case NOTE_RETRIG : 
                         {
-                            /*
-                                Note Retrig effect details for .MOD, reference:
-                                OpenMPT 1.28.02.00
-                                Tick 0 == row itself, where note is processed
-                                Tick 1 == after first row, where we process 
-                                            volume slide etc.
-
-                                ** speed 1: **
-                                E9x: Ignored completely, for every value of x, even 
-                                for x == 0. Subsequent E9x commands immediately
-                                afterwards the previous E9x command are also 
-                                ignored, even if no sample is playing.
-                                Bottom line: don't process E9x when speed == 1.
-
-                                ** speed 2: **
-                                E90: retrigs sample 1x on tick 1
-                                E91: retrigs sample 1x on tick 1
-                                E92 alone: does nothing
-                                E92 followed by another E92, E91 or E90,
-                                not necessarily on the next row but
-                                simply on a later row: retrigs the sample on tick 1
-
-                                E92 followed by E90,
-                                E92 followed by E91,
-                                E92 followed by E92: retrigs sample 1x on tick 1 
-                                after the row on which the second retrig occurs (!)
-                                E92 followed by E93: no retrig 
-
-                                ** speed 3: **
-                                E90: retrigs sample 2x
-
-                                A lone E9x command with x < speed retrigs the sample
-
-                                E96
-                                E96
-                                E96
-                                E96
-                                E96
-                                E96 <-- retrig here on tick 1
-
-                                E97
-                                (..)
-                                E95
-                                (..)
-                                E94
-                                (..)
-                                E98
-                                (..)
-                                E96
-                                (..)
-                                E96 <-- retrig sample here on tick 1
-
-                                Bottom line:
-                                - when the effect occurs on the row:
-                                    --> set retriglimit to argument
-                                - increase retrig tick counter on all ticks except 
-                                    tick 0 (the row)
-                                - if retrig tick counter >= argument then:
-                                    - reset retrig tick counter
-                                    - retrig sample
-                                - a new note action resets the retrig tick counter
-                                - an instrument change without any note doesn't
-                            */
-                            /*
-                                FT2 ignores the effect if the argument is 
-                                greater than or equal to the nr of ticks per 
-                                row
-                            */
-
-                            /*
-                            // don't alter pattern data!
-                            if ( ft2StyleEffects_ && (argument >= tempo ) )
-                            {
-                                iNote->effects[fxloop].effect = 0;
-                                iNote->effects[fxloop].argument = 0;
-                            } 
-                            */
                             break;
                         }
+                        */
                         case NOTE_CUT : 
                         {
                             if ( !xfxArg ) channel.volume = 0;
@@ -1507,7 +1414,7 @@ int Mixer::updateNotes () {
                 }
                 case PANNING_SLIDE :
                 {
-                    if (argument) channel.lastPanningSlide = argument;
+                    if ( argument ) channel.lastPanningSlide = argument;
                     break;
                 }
                 case MULTI_NOTE_RETRIG :
@@ -1680,25 +1587,34 @@ int Mixer::updateEffects () {
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
 
+            /*
+                Volume slide + pitch commands: handle volume slide first
+            */
             switch ( effect ) {
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
                 {
-                    unsigned&   v = channel.volume;
-                    unsigned    arg = channel.lastVolumeSlide;
-                    unsigned    slide = (arg & 0xF0) >> 4;                      
-                    if (slide) { // slide up
-                        v += slide;
-                        if (v > MAX_VOLUME) v = MAX_VOLUME;
-                    } else {     // slide down
-                        slide = arg & 0x0F;
-                        if (slide > v)  v = 0;
-                        else            v -= slide;
+                    unsigned& lastSlide = channel.lastVolumeSlide;
+                    unsigned slide1 = lastSlide >> 4;
+                    unsigned slide2 = lastSlide & 0xF;
+                    if ( !(slide1 && slide2) ) // these are s3m fine slides
+                    {
+                        unsigned&   v = channel.volume;
+                        if ( slide1 ) { // slide up
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        } else {       // slide down
+                            if ( slide2 > v ) v = 0;
+                            else v -= slide2;
+                        }
                     }
                     break;
                 }
             }
+            /*
+                Handle the pitch & other commands
+            */
             switch ( effect ) {
                 case ARPEGGIO :
                 {
@@ -1784,23 +1700,29 @@ int Mixer::updateEffects () {
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 {                    
                     argument = channel.lastTonePortamento << 2;
-                    if ( channel.portaDestPeriod )
+                    //if ( note.note && () && channel.portaDestPeriod )
+                    if ( ((channel.oldNote.effects[fxloop].effect == TONE_PORTAMENTO) || 
+                          (channel.oldNote.effects[fxloop].effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE))
+                        || (note.note && (note.note != KEY_OFF)) )
                     {
-                        if ( channel.period < channel.portaDestPeriod )
+                        if ( channel.portaDestPeriod )
                         {
-                            channel.period += argument;
-                            if ( channel.period > channel.portaDestPeriod )
-                                channel.period = channel.portaDestPeriod;
-                        } else if ( channel.period > channel.portaDestPeriod )
-                        {
-                            if ( channel.period > argument )
-                                channel.period -= argument;
-                            else channel.period = channel.portaDestPeriod;
                             if ( channel.period < channel.portaDestPeriod )
-                                channel.period = channel.portaDestPeriod;
+                            {
+                                channel.period += argument;
+                                if ( channel.period > channel.portaDestPeriod )
+                                    channel.period = channel.portaDestPeriod;
+                            } else if ( channel.period > channel.portaDestPeriod )
+                            {
+                                if ( channel.period > argument )
+                                    channel.period -= argument;
+                                else channel.period = channel.portaDestPeriod;
+                                if ( channel.period < channel.portaDestPeriod )
+                                    channel.period = channel.portaDestPeriod;
+                            }
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );
                         }
-                        setFrequency( iChannel,
-                            periodToFrequency( channel.period ) );
                     }
                     break;
                 }
@@ -1820,6 +1742,77 @@ int Mixer::updateEffects () {
                     switch ( effect ) {
                         case NOTE_RETRIG :                             
                         {
+                            /*
+                                Note Retrig effect details for .MOD, reference:
+                                OpenMPT 1.28.02.00
+                                Tick 0 == row itself, where note is processed
+                                Tick 1 == after first row, where we process 
+                                            volume slide etc.
+
+                                ** speed 1: **
+                                E9x: Ignored completely, for every value of x, even 
+                                for x == 0. Subsequent E9x commands immediately
+                                afterwards the previous E9x command are also 
+                                ignored, even if no sample is playing.
+                                Bottom line: don't process E9x when speed == 1.
+
+                                ** speed 2: **
+                                E90: retrigs sample 1x on tick 1
+                                E91: retrigs sample 1x on tick 1
+                                E92 alone: does nothing
+                                E92 followed by another E92, E91 or E90,
+                                not necessarily on the next row but
+                                simply on a later row: retrigs the sample on tick 1
+
+                                E92 followed by E90,
+                                E92 followed by E91,
+                                E92 followed by E92: retrigs sample 1x on tick 1 
+                                after the row on which the second retrig occurs (!)
+                                E92 followed by E93: no retrig 
+
+                                ** speed 3: **
+                                E90: retrigs sample 2x
+
+                                A lone E9x command with x < speed retrigs the sample
+
+                                E96
+                                E96
+                                E96
+                                E96
+                                E96
+                                E96 <-- retrig here on tick 1
+
+                                E97
+                                (..)
+                                E95
+                                (..)
+                                E94
+                                (..)
+                                E98
+                                (..)
+                                E96
+                                (..)
+                                E96 <-- retrig sample here on tick 1
+
+                                Bottom line:
+                                - when the effect occurs on the row:
+                                    --> set retriglimit to argument
+                                - increase retrig tick counter on all ticks 
+                                  except tick 0 (the row)
+                                - if retrig tick counter >= argument then:
+                                    - reset retrig tick counter
+                                    - retrig sample
+                                - a new note action resets the retrig tick 
+                                  counter
+                                - an instrument change without any note 
+                                  doesn't
+
+                                ***********************************************
+
+                                FT2 ignores the effect if the argument is 
+                                greater than or equal to the nr of ticks per 
+                                row
+                            */
                             if ( channel.pSample ) {
                                 if ( ft2StyleEffects_ && (argument >= tempo) ) break;
                                 channel.retrigCount++;
@@ -1965,7 +1958,40 @@ int Mixer::updateImmediateEffects () {
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
 
-            switch (effect) {
+            switch ( effect ) {
+                case VOLUME_SLIDE:
+                case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
+                case VIBRATO_AND_VOLUME_SLIDE:
+                {
+                    /*
+                        So, apparently:
+                        D01 = volume slide down by 1
+                        D10 = volume slide up   by 1
+                        DF1 = fine volume slide down by 1
+                        D1F = fine volume slide up   by 1
+                        DFF = fine volume slide up   by F
+                        DF0 = volume slide up   by F
+                        D0F = volume slide down by F
+                    */
+                    if ( st3StyleEffectMemory_ )
+                    {
+                        argument = channel.lastVolumeSlide;
+                        unsigned slide1 = argument >> 4;
+                        unsigned slide2 = argument & 0xF;
+                        unsigned& v = channel.volume;
+                        if ( (slide2 == 0xF) && slide1 ) 
+                        {
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        } 
+                        else if ( (slide1 == 0xF) && slide2 ) 
+                        { 
+                            if ( slide2 > v ) v = 0;
+                            else v -= slide2;
+                        }
+                    }
+                    break;
+                }
                 case EXTENDED_EFFECTS :
                     {
                         effect = argument >> 4;
@@ -1973,10 +1999,7 @@ int Mixer::updateImmediateEffects () {
                         switch (effect) {
                             case FINE_PORTAMENTO_UP :
                                 {
-                                    
-                                    /*if ( argument ) 
-                                        channel.lastFinePortamentoUp = argument;
-                                    else */argument = channel.lastFinePortamentoUp;
+                                    argument = channel.lastFinePortamentoUp;
                                     argument <<= 2;
                                     if ( argument < channel.period )
                                         channel.period -= argument;
@@ -1984,23 +2007,19 @@ int Mixer::updateImmediateEffects () {
                                     if ( channel.period < module->getMinPeriod() )
                                         channel.period = module->getMinPeriod();
                                     setFrequency( iChannel,
-                                        periodToFrequency( channel.period ) );
-                                    
+                                        periodToFrequency( channel.period ) );                                    
                                     //std::cout << " F ^ by " << channel.lastFinePortamentoUp;
                                     break;
                                 }
                             case FINE_PORTAMENTO_DOWN :
                                 {
-                                    /*if ( argument )
-                                        channel.lastFinePortamentoDown = argument; // S3M?
-                                    else */argument = channel.lastFinePortamentoDown;
+                                    argument = channel.lastFinePortamentoDown;
                                     argument <<= 2;
                                     channel.period += argument;
                                     if ( channel.period > module->getMaxPeriod() )
                                         channel.period = module->getMaxPeriod();
                                     setFrequency( iChannel,
                                         periodToFrequency( channel.period ) );
-
                                     //std::cout << " F v by " << channel.lastFinePortamentoDown;
                                     break;
                                 }
@@ -2035,9 +2054,7 @@ int Mixer::updateImmediateEffects () {
                     switch ( effect ) {
                         case EXTRA_FINE_PORTAMENTO_UP : // increase pitch, decrease period
                         {
-                            /*if ( argument ) 
-                                channel.lastExtraFinePortamentoUp = argument;  // ? S3M?
-                            else */argument = channel.lastExtraFinePortamentoUp;
+                            argument = channel.lastExtraFinePortamentoUp;
                             if ( argument < channel.period )
                                 channel.period -= argument;
                             else channel.period = module->getMinPeriod();
@@ -2045,21 +2062,17 @@ int Mixer::updateImmediateEffects () {
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
-
                             //std::cout << " XF ^ by " << channel.lastExtraFinePortamentoUp;
                             break;
                         }
                         case EXTRA_FINE_PORTAMENTO_DOWN :
                         {
-                            /*if ( argument ) 
-                                channel.lastExtraFinePortamentoDown = argument;// ? S3M?
-                            else*/ argument = channel.lastExtraFinePortamentoDown;
+                            argument = channel.lastExtraFinePortamentoDown;
                             channel.period += argument;
                             if ( channel.period > module->getMaxPeriod() )
                                 channel.period = module->getMaxPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
-
                             //std::cout << " XF v by " << channel.lastExtraFinePortamentoDown;
                             break;
                         }
@@ -2236,36 +2249,42 @@ vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 int main(int argc, char *argv[])  { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
-        "D:\\MODS\\M2W_BUGTEST\\women2.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\ssi2.S3m",
-        "D:\\MODS\\M2W_BUGTEST\\menutune3.xm",
+        
+        //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\ssi2.S3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune3.xm",
+        "D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
+        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\ssi.S3m",
+        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
-        "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
+        //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\dosprog\\mods\\women.s3m",
-        "D:\\MODS\\dosprog\\backward.s3m",
-        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
-        //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
+        //"D:\\MODS\\dosprog\\backward.s3m",
+        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        "D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\MODS\\dosprog\\china1-okt.s3m",
         //"D:\\MODS\\dosprog\\2nd_pm.xm",
-        //"D:\\MODS\\dosprog\\stardstm.mod",
+        "D:\\MODS\\dosprog\\stardstm.mod",
         //"D:\\MODS\\dosprog\\lchina.s3m",
-        //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
-        //"D:\\MODS\\dosprog\\mods\\againstr.mod",
+        "D:\\MODS\\dosprog\\mods\\againstr.s3m",
+        "D:\\MODS\\dosprog\\mods\\againstr.mod",
         "D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
-        //"D:\\MODS\\dosprog\\mods\\un-land2.s3m",
+        "D:\\MODS\\dosprog\\mods\\un-land2.s3m",
         "D:\\MODS\\dosprog\\mods\\un-land.s3m",
-        //"D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
-        //"D:\\MODS\\dosprog\\mods\\un-worm.s3m",
+        "D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
+        "D:\\MODS\\dosprog\\mods\\un-worm.s3m",
         "D:\\MODS\\dosprog\\chipmod\\mental.mod",
-        //"D:\\MODS\\dosprog\\mods\\theend.mod",
-        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        "D:\\MODS\\dosprog\\mods\\theend.mod",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
         //"D:\\MODS\\dosprog\\music\\xm\\united_7.xm",
         //"D:\\MODS\\dosprog\\ctstoast.xm",
