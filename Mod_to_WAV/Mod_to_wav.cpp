@@ -105,7 +105,11 @@ public:
     /*
     effect memory:
     */
-    unsigned        lastNonZeroFXArg;
+    bool            patternIsLooping;
+    unsigned        patternLoopStart;
+    //unsigned        patternLoopEnd;
+    unsigned        patternLoopCounter;
+    //unsigned        lastNonZeroFXArg;
     unsigned        lastArpeggio;
     unsigned        arpeggioCount;
     unsigned        arpeggioNote1;
@@ -149,7 +153,7 @@ public:
     bool            isPrimary;
     bool            isFadingOut;
     Sample          *sample;
-    unsigned long long  sampleOffset_; // changed
+    //unsigned long long  sampleOffset_; // changed
     // added:
     unsigned        sampleOffset;      // samples can be up to 4 GB in theory
     unsigned        sampleOffsetFrac;
@@ -193,6 +197,8 @@ public: // debug
     unsigned        patternDelay_;
     unsigned        patternRow;
     unsigned        iPatternTable;
+    unsigned        patternLoopStartRow_;
+    bool            patternLoopFlag_;
     Pattern         *pattern;
     Note            *iNote;
 
@@ -1019,6 +1025,8 @@ int Mixer::updateNotes () {
     */
 #endif
 
+    patternLoopFlag_ = false;
+
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
         Channel&    channel = channels[iChannel];
         unsigned    note,instrument,sample;
@@ -1032,8 +1040,8 @@ int Mixer::updateNotes () {
         unsigned    oldInstrument;      
         int         finetune = 0;
 
+        
 
-        channel.sampleOffset = 0;
         note       = iNote->note;        
         instrument = iNote->instrument;
 
@@ -1042,11 +1050,13 @@ int Mixer::updateNotes () {
                 isNewNote = false;
                 keyedOff = true;
             } else {
-                if ( note > MAXIMUM_NOTES ) std::cout << "!";
+                if ( note > MAXIMUM_NOTES ) std::cout << "!"; // DEBUG
                 channel.lastNote = note;
                 isNewNote = true;
                 replay = true;
-                channel.retrigCount = 0;
+                channel.retrigCount = 0; // to check if that resets the counter, and when
+                if ( ft2StyleEffects_ ) channel.sampleOffset = 0;
+                //if ( ft2StyleEffects_ ) std::cout << "ft2!";
             }
         } else {
             isNewNote = false;
@@ -1072,6 +1082,7 @@ int Mixer::updateNotes () {
                     isValidInstrument = false;
                 }
             }
+            channel.sampleOffset = 0;
         } else {
             isNewInstrument = false;
             channel.pInstrument = 
@@ -1107,6 +1118,10 @@ int Mixer::updateNotes () {
                 finetune );
         }
 
+        /*
+            Start effect handling
+        */
+
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
         {
             unsigned& effect   = iNote->effects[fxloop].effect;
@@ -1121,27 +1136,78 @@ int Mixer::updateNotes () {
             if ( st3StyleEffectMemory_ && argument &&
                 (fxloop == (MAX_EFFECT_COLUMNS - 1)) )
             {
-                channel.lastNonZeroFXArg = argument; 
+                //channel.lastNonZeroFXArg = argument; 
                 channel.lastArpeggio = argument;
                 channel.lastMultiNoteRetrig = argument;
                 channel.lastTremor = argument;
                 channel.lastTremolo = argument;
-                //channel.lastPortamentoUp = argument;
-                //channel.lastPortamentoDown = argument;
+                channel.lastPortamentoUp = argument;
+                channel.lastPortamentoDown = argument;
             }
             switch ( effect ) {
-                case ARPEGGIO :
-                {
+                case ARPEGGIO : // to be reviewed
+                {        
+                    unsigned arpeggio = argument;
+                    if ( st3StyleEffectMemory_ && (arpeggio == 0) )
+                        arpeggio = channel.lastArpeggio; 
                     
-                    if ( st3StyleEffectMemory_ && (argument == 0) )
-                        argument = channel.lastArpeggio; //?
-                    
-                    if ( argument ) {
+                    if ( arpeggio ) {
+
                         if ( ft2StyleEffects_ ) // not exactly like FT2, quick hack
-                            argument = (argument >> 4) | ((argument & 0xF) << 4);
-                        channel.arpeggioCount = 0;
-                        channel.arpeggioNote1 = channel.lastNote + (argument >> 4);
-                        channel.arpeggioNote2 = channel.lastNote + (argument & 0xF);
+                            arpeggio = (arpeggio >> 4) | ((arpeggio & 0xF) << 4);
+
+                        channel.arpeggioNote1 = channel.lastNote + (arpeggio >> 4);
+                        channel.arpeggioNote2 = channel.lastNote + (arpeggio & 0xF);
+
+                        if ( channel.oldNote.effects[fxloop].effect != ARPEGGIO )
+                            channel.arpeggioCount = 0;
+
+                        else { 
+                            if ( channel.pSample ) {
+                                switch ( channel.arpeggioCount ) {
+                                    case 0:
+                                    {
+                                        channel.period = noteToPeriod(
+                                            channel.lastNote +
+                                            channel.pSample->getRelativeNote(),
+                                            channel.pSample->getFinetune()
+                                        );
+                                        break;
+                                    }
+                                    case 1:
+                                    {
+                                        channel.period = noteToPeriod(
+                                            channel.arpeggioNote1 +
+                                            channel.pSample->getRelativeNote(),
+                                            channel.pSample->getFinetune()
+                                        );
+                                        break;
+                                    }
+                                    case 2:
+                                    {
+                                        channel.period = noteToPeriod(
+                                            channel.arpeggioNote2 +
+                                            channel.pSample->getRelativeNote(),
+                                            channel.pSample->getFinetune()
+                                        );
+                                        break;
+                                    }
+                                }
+                                channel.arpeggioCount++;
+                                if ( channel.arpeggioCount >= 3 ) 
+                                    channel.arpeggioCount = 0;
+                                playSample(
+                                    iChannel,
+                                    channel.pSample,
+                                    channel.sampleOffset,
+                                    FORWARD );
+                                setFrequency(
+                                    iChannel,
+                                    periodToFrequency( channel.period ) );
+                                replay = false;
+                            }
+
+                        }
                     }
                     break;
                 }
@@ -1150,8 +1216,8 @@ int Mixer::updateNotes () {
                     if ( argument ) channel.lastPortamentoUp = argument;
                     if ( st3StyleEffectMemory_ )
                     {
-                        //argument = channel.lastPortamentoUp;
-                        argument = channel.lastNonZeroFXArg;
+                        argument = channel.lastPortamentoUp;
+                        //argument = channel.lastNonZeroFXArg;
                         unsigned xfx = argument >> 4;
                         unsigned xfxArg = argument & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
@@ -1186,8 +1252,8 @@ int Mixer::updateNotes () {
                     if ( argument ) channel.lastPortamentoDown = argument;
                     if ( st3StyleEffectMemory_ )
                     {
-                        //argument = channel.lastPortamentoDown;
-                        argument = channel.lastNonZeroFXArg;
+                        argument = channel.lastPortamentoDown;
+                        //argument = channel.lastNonZeroFXArg;
                         unsigned xfx = argument >> 4;
                         unsigned xfxArg = argument & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
@@ -1255,6 +1321,22 @@ int Mixer::updateNotes () {
                     break;
                 }
                 case SET_SAMPLE_OFFSET :   
+                /*
+                    Using the "OK" sample from ST-02
+
+                    00 C-2 01 906		PT23	: kay - ay - ay - okay		<= buggy, not implemented
+                    01 --- 00 000		PT315	: kay - kay - kay - okay
+                    02 C-2 00 000		MED	    : kay - kay - kay - okay
+                    03 --- 00 000		ST3	    : kay - kay - kay - okay
+                    04 C-2 00 000		IO10	: kay - kay - kay - okay
+                    05 --- 00 000		MTM	    : kay - okay - okay - okay
+                    06 C-2 01 000		FT2	    : kay - okay - okay - okay
+                    07 --- 00 000		IT	    : kay - okay - okay - okay
+
+                    So it seems that the bug was fixed somewhere between Protracker 2.3d and
+                    3.15. The problem is that there's no way to know if the bug emulation is
+                    desirable or not when playing M.K. mods!
+                */
                 {                   
                     if ( channel.pSample ) {
                         if ( argument ) channel.lastSampleOffset = argument;
@@ -1296,8 +1378,16 @@ int Mixer::updateNotes () {
                 case POSITION_JUMP :
                 // Warning: position jumps takes s3m marker patterns into account
                 {
+                    /*
+                        FastTracker:
+                        A Position jump resets the pattern start row set by a
+                        pattern break that occured earlier on the same row. If
+                        you want Position Jump + Pattern Break in FT2, you need
+                        to put the position jump left of the pattern break.
+
+                    */
+                    if ( ft2StyleEffects_ && patternBreak ) patternStartRow = 0;
                     patternBreak = true;
-                    patternStartRow = 0;
                     nextPatternDelta = (int)argument - (int)iPatternTable; 
                     break;
                 }
@@ -1309,11 +1399,16 @@ int Mixer::updateNotes () {
                 case PATTERN_BREAK :
                 {
                     unsigned startRow = (argument >> 4) * 10 + (argument & 0xF);
-                    if ( startRow < 64 ) // quick s3m hack
+                    /*
+                        ST3 & FT2 can't jump past row 64. Impulse Tracker can,
+                        values higher than the nr of rows of the next pattern
+                        are converted to zero.
+                    */
+                    if ( startRow < 64 )
                     {
                         patternBreak = true;
                         patternStartRow = startRow;
-                    } 
+                    } // else if impulse tracker then ...
                     break;
                 }
                 case EXTENDED_EFFECTS : 
@@ -1331,35 +1426,59 @@ int Mixer::updateNotes () {
                             if ( xfxArg ) channel.lastFinePortamentoDown = xfxArg;
                             break;
                         }
-                        case SET_GLISSANDO_CONTROL :
+                        case SET_GLISSANDO_CONTROL:
                         {
                             break;
                         }
-                        case SET_VIBRATO_CONTROL : 
+                        case SET_VIBRATO_CONTROL: 
                         {
                             break;
                         }
-                        case SET_FINETUNE :
+                        case SET_FINETUNE:
                         {
                             finetune = xfxArg;
                             if (finetune & 8) finetune |= 0xFFFFFFF0;
                             break;
                         }
-                        case SET_PATTERN_LOOP : 
+                        case SET_PATTERN_LOOP: 
                         {
+                            if ( !xfxArg ) channel.patternLoopStart = patternRow;
+                            else {
+                                if ( !channel.patternIsLooping ) 
+                                { 
+                                    channel.patternLoopCounter = xfxArg;
+                                    patternLoopStartRow_ = channel.patternLoopStart;
+                                    channel.patternIsLooping = true;
+                                    patternLoopFlag_ = true;
+                                } else { 
+                                    channel.patternLoopCounter--;
+                                    if ( !channel.patternLoopCounter )
+                                        channel.patternIsLooping = false;
+                                    else { 
+                                        patternLoopStartRow_ = channel.patternLoopStart;
+                                        patternLoopFlag_ = true;
+                                    }
+                                }
+                                /*
+                                std::cout << "chn " << std::setw( 2 ) << (iChannel + 1) << ": "
+                                    << (channel.patternIsLooping ? "yes," : "no, ") << " #: "
+                                    << std::setw( 2 ) << channel.patternLoopStart << "|";
+                                */
+
+                            }
                             break;
                         }
-                        case SET_TREMOLO_CONTROL :
+                        case SET_TREMOLO_CONTROL:
                         {
                             break;
                         }
                         /*
-                        case NOTE_RETRIG : 
+                        case NOTE_RETRIG: 
                         {
                             break;
                         }
                         */
-                        case NOTE_CUT : 
+                        case NOTE_CUT: 
                         {
                             if ( !xfxArg ) channel.volume = 0;
                             break;
@@ -1376,11 +1495,18 @@ int Mixer::updateNotes () {
                         case PATTERN_DELAY :
                         {
                             /* 
+                                ProTracker, ScreamTracker 3 & Impulse Tracker:
                                 mostLeft delay command prevails if multiple 
+                                pattern delay commands are found on the same
+                                row.
+
+                                FastTracker:
+                                mostRight delay command prevails if multiple
                                 pattern delay commands are found on the same
                                 row.
                             */
                             if ( !patternDelay_ ) patternDelay_ = xfxArg;
+                            else if ( ft2StyleEffects_ ) patternDelay_ = xfxArg;
                             break;
                         }
                     }
@@ -1525,22 +1651,78 @@ int Mixer::updateNotes () {
         } 
 #endif
         iNote++;
-    }
+    } // end of effect processing
 #ifdef debug_mixer
     std::cout << std::endl;
 #endif
-    // prepare for next row / next function call
-    if ( !patternBreak ) {
-        patternRow++;
+/*
+Pattern loops are set by channel, and nesting is allowed as long as
+the loops are in different tracks. The nested loop behaviour is somewhat
+nonobvious as seen in the following examples.
+
+   00 --- 00 E60 | --- 00 E60		00 --- 00 000 | --- 00 E60
+   01 C-2 01 000 | --- 00 000		01 C-2 01 000 | --- 00 000
+   02 --- 00 E62 | --- 00 E62		02 --- 00 000 | --- 00 E62
+
+In both cases the note is played three times.
+
+   00 --- 00 E60 | --- 00 E60
+   01 C-2 01 000 | --- 00 000
+   02 --- 00 E63 | --- 00 E62
+
+In this situation the note is played twelve times. We escape the loop when
+both counters are zeroed. Here's how the internal registers look like:
+
+	Iteration => 1 2 3 4 5 6 7 8 9 A B C
+	Channel 1 => 3 2 1 0 3 2 1 0 3 2 1 0
+	Channel 2 => 2 1 0 2 1 0 2 1 0 2 1 0
+
+
+If a loop end is used with no start point set, it jumps to the first line
+of the pattern. If a pattern break is inside a loop and there is a loop
+end in the next pattern it jumps to the row set as loop start in the
+previous pattern. It is also possible to make an infinite loop in
+Protracker and Fast Tracker II using nested loops in the same track:
+
+   00 --- 00 E60 | --- 00 000
+   01 --- 00 000 | --- 00 000
+   02 C-2 01 000 | --- 00 000
+   03 --- 00 E61 | --- 00 000
+   04 --- 00 E61 | --- 00 000	<= infinite loop
+
+S3M and IT set a new start point in the line after the end of the previous
+loop, making the infinite loop impossible.
+*/
+
+    /*
+    std::cout << std::endl << "row " << std::setw(3) << patternRow << ":";
+    for ( unsigned i = 0; i < nChannels; i++ )
+        std::cout << std::setw( 2 ) << channels[i].patternLoopCounter << "|";
+    std::cout << " Looping: " << (patternLoopFlag_ ? "yes" : "no ") 
+        << ", to #" << patternLoopStartRow_ << " ";
+    */
+    if ( patternLoopFlag_ ) 
+    { 
+        //std::cout << " loopStartRow: " << patternLoopStartRow_;
+        patternRow = patternLoopStartRow_;
+        iNote = pattern->getRow( patternRow );
     } else {
-        patternRow = pattern->getnRows();
+        // prepare for next row / next function call
+        if ( !patternBreak ) patternRow++;
+        else patternRow = pattern->getnRows();
     }
+    //std::cout << std::endl;
 
     if ( patternRow >= pattern->getnRows() ) {
 #ifdef debug_mixer
         std::cout << "\n";
         //_getch();
 #endif
+        for ( unsigned iChannel = 0; iChannel < nChannels; iChannel++ ) {
+            channels[iChannel].patternLoopStart = 0;
+            channels[iChannel].patternLoopCounter = 0;
+        }
+        
         patternRow = patternStartRow;
         /*
         if( nextPatternDelta > 0 ) iPatternTable += nextPatternDelta; // Disable repeat!
@@ -1619,7 +1801,7 @@ int Mixer::updateEffects () {
                 case ARPEGGIO :
                 {
                     if ( channel.pSample ) {
-                        switch ( channel.arpeggioCount & 0x3 ) {
+                        switch ( channel.arpeggioCount ) {
                             case 0 : 
                             {
                                 channel.period = noteToPeriod(
@@ -1649,7 +1831,8 @@ int Mixer::updateEffects () {
                             }
                         }
                         channel.arpeggioCount++;
-                        channel.arpeggioCount &= 0x3;
+                        if ( channel.arpeggioCount >= 3 )
+                            channel.arpeggioCount = 0;
                         playSample( 
                             iChannel,
                             channel.pSample,
@@ -1828,7 +2011,8 @@ int Mixer::updateEffects () {
                         }
                         case NOTE_CUT : 
                         {
-                            if (tick > argument) {
+                            //std::cout << "vv"; // DEBUG
+                            if (tick >= argument) {
                                 channel.volume = 0;
                                 note.effects[fxloop].effect   = 0;
                                 note.effects[fxloop].argument = 0;
@@ -2255,6 +2439,11 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi2.S3m",
         //"D:\\MODS\\M2W_BUGTEST\\menutune3.xm",
+        //"D:\\MODS\\M2W_BUGTEST\\pullmax-portatest.xm",
+        //"D:\\MODS\\M2W_BUGTEST\\appeal.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
+        "D:\\MODS\\dosprog\\ode2pro.MOD",
+        "D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
         "D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
         "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
