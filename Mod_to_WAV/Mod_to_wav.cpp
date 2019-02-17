@@ -29,7 +29,6 @@ bugs:
     - arpeggio counter should not be reset when a new note occurs!
     - aryx.s3m: too high notes in pattern data
     - SSI.S3M: ghost notes towards the end
-    - menutune3.s3m: FF1 effect corrupts sample data (??)
 
 
 Fixed / cleared up:
@@ -37,6 +36,8 @@ Fixed / cleared up:
       --> channel was muted in modplug tracker
     - SSI.S3M: weird deformed sample in 2nd part of the song (after start eastern type music)
       --> portamento memory fixed (hopefully)
+    - menutune3.s3m: FF1 effect corrupts sample data (??)
+      --> FF1 effect fixed (it did not corrupt sample data)
 
 */
 
@@ -56,7 +57,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 };
 
 
-#define BUFFER_LENGTH_IN_MINUTES   10
+#define BUFFER_LENGTH_IN_MINUTES   16
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -114,7 +115,6 @@ public:
     unsigned        arpeggioCount;
     unsigned        arpeggioNote1;
     unsigned        arpeggioNote2;
-    unsigned        lastSampleOffset;
     unsigned        vibratoWaveForm;
     unsigned        tremoloWaveForm;
     unsigned        retrigCount;
@@ -132,6 +132,7 @@ public:
     unsigned        lastFineVolumeSlideDown;
     unsigned        lastGlobalVolumeSlide;
     unsigned        lastPanningSlide;
+    unsigned        lastSampleOffset;
     unsigned        lastMultiNoteRetrig;
     unsigned        lastTremor;
     unsigned        lastExtraFinePortamentoUp;
@@ -529,7 +530,9 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 ((((((a  * fract) >> FRAC_RES_SHIFT) 
                                     + b) * fract) >> FRAC_RES_SHIFT)
                                     + c) * fract) >> FRAC_RES_SHIFT) 
-                                    + p1; 
+                                    + p1;
+
+                            //f2 = p1; // disable interpolation for testing
                             
                             *mixBufferPTR++ += (f2 * leftGain);    
                             *mixBufferPTR++ += (f2 * rightGain);
@@ -1012,10 +1015,12 @@ int Mixer::updateNotes () {
     if ( patternDelay_ ) { patternDelay_--; return 0; }
 
 #ifdef debug_mixer
-    /*
+    
     char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     unsigned p = module->getPatternTable(iPatternTable);
-    std::cout << "\n";
+    std::cout << std::setw( 2 ) << patternRow;
+    //std::cout << "\n";
+    /*
     if (iPatternTable < 10)    std::cout << " ";
     else                       std::cout << (iPatternTable / 10);
     std::cout << (iPatternTable % 10) << ":";
@@ -1086,11 +1091,11 @@ int Mixer::updateNotes () {
         } else {
             isNewInstrument = false;
             channel.pInstrument = 
-                module->getInstrument(oldInstrument - 1);
+                module->getInstrument( oldInstrument - 1 );
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
-                        (channel.lastNote - 1);
+                        ( channel.lastNote - 1 );
                     channel.pSample = 
                         channel.pInstrument->getSample( sample ); 
                 }
@@ -1121,7 +1126,6 @@ int Mixer::updateNotes () {
         /*
             Start effect handling
         */
-
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
         {
             unsigned& effect   = iNote->effects[fxloop].effect;
@@ -1159,7 +1163,8 @@ int Mixer::updateNotes () {
                         channel.arpeggioNote1 = channel.lastNote + (arpeggio >> 4);
                         channel.arpeggioNote2 = channel.lastNote + (arpeggio & 0xF);
 
-                        if ( channel.oldNote.effects[fxloop].effect != ARPEGGIO )
+                        if ( (channel.oldNote.effects[fxloop].effect != ARPEGGIO) 
+                            || isNewNote )
                             channel.arpeggioCount = 0;
 
                         else { 
@@ -1286,11 +1291,18 @@ int Mixer::updateNotes () {
                 case TONE_PORTAMENTO :
                 {
                     if ( argument ) channel.lastTonePortamento = argument;
-                    if ( channel.pSample && isNewNote ) channel.portaDestPeriod =
+                    if ( channel.pSample /* && isNewNote*/ ) 
+                        channel.portaDestPeriod =
+                            noteToPeriod(
+                                channel.lastNote + channel.pSample->getRelativeNote(),
+                                channel.pSample->getFinetune()
+                        ); 
+                    else // maybe not necessary
+                        channel.portaDestPeriod =
                         noteToPeriod(
-                            note + channel.pSample->getRelativeNote(),
-                            channel.pSample->getFinetune()
-                        );   
+                            channel.lastNote + 0,
+                            0
+                        );
                     break;
                 }
                 case SET_VIBRATO_SPEED : // XM volume column command
@@ -1340,15 +1352,27 @@ int Mixer::updateNotes () {
                 {                   
                     if ( channel.pSample ) {
                         if ( argument ) channel.lastSampleOffset = argument;
-                        else argument = channel.lastSampleOffset;
-                        unsigned sOfs = argument << 8;
+                        //else argument = channel.lastSampleOffset;
+                        unsigned sOfs = channel.lastSampleOffset << 8;
+
+                        /*
                         if ( sOfs < (channel.pSample->getLength())) {
                             channel.sampleOffset = sOfs;
                             if ( isNewNote ) replay = true;
                         } else {
                             replay = false;
-                        }                            
-                    } 
+                        } 
+                        */
+
+                        // to check if compatible with PROTRACKER / XM
+                        if ( sOfs < (channel.pSample->getLength()) ) {
+                            channel.sampleOffset = sOfs;                            
+                        } else {
+                            channel.sampleOffset = channel.pSample->getLength() - 1;
+                            //channel.sampleOffset = channel.pSample->getRepeatOffset();
+                        }
+                        if ( isNewNote ) replay = true;
+                    }
                     break;
                 }
                 case VOLUME_SLIDE :
@@ -1459,12 +1483,6 @@ int Mixer::updateNotes () {
                                         patternLoopFlag_ = true;
                                     }
                                 }
-                                /*
-                                std::cout << "chn " << std::setw( 2 ) << (iChannel + 1) << ": "
-                                    << (channel.patternIsLooping ? "yes," : "no, ") << " #: "
-                                    << std::setw( 2 ) << channel.patternLoopStart << "|";
-                                */
-
                             }
                             break;
                         }
@@ -1472,12 +1490,12 @@ int Mixer::updateNotes () {
                         {
                             break;
                         }
-                        /*
-                        case NOTE_RETRIG: 
+                        case SET_ROUGH_PANNING: 
                         {
+                            if ( !ft2StyleEffects_ )
+                                channel.panning = argument << 4;
                             break;
                         }
-                        */
                         case NOTE_CUT: 
                         {
                             if ( !xfxArg ) channel.volume = 0;
@@ -1495,18 +1513,23 @@ int Mixer::updateNotes () {
                         case PATTERN_DELAY :
                         {
                             /* 
-                                ProTracker, ScreamTracker 3 & Impulse Tracker:
+                                ScreamTracker 3 & Impulse Tracker:
                                 mostLeft delay command prevails if multiple 
                                 pattern delay commands are found on the same
                                 row.
 
-                                FastTracker:
+                                ProTracker & FastTracker:
                                 mostRight delay command prevails if multiple
                                 pattern delay commands are found on the same
                                 row.
                             */
+                            if ( st3StyleEffectMemory_ ) { 
+                                if ( !patternDelay_ ) patternDelay_ = xfxArg;
+                            } else patternDelay_ = xfxArg;
+                            /*
                             if ( !patternDelay_ ) patternDelay_ = xfxArg;
                             else if ( ft2StyleEffects_ ) patternDelay_ = xfxArg;
+                            */
                             break;
                         }
                     }
@@ -1599,6 +1622,7 @@ int Mixer::updateNotes () {
         #define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
         #define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
         #define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
+        #define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE | FOREGROUND_INTENSITY)
         #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
         #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
         #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
@@ -1616,16 +1640,27 @@ int Mixer::updateNotes () {
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
             std::cout << "|";
             SetConsoleTextAttribute( hStdout, FOREGROUND_LIGHTCYAN );
+            
             if ( note < (MAXIMUM_NOTES + 2)) std::cout << noteStrings[note];
             else {
                 std::cout << std::hex << std::setw(3) << (unsigned)note << std::dec;
             }
+            /*
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+            std::cout << std::setw( 5 ) << noteToPeriod( note,channel.pSample->getFinetune() );
+
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTBLUE );
+            std::cout << "," << std::setw( 5 ) << channel.period;
+
+            SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTMAGENTA );
+            std::cout << "," << std::setw( 5 ) << channel.portaDestPeriod;
+            */
             // display instrument
             SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
             if( instrument )
                 std::cout << std::dec << std::setw( 2 ) << instrument;
             else std::cout << "  ";
-
+            /*
             // display volume column
             SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
             if ( iNote->effects[0].effect )
@@ -1633,7 +1668,7 @@ int Mixer::updateNotes () {
                     << std::setw( 1 ) << iNote->effects[0].effect
                     << std::setw( 2 ) << iNote->effects[0].argument;
             else std::cout << "   ";
-
+            */
             // effect
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
             for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
@@ -1644,7 +1679,7 @@ int Mixer::updateNotes () {
                 else std::cout << "--";
                 SetConsoleTextAttribute( hStdout,FOREGROUND_BROWN );
                 std::cout
-                    << std::setw( 2 ) << (iNote->effects[fxloop].argument >> 8) // T-E-M-P
+                    << std::setw( 2 ) << (iNote->effects[fxloop].argument ) 
                     << std::dec;
             }
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
@@ -1709,7 +1744,10 @@ loop, making the infinite loop impossible.
     } else {
         // prepare for next row / next function call
         if ( !patternBreak ) patternRow++;
-        else patternRow = pattern->getnRows();
+        else {
+            patternLoopStartRow_ = 0;
+            patternRow = pattern->getnRows();
+        }
     }
     //std::cout << std::endl;
 
@@ -1718,12 +1756,17 @@ loop, making the infinite loop impossible.
         std::cout << "\n";
         //_getch();
 #endif
-        for ( unsigned iChannel = 0; iChannel < nChannels; iChannel++ ) {
-            channels[iChannel].patternLoopStart = 0;
-            channels[iChannel].patternLoopCounter = 0;
-        }
-        
         patternRow = patternStartRow;
+        /*
+            FT2 starts the pattern on the same row that the pattern loop 
+            started in the pattern before it
+        */
+        if ( ft2StyleEffects_ ) {
+            //std::cout << "loop start = " << patternLoopStartRow_ << std::endl;
+            patternRow = patternLoopStartRow_;
+            patternLoopStartRow_ = 0;
+        }
+
         /*
         if( nextPatternDelta > 0 ) iPatternTable += nextPatternDelta; // Disable repeat!
         else                     iPatternTable++;
@@ -1748,7 +1791,8 @@ loop, making the infinite loop impossible.
             );
         }
         pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
-        iNote = pattern->getRow( patternStartRow );
+        //iNote = pattern->getRow( patternStartRow );
+        iNote = pattern->getRow( patternRow );
 #ifdef debug_mixer
         std::cout << std::endl
             << "Playing pattern # " 
@@ -1801,6 +1845,11 @@ int Mixer::updateEffects () {
                 case ARPEGGIO :
                 {
                     if ( channel.pSample ) {
+                        /*
+                        channel.arpeggioCount++;
+                        if ( channel.arpeggioCount >= 3 )
+                            channel.arpeggioCount = 0; // added
+                        */
                         switch ( channel.arpeggioCount ) {
                             case 0 : 
                             {
@@ -1830,9 +1879,11 @@ int Mixer::updateEffects () {
                                 break;
                             }
                         }
+                        
                         channel.arpeggioCount++;
                         if ( channel.arpeggioCount >= 3 )
                             channel.arpeggioCount = 0;
+                        
                         playSample( 
                             iChannel,
                             channel.pSample,
@@ -1882,23 +1933,26 @@ int Mixer::updateEffects () {
                 case TONE_PORTAMENTO :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 {                    
-                    argument = channel.lastTonePortamento << 2;
+                    unsigned portaSpeed = channel.lastTonePortamento << 2;
                     //if ( note.note && () && channel.portaDestPeriod )
+                    /*
                     if ( ((channel.oldNote.effects[fxloop].effect == TONE_PORTAMENTO) || 
                           (channel.oldNote.effects[fxloop].effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE))
                         || (note.note && (note.note != KEY_OFF)) )
+                    */
                     {
+                        //if ( tick == 1 ) std::cout << " DestPer: " << channel.portaDestPeriod << std::endl;
                         if ( channel.portaDestPeriod )
                         {
                             if ( channel.period < channel.portaDestPeriod )
                             {
-                                channel.period += argument;
+                                channel.period += portaSpeed;
                                 if ( channel.period > channel.portaDestPeriod )
                                     channel.period = channel.portaDestPeriod;
                             } else if ( channel.period > channel.portaDestPeriod )
                             {
-                                if ( channel.period > argument )
-                                    channel.period -= argument;
+                                if ( channel.period > portaSpeed )
+                                    channel.period -= portaSpeed;
                                 else channel.period = channel.portaDestPeriod;
                                 if ( channel.period < channel.portaDestPeriod )
                                     channel.period = channel.portaDestPeriod;
@@ -1906,6 +1960,7 @@ int Mixer::updateEffects () {
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
                         }
+                        
                     }
                     break;
                 }
@@ -2442,14 +2497,23 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\pullmax-portatest.xm",
         //"D:\\MODS\\M2W_BUGTEST\\appeal.mod",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
-        "D:\\MODS\\dosprog\\ode2pro.MOD",
-        "D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
-        "D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
-        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
+        //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
+        //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
+        //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
+        //"D:\\MODS\\M2W_BUGTEST\\2nd_pm-porta.s3m",
+
+        //"D:\\MODS\\dosprog\\mods\\demotune.mod", // xm = wrong, ptn loop tester
+        //"D:\\MODS\\dosprog\\ode2pro.MOD",
+        //"D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.s3m",
+        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
@@ -2457,15 +2521,15 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\dosprog\\mods\\women.s3m",
         //"D:\\MODS\\dosprog\\backward.s3m",
-        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
-        "D:\\MODS\\dosprog\\mods\\starsmuz.xm",
+        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\MODS\\dosprog\\china1-okt.s3m",
         //"D:\\MODS\\dosprog\\2nd_pm.xm",
         "D:\\MODS\\dosprog\\stardstm.mod",
         //"D:\\MODS\\dosprog\\lchina.s3m",
-        "D:\\MODS\\dosprog\\mods\\againstr.s3m",
-        "D:\\MODS\\dosprog\\mods\\againstr.mod",
+        //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
+        //"D:\\MODS\\dosprog\\mods\\againstr.mod",
         "D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
         "D:\\MODS\\dosprog\\mods\\un-land2.s3m",
@@ -2479,9 +2543,9 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\ctstoast.xm",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
         //"D:\\MODS\\dosprog\\women.xm",
         /*
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
@@ -2495,8 +2559,8 @@ int main(int argc, char *argv[])  {
         "D:\\MODS\\dosprog\\mods\\track8.s3m",
         "D:\\MODS\\dosprog\\mods\\track9.s3m",
         */
-        "D:\\MODS\\dosprog\\mods\\ssi.s3m",
-        "D:\\MODS\\dosprog\\mods\\ssi.xm",
+        //"D:\\MODS\\dosprog\\mods\\ssi.s3m",
+        //"D:\\MODS\\dosprog\\mods\\ssi.xm",
         "D:\\MODS\\dosprog\\mods\\pori.s3m",
         "D:\\MODS\\dosprog\\mods\\tearhate.s3m",
         "D:\\MODS\\dosprog\\mods\\starsmuz.s3m",
@@ -2534,7 +2598,6 @@ int main(int argc, char *argv[])  {
         "D:\\MODS\\dosprog\\mods\\bj-eyes.xm",
         "D:\\MODS\\dosprog\\mods\\1993.mod",
         "D:\\MODS\\dosprog\\mods\\1993.xm",
-        "D:\\MODS\\dosprog\\mods\\demotune.mod", // xm = wrong, ptn loop tester
         "D:\\MODS\\dosprog\\mods\\baska.mod",
         "D:\\MODS\\dosprog\\mods\\bj-love.xm",
 //        "D:\\MODS\\dosprog\\mods\\probmod\\3demon.mod",

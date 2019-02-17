@@ -15,7 +15,7 @@ Thanks must go to:
 
 #include "Module.h"
 
-//#define debug_s3m_loader  
+//#define debug_s3m_loader
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
@@ -422,7 +422,7 @@ int Module::loadS3mFile() {
         //sample.c4Speed = instHeader.c4Speed;
         // safety checks:
         if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
-            sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart + 1;
+            sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart;
         else sample.repeatLength = sample.length;
         if ( sample.volume > S3M_MAX_VOLUME ) sample.volume = S3M_MAX_VOLUME;
         if ( sample.repeatOffset >= sample.length ) sample.repeatOffset = 0;
