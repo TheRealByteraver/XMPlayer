@@ -1012,7 +1012,7 @@ int Mixer::updateNotes () {
     unsigned        patternStartRow = 0;
     int             nextPatternDelta = 1;
 
-    if ( patternDelay_ ) { patternDelay_--; return 0; }
+    //if ( patternDelay_ ) { patternDelay_--; return 0; }
 
 #ifdef debug_mixer
     
@@ -1107,13 +1107,34 @@ int Mixer::updateNotes () {
         //if ( isNewNote ) replay = true;
         channel.oldNote = channel.newNote;
         channel.newNote = *iNote;
+
+        /*
+            Start effect handling
+        */
         // check if a portamento effect occured:
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ )
         {
             unsigned& effect = iNote->effects[fxloop].effect;
+            unsigned& argument = iNote->effects[fxloop].argument;
             if ( (effect == TONE_PORTAMENTO) ||
-                (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) )
+                (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) ) {
+
+                if ( argument && (effect == TONE_PORTAMENTO) )
+                    channel.lastTonePortamento = argument;
+                if ( channel.pSample ) // && isNewNote ) 
+                    channel.portaDestPeriod =
+                    noteToPeriod(
+                        channel.lastNote + channel.pSample->getRelativeNote(),
+                        channel.pSample->getFinetune()
+                    );
+                else // maybe not necessary
+                    channel.portaDestPeriod =
+                    noteToPeriod(
+                        channel.lastNote + 0,
+                        0
+                    );
                 replay = false;  // temp hack
+            }
         }
         // valid sample for replay ? -> replay sample if new note
         if ( replay && channel.pSample && (!isNoteDelayed) ) {
@@ -1123,9 +1144,6 @@ int Mixer::updateNotes () {
                 finetune );
         }
 
-        /*
-            Start effect handling
-        */
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
         {
             unsigned& effect   = iNote->effects[fxloop].effect;
@@ -1163,10 +1181,10 @@ int Mixer::updateNotes () {
                         channel.arpeggioNote1 = channel.lastNote + (arpeggio >> 4);
                         channel.arpeggioNote2 = channel.lastNote + (arpeggio & 0xF);
 
-                        if ( (channel.oldNote.effects[fxloop].effect != ARPEGGIO) 
-                            || isNewNote )
+                        /* if ( (channel.oldNote.effects[fxloop].effect != ARPEGGIO) 
+                            || isNewNote ) */
                             channel.arpeggioCount = 0;
-
+                        /*
                         else { 
                             if ( channel.pSample ) {
                                 switch ( channel.arpeggioCount ) {
@@ -1213,6 +1231,7 @@ int Mixer::updateNotes () {
                             }
 
                         }
+                        */
                     }
                     break;
                 }
@@ -1288,10 +1307,11 @@ int Mixer::updateNotes () {
                     }
                     break;
                 }
+                /*
                 case TONE_PORTAMENTO :
                 {
                     if ( argument ) channel.lastTonePortamento = argument;
-                    if ( channel.pSample /* && isNewNote*/ ) 
+                    if ( channel.pSample )// && isNewNote ) 
                         channel.portaDestPeriod =
                             noteToPeriod(
                                 channel.lastNote + channel.pSample->getRelativeNote(),
@@ -1305,6 +1325,7 @@ int Mixer::updateNotes () {
                         );
                     break;
                 }
+                */
                 case SET_VIBRATO_SPEED : // XM volume column command
                 case FINE_VIBRATO :
                 case VIBRATO :
@@ -1845,11 +1866,11 @@ int Mixer::updateEffects () {
                 case ARPEGGIO :
                 {
                     if ( channel.pSample ) {
-                        /*
+                        
                         channel.arpeggioCount++;
                         if ( channel.arpeggioCount >= 3 )
                             channel.arpeggioCount = 0; // added
-                        */
+                        
                         switch ( channel.arpeggioCount ) {
                             case 0 : 
                             {
@@ -1879,11 +1900,11 @@ int Mixer::updateEffects () {
                                 break;
                             }
                         }
-                        
+                        /*
                         channel.arpeggioCount++;
                         if ( channel.arpeggioCount >= 3 )
                             channel.arpeggioCount = 0;
-                        
+                        */
                         playSample( 
                             iChannel,
                             channel.pSample,
@@ -2336,9 +2357,19 @@ int Mixer::updateBpm () {
     if (tick < tempo) { 
         updateEffects ();         
     } else { 
+        if ( patternDelay_ ) { 
+            patternDelay_--; 
+        } else {
+            updateNotes();
+        }
+        tick = 0;
+        updateImmediateEffects();
+
+        /*
         tick = 0; 
         updateNotes (); 
         updateImmediateEffects ();
+        */
     }
     setVolumes ();
     return 0;
@@ -2508,12 +2539,15 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\ode2pro.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
-        //"D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
+        "D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
+        "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
-        //"D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
-        //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
+        "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.s3m",
-        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        "D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
+        "D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
@@ -2603,8 +2637,6 @@ int main(int argc, char *argv[])  {
 //        "D:\\MODS\\dosprog\\mods\\probmod\\3demon.mod",
         "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\mods\\probmod\\flt8_1.mod",
-        "D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
-        "D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         nullptr
     };
     /*
