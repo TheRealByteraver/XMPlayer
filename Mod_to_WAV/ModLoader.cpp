@@ -106,15 +106,15 @@ int tagID(std::string tagID, bool &flt8Err, unsigned& trackerType) {
         chn = ((unsigned char)tagID[0] - 48) * 10 +
                (unsigned char)tagID[1] - 48;
         if ( (chn > 32) || (chn < 10) ) chn = 0;
-        else trackerType = TRACKER_FT2;
+        //else trackerType = TRACKER_FT2;
     } else if ( (tagID[0] == 'T') && (tagID[1] == 'D') && (tagID[2] == 'Z') ) {
         chn = (unsigned char)tagID[3] - 48;
         if ( (chn < 1) || (chn > 3) ) chn = 0; // only values 1..3 are valid
-        else trackerType = TRACKER_FT2;
+        //else trackerType = TRACKER_FT2;
     } else if ( (tagID[1] == 'C') && (tagID[2] == 'H') && (tagID[3] == 'N') ) {
         chn = (unsigned char)tagID[0] - 48;
         if ( (chn < 5) || (chn > 9) ) chn = 0; // only values 5..9 are valid
-        else trackerType = TRACKER_FT2;
+        //else trackerType = TRACKER_FT2;
     } else chn = 0;
     return chn;
 }

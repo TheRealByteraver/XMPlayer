@@ -104,11 +104,10 @@ public:
 
 
     /*
-    effect memory:
+    effect memory & index counters:
     */
     bool            patternIsLooping;
     unsigned        patternLoopStart;
-    //unsigned        patternLoopEnd;
     unsigned        patternLoopCounter;
     //unsigned        lastNonZeroFXArg;
     unsigned        lastArpeggio;
@@ -117,6 +116,8 @@ public:
     unsigned        arpeggioNote2;
     unsigned        vibratoWaveForm;
     unsigned        tremoloWaveForm;
+    int             vibratoCount;
+    int             tremeloCount;
     unsigned        retrigCount;
     unsigned        delayCount;
     unsigned        lastPortamentoUp;
@@ -219,6 +220,7 @@ private: // debug
     int             setMixerVolume(unsigned fromChannel);
     int             setFrequency(unsigned fromChannel, unsigned frequency);
     int             playSample  (unsigned fromChannel, Sample *sample, unsigned offset, bool direction);
+    int             stopChannelPrimary( unsigned fromChannel );
     int             setVolumes ();
     int             updateImmediateEffects (); // grbml pattern delay grmbl... grrr!
     int             updateEffects ();
@@ -842,11 +844,43 @@ END;
         //finally. thank god for Benjamin Rousseaux!!!
         return (unsigned)(
             pow(2.0, 
-                (133.0 - ((double)note + ((double)finetune / 128.0))) / 12.0
+                ( 133.0 - ((double)note + ((double)finetune / 128.0))) / 12.0
             ) * 13.375
         );
     }
 }
+
+/*
+
+AMIGA calculations:
+
+period = 13.375 * 2 ^ [ ( 133 - note - finetune / 128 ) / 12 ]
+
+frequency = (8363 * 1712) / period
+
+Ex:
+note == 48 => amiga period should be = 1712
+calculated period: 1813,8 (previous note's period actually == 1812)
+
+frequency -->  7893,6
+
+Frequency if calculated by:
+
+PAL Value                     NTSC Value
+===========                   ============
+
+7093789.2                     7159090.5
+----------- = 11745 Hz        ----------- = 11853 Hz
+period * 2                    period * 2
+
+
+PAL  freq * 4 = 7822
+NTSC freq * 4 = 7894
+
+*/
+
+
+
 
 unsigned Mixer::periodToFrequency(unsigned period) {
     return module->useLinearFrequencies() ?
@@ -1007,6 +1041,80 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
     return 0;
 }
 
+int Mixer::stopChannelPrimary( unsigned fromChannel ) {
+    /*
+    unsigned    oldestSlot;
+    unsigned    emptySlot;
+    unsigned    age;
+    unsigned    newMc;
+    unsigned    mcIndex;
+    bool        sampleStarted = false;
+    */
+    // stop previous note in same logical Channel
+    for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
+        unsigned j = channels[fromChannel].mixerChannelsTable[i];
+        if ( j ) {
+            if ( mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel) ) {
+                mixerChannels[j].isPrimary = false;
+                channels[fromChannel].mixerChannelsTable[i] = 0;
+                // temp: 
+                mixerChannels[j].isFadingOut = true;
+                mixerChannels[j].isActive = false;
+                break;
+            }
+        }
+    }
+    /*
+    mixerChannels[channels[fromChannel].iPrimary].isPrimary = false;
+    mixerChannels[channels[fromChannel].iPrimary].isActive = false;
+    channels[fromChannel].mixerChannelsTable[channels[fromChannel].iPrimary] = 0;
+    */
+    /*
+    // find an empty slot in mixer channels table
+    for ( emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++ ) {
+        if ( !channels[fromChannel].mixerChannelsTable[emptySlot] ) break;
+    }
+    // None found, remove oldest sample (the longest playing one)
+    // and use it's channel for the new sample
+    if ( emptySlot >= MAX_NOTES_PER_CHANNEL ) {
+        oldestSlot = 0;
+        age = 0;
+        for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
+            mcIndex = channels[fromChannel].mixerChannelsTable[i];
+            if ( mixerChannels[mcIndex].age > age ) {
+                age = mixerChannels[mcIndex].age;
+                oldestSlot = i;
+            }
+        }
+        emptySlot = oldestSlot;
+        newMc = mcIndex;
+    } else {
+        // find a new channel for mixing
+        newMc = 1; // mix channel 0 is never used
+        while ( newMc < MIXER_MAX_CHANNELS ) {
+            if ( !mixerChannels[newMc].isActive ) break;
+            newMc++;
+        }
+    }
+
+    if ( newMc < MIXER_MAX_CHANNELS ) { // should be unnecessary  (the check)
+        mixerChannels[newMc].isActive = true;
+        mixerChannels[newMc].isPrimary = true;
+        mixerChannels[newMc].isPlayingBackwards = direction;
+        mixerChannels[newMc].isFadingOut = false;
+        mixerChannels[newMc].age = 0;
+        mixerChannels[newMc].fromChannel = fromChannel;
+        mixerChannels[newMc].sample = sample;
+        // temp hack
+        mixerChannels[newMc].isVolumeRampActive = false;
+        mixerChannels[newMc].sampleOffset = sampleOffset;
+        channels[fromChannel].mixerChannelsTable[emptySlot] = newMc;
+        channels[fromChannel].iPrimary = emptySlot;
+    }
+    */
+    return 0;
+}
+
 int Mixer::updateNotes () {
     bool            patternBreak = false;
     unsigned        patternStartRow = 0;
@@ -1060,6 +1168,8 @@ int Mixer::updateNotes () {
                 isNewNote = true;
                 replay = true;
                 channel.retrigCount = 0; // to check if that resets the counter, and when
+                if( (channel.vibratoWaveForm & VIBRATO_NO_RETRIG_FLAG) == 0 ) 
+                    channel.vibratoCount = 0;
                 if ( ft2StyleEffects_ ) channel.sampleOffset = 0;
                 //if ( ft2StyleEffects_ ) std::cout << "ft2!";
             }
@@ -1085,6 +1195,8 @@ int Mixer::updateNotes () {
                     isValidInstrument = true;
                 } else {
                     isValidInstrument = false;
+                    replay = false;
+                    stopChannelPrimary( iChannel ); // sundance.mod illegal sample
                 }
             }
             channel.sampleOffset = 0;
@@ -1146,8 +1258,8 @@ int Mixer::updateNotes () {
 
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
         {
-            unsigned& effect   = iNote->effects[fxloop].effect;
-            unsigned& argument = iNote->effects[fxloop].argument;
+            const unsigned& effect   = iNote->effects[fxloop].effect;
+            const unsigned& argument = iNote->effects[fxloop].argument;
             /* 
                 ScreamTracker uses very little effect memory. The Qxy command
                 (multi retrig) will use the argument of a previous Order jump
@@ -1166,6 +1278,17 @@ int Mixer::updateNotes () {
                 channel.lastPortamentoUp = argument;
                 channel.lastPortamentoDown = argument;
             }
+            
+            if ( (fxloop == (MAX_EFFECT_COLUMNS - 1)) &&
+                (effect != VIBRATO) &&
+                (effect != FINE_VIBRATO) &&
+                (effect != VIBRATO_AND_VOLUME_SLIDE) )
+            {
+                //channel.vibratoCount = 0; // only on new note
+                setFrequency( iChannel,periodToFrequency( channel.period ) );
+            }
+            
+
             switch ( effect ) {
                 case ARPEGGIO : // to be reviewed
                 {        
@@ -1240,10 +1363,10 @@ int Mixer::updateNotes () {
                     if ( argument ) channel.lastPortamentoUp = argument;
                     if ( st3StyleEffectMemory_ )
                     {
-                        argument = channel.lastPortamentoUp;
+                        unsigned lastPorta = channel.lastPortamentoUp;
                         //argument = channel.lastNonZeroFXArg;
-                        unsigned xfx = argument >> 4;
-                        unsigned xfxArg = argument & 0xF;
+                        unsigned xfx = lastPorta >> 4;
+                        unsigned xfxArg = lastPorta & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
                         switch ( xfx )
                         {
@@ -1261,12 +1384,14 @@ int Mixer::updateNotes () {
                                 channel.lastFinePortamentoUp = xfxArg; 
                                 break;
                             }
+                            /*
                             default: // normal portamento up
                             {
                                 //std::cout << "^ arg = " << argument << std::endl;
                                 channel.lastPortamentoUp = argument;
                                 break;
                             }
+                            */
                         }
                     }
                     break;
@@ -1276,10 +1401,10 @@ int Mixer::updateNotes () {
                     if ( argument ) channel.lastPortamentoDown = argument;
                     if ( st3StyleEffectMemory_ )
                     {
-                        argument = channel.lastPortamentoDown;
+                        unsigned lastPorta = channel.lastPortamentoDown;
                         //argument = channel.lastNonZeroFXArg;
-                        unsigned xfx = argument >> 4;
-                        unsigned xfxArg = argument & 0xF;
+                        unsigned xfx = lastPorta >> 4;
+                        unsigned xfxArg = lastPorta & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
                         switch ( xfx )
                         {
@@ -1297,12 +1422,14 @@ int Mixer::updateNotes () {
                                 channel.lastFinePortamentoDown = xfxArg;
                                 break;
                             }
+                            /*
                             default: // normal portamento down
                             {
                                 //std::cout << "^ arg = " << argument << std::endl;
                                 channel.lastPortamentoDown = argument;
                                 break;
                             }
+                            */
                         }
                     }
                     break;
@@ -1336,6 +1463,54 @@ int Mixer::updateNotes () {
                     if (argument & 0xF) 
                             lv = (lv & 0xF0) + (argument & 0xF);
                     //channel.lastVibrato = lv;
+
+                    if ( //(channel.vibratoWaveForm & VIBRATO_NO_RETRIG_FLAG) && 
+                        ft2StyleEffects_ &&
+                        (effect != SET_VIBRATO_SPEED) 
+                        )
+                    {
+                        // Hxy: vibrato with x speed and y amplitude
+                        channel.vibratoCount += channel.lastVibrato >> 4;
+                        if ( channel.vibratoCount > 31 ) channel.vibratoCount -= 64;
+                        unsigned vibAmp;
+                        unsigned tableIdx;
+                        if ( channel.vibratoCount < 0 ) tableIdx = -channel.vibratoCount;
+                        else                           tableIdx = channel.vibratoCount;
+                        switch ( channel.vibratoWaveForm & 0x3 )
+                        {
+                            case VIBRATO_RANDOM:
+                            case VIBRATO_SINEWAVE:
+                            {
+                                vibAmp = sineTable[tableIdx];
+                                break;
+                            }
+                            case VIBRATO_RAMPDOWN:
+                            {
+                                tableIdx <<= 3;
+                                if ( channel.vibratoCount < 0 ) vibAmp = 255 - tableIdx;
+                                else vibAmp = tableIdx;
+                                break;
+                            }
+                            case VIBRATO_SQUAREWAVE:
+                            {
+                                vibAmp = 255;
+                                break;
+                            }
+                        }
+                        vibAmp *= channel.lastVibrato & 0xF;
+                        vibAmp >>= 7;
+                        if ( effect != FINE_VIBRATO ) vibAmp <<= 2;
+                        //vibAmp >>= 1;
+                        //unsigned frequency = periodToFrequency( channel.period );
+                        //if ( channel.vibratoCount >= 0 )    frequency += vibAmp;
+                        //else                                frequency -= vibAmp;
+                        //std::cout << "F = " << frequency << std::endl;    // DEBUG
+                        //setFrequency( iChannel,frequency );
+                        unsigned period = channel.period;
+                        if ( channel.vibratoCount > 0 ) period += vibAmp;
+                        else                            period -= vibAmp;
+                        setFrequency( iChannel,periodToFrequency( period ) );
+                    }
                     break;
                 }
                 case TREMOLO : 
@@ -1522,7 +1697,7 @@ int Mixer::updateNotes () {
                             if ( !xfxArg ) channel.volume = 0;
                             break;
                         }
-                        case NOTE_DELAY : 
+                        case NOTE_DELAY: 
                         {
                             if( xfxArg < tempo )
                             {
@@ -1750,16 +1925,8 @@ S3M and IT set a new start point in the line after the end of the previous
 loop, making the infinite loop impossible.
 */
 
-    /*
-    std::cout << std::endl << "row " << std::setw(3) << patternRow << ":";
-    for ( unsigned i = 0; i < nChannels; i++ )
-        std::cout << std::setw( 2 ) << channels[i].patternLoopCounter << "|";
-    std::cout << " Looping: " << (patternLoopFlag_ ? "yes" : "no ") 
-        << ", to #" << patternLoopStartRow_ << " ";
-    */
     if ( patternLoopFlag_ ) 
     { 
-        //std::cout << " loopStartRow: " << patternLoopStartRow_;
         patternRow = patternLoopStartRow_;
         iNote = pattern->getRow( patternRow );
     } else {
@@ -1770,8 +1937,6 @@ loop, making the infinite loop impossible.
             patternRow = pattern->getnRows();
         }
     }
-    //std::cout << std::endl;
-
     if ( patternRow >= pattern->getnRows() ) {
 #ifdef debug_mixer
         std::cout << "\n";
@@ -1783,19 +1948,12 @@ loop, making the infinite loop impossible.
             started in the pattern before it
         */
         if ( ft2StyleEffects_ ) {
-            //std::cout << "loop start = " << patternLoopStartRow_ << std::endl;
             patternRow = patternLoopStartRow_;
             patternLoopStartRow_ = 0;
         }
-
-        /*
-        if( nextPatternDelta > 0 ) iPatternTable += nextPatternDelta; // Disable repeat!
-        else                     iPatternTable++;
-        */
         int iPtnTable = (int)iPatternTable + nextPatternDelta;
         if ( iPtnTable < 0 ) iPatternTable = 0; // should be impossible
         else iPatternTable = iPtnTable;
-
         // skip marker patterns:
         for ( ; 
             (iPatternTable < module->getSongLength()) && 
@@ -1812,7 +1970,6 @@ loop, making the infinite loop impossible.
             );
         }
         pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
-        //iNote = pattern->getRow( patternStartRow );
         iNote = pattern->getRow( patternRow );
 #ifdef debug_mixer
         std::cout << std::endl
@@ -1919,9 +2076,6 @@ int Mixer::updateEffects () {
                 case PORTAMENTO_UP :
                 {       
                     argument = channel.lastPortamentoUp << 2;
-
-                    //std::cout << "chn " << iChannel + 1 << " b4 ^: " << channel.period << ", arg = " << argument;
-
                     if ( channel.period > argument )
                     {
                         channel.period -= argument;
@@ -1931,24 +2085,16 @@ int Mixer::updateEffects () {
                     setFrequency(
                         iChannel,
                         periodToFrequency( channel.period ) );
-
-                    //std::cout << ", after ^: " << channel.period << std::endl;
-
                     break;
                 }
                 case PORTAMENTO_DOWN :
                 {
                     argument = channel.lastPortamentoDown << 2;
-
-                    //std::cout << "chn " << iChannel + 1 << " b4 v: " << channel.period << ", arg = " << argument;
-
                     channel.period += argument;
                     if ( channel.period > module->getMaxPeriod() )
                         channel.period = module->getMaxPeriod();
                     setFrequency( iChannel,
                         periodToFrequency( channel.period ) );
-
-                    //std::cout << ", after v: " << channel.period << std::endl;
                     break;
                 }
                 case TONE_PORTAMENTO :
@@ -1962,7 +2108,6 @@ int Mixer::updateEffects () {
                         || (note.note && (note.note != KEY_OFF)) )
                     */
                     {
-                        //if ( tick == 1 ) std::cout << " DestPer: " << channel.portaDestPeriod << std::endl;
                         if ( channel.portaDestPeriod )
                         {
                             if ( channel.period < channel.portaDestPeriod )
@@ -1985,9 +2130,55 @@ int Mixer::updateEffects () {
                     }
                     break;
                 }
-                case VIBRATO :
-                case VIBRATO_AND_VOLUME_SLIDE :
+
+                case VIBRATO:
+                case FINE_VIBRATO:
+                case VIBRATO_AND_VOLUME_SLIDE:
                 {
+                    // Hxy: vibrato with x speed and y amplitude
+                    channel.vibratoCount += channel.lastVibrato >> 4;
+                    if ( channel.vibratoCount > 31 ) channel.vibratoCount -= 64;
+                    unsigned vibAmp;
+                    unsigned tableIdx;
+                    if (channel.vibratoCount < 0 ) tableIdx = -channel.vibratoCount;
+                    else                           tableIdx = channel.vibratoCount;                    
+                    switch ( channel.vibratoWaveForm & 0x3 )
+                    {
+                        case VIBRATO_RANDOM:
+                        case VIBRATO_SINEWAVE:
+                        {
+                            vibAmp = sineTable[tableIdx];
+                            break;
+                        }
+                        case VIBRATO_RAMPDOWN:
+                        {
+                            tableIdx <<= 3;
+                            if ( channel.vibratoCount < 0 ) vibAmp = 255 - tableIdx;
+                            else vibAmp = tableIdx;
+                            break;
+                        }
+                        case VIBRATO_SQUAREWAVE:
+                        {
+                            vibAmp = 255;
+                            break;
+                        }
+                    }
+                    vibAmp *= channel.lastVibrato & 0xF;
+                    vibAmp >>= 7;
+                    if (effect != FINE_VIBRATO ) vibAmp <<= 2;
+                    //vibAmp >>= 1;
+
+                    //unsigned frequency = periodToFrequency( channel.period );
+                    //if ( channel.vibratoCount >= 0 )    frequency += vibAmp;
+                    //else                                frequency -= vibAmp;
+                    //std::cout << "F = " << frequency << std::endl;
+                    //setFrequency( iChannel,frequency );
+
+                    unsigned period = channel.period;
+                    if ( channel.vibratoCount > 0 ) period += vibAmp;
+                    else                            period -= vibAmp;
+                    setFrequency( iChannel,periodToFrequency( period ) );
+
                     break;
                 }
                 case TREMOLO : 
@@ -2539,15 +2730,18 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\ode2pro.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
-        "D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
+        //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
+        //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
+        "D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
+        "D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
         "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.s3m",
         "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
-        "D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
-        "D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
+        //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
+        //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",

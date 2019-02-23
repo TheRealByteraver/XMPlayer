@@ -91,6 +91,25 @@
 #define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
 /*
+    Vibrato / Tremelo / Panbrello curve tables & constants:
+*/
+const int sineTable[] = {
+    0  ,24 ,49 ,74 ,97 ,120,141,161,
+    180,197,212,224,235,244,250,253,
+    255,253,250,244,235,224,212,197,
+    180,161,141,120,97 ,74 ,49 ,24 , 
+    0
+};
+
+#define VIBRATO_SINEWAVE                    0
+#define VIBRATO_RAMPDOWN                    1
+#define VIBRATO_SQUAREWAVE                  2
+#define VIBRATO_RANDOM                      3
+#define VIBRATO_NO_RETRIG_FLAG              4
+
+
+
+/*
 const unsigned periods[MAXIMUM_NOTES] = {
    4*1712,4*1616,4*1524,4*1440,4*1356,4*1280,4*1208,4*1140,4*1076,4*1016, 4*960, 4*906,
    2*1712,2*1616,2*1524,2*1440,2*1356,2*1280,2*1208,2*1140,2*1076,2*1016, 2*960, 2*906,
