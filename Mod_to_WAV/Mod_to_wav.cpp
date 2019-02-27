@@ -1197,6 +1197,8 @@ int Mixer::updateNotes () {
                     isValidInstrument = false;
                     replay = false;
                     stopChannelPrimary( iChannel ); // sundance.mod illegal sample
+                    std::cout << " cut at " << std::dec << std::setw( 2 ) << patternRow
+                        << ":" << std::setw( 2 ) << iChannel << ", inst " << instrument << std::endl;
                 }
             }
             channel.sampleOffset = 0;
@@ -1287,6 +1289,15 @@ int Mixer::updateNotes () {
                 //channel.vibratoCount = 0; // only on new note
                 setFrequency( iChannel,periodToFrequency( channel.period ) );
             }
+            if ( channel.oldNote.effects[fxloop].effect == ARPEGGIO ) {
+                if( ! 
+                    ((channel.newNote.effects[fxloop].effect == ARPEGGIO) &&
+                    ft2StyleEffects_)
+                    )
+                setFrequency(
+                    iChannel,
+                    periodToFrequency( channel.period ) );
+            }
             
 
             switch ( effect ) {
@@ -1304,16 +1315,15 @@ int Mixer::updateNotes () {
                         channel.arpeggioNote1 = channel.lastNote + (arpeggio >> 4);
                         channel.arpeggioNote2 = channel.lastNote + (arpeggio & 0xF);
 
-                        /* if ( (channel.oldNote.effects[fxloop].effect != ARPEGGIO) 
-                            || isNewNote ) */
-                            channel.arpeggioCount = 0;
-                        /*
-                        else { 
+                        if ( (channel.oldNote.effects[fxloop].effect == ARPEGGIO) 
+                           && ft2StyleEffects_ ) 
+                        {                            
                             if ( channel.pSample ) {
+                                unsigned arpeggioPeriod;
                                 switch ( channel.arpeggioCount ) {
                                     case 0:
                                     {
-                                        channel.period = noteToPeriod(
+                                        arpeggioPeriod = noteToPeriod(
                                             channel.lastNote +
                                             channel.pSample->getRelativeNote(),
                                             channel.pSample->getFinetune()
@@ -1322,7 +1332,7 @@ int Mixer::updateNotes () {
                                     }
                                     case 1:
                                     {
-                                        channel.period = noteToPeriod(
+                                        arpeggioPeriod = noteToPeriod(
                                             channel.arpeggioNote1 +
                                             channel.pSample->getRelativeNote(),
                                             channel.pSample->getFinetune()
@@ -1331,7 +1341,7 @@ int Mixer::updateNotes () {
                                     }
                                     case 2:
                                     {
-                                        channel.period = noteToPeriod(
+                                        arpeggioPeriod = noteToPeriod(
                                             channel.arpeggioNote2 +
                                             channel.pSample->getRelativeNote(),
                                             channel.pSample->getFinetune()
@@ -1342,19 +1352,21 @@ int Mixer::updateNotes () {
                                 channel.arpeggioCount++;
                                 if ( channel.arpeggioCount >= 3 ) 
                                     channel.arpeggioCount = 0;
+                                /*
                                 playSample(
                                     iChannel,
                                     channel.pSample,
                                     channel.sampleOffset,
                                     FORWARD );
+                                */
                                 setFrequency(
                                     iChannel,
-                                    periodToFrequency( channel.period ) );
-                                replay = false;
+                                    periodToFrequency( arpeggioPeriod ) );
+                                //replay = false;
                             }
 
                         }
-                        */
+                        else channel.arpeggioCount = 0;
                     }
                     break;
                 }
@@ -1689,7 +1701,7 @@ int Mixer::updateNotes () {
                         case SET_ROUGH_PANNING: 
                         {
                             if ( !ft2StyleEffects_ )
-                                channel.panning = argument << 4;
+                                channel.panning = xfxArg << 4;
                             break;
                         }
                         case NOTE_CUT: 
@@ -2022,16 +2034,15 @@ int Mixer::updateEffects () {
             switch ( effect ) {
                 case ARPEGGIO :
                 {
-                    if ( channel.pSample ) {
-                        
+                    if ( channel.pSample ) {                        
                         channel.arpeggioCount++;
                         if ( channel.arpeggioCount >= 3 )
-                            channel.arpeggioCount = 0; // added
-                        
+                            channel.arpeggioCount = 0; // added 
+                        unsigned arpeggioPeriod;
                         switch ( channel.arpeggioCount ) {
                             case 0 : 
                             {
-                                channel.period = noteToPeriod(
+                                arpeggioPeriod = noteToPeriod(
                                         channel.lastNote +
                                         channel.pSample->getRelativeNote(),
                                         channel.pSample->getFinetune()
@@ -2040,7 +2051,7 @@ int Mixer::updateEffects () {
                             }
                             case 1 :
                             {
-                                channel.period = noteToPeriod(
+                                arpeggioPeriod = noteToPeriod(
                                         channel.arpeggioNote1 +
                                         channel.pSample->getRelativeNote(),
                                         channel.pSample->getFinetune() 
@@ -2049,7 +2060,7 @@ int Mixer::updateEffects () {
                             }
                             case 2 : 
                             {
-                                channel.period = noteToPeriod(
+                                arpeggioPeriod = noteToPeriod(
                                         channel.arpeggioNote2 +
                                         channel.pSample->getRelativeNote(),
                                         channel.pSample->getFinetune() 
@@ -2062,14 +2073,16 @@ int Mixer::updateEffects () {
                         if ( channel.arpeggioCount >= 3 )
                             channel.arpeggioCount = 0;
                         */
+                        /*
                         playSample( 
                             iChannel,
                             channel.pSample,
                             channel.sampleOffset,
                             FORWARD );
+                        */
                         setFrequency( 
                             iChannel,
-                            periodToFrequency( channel.period ) );                            
+                            periodToFrequency( arpeggioPeriod ) );
                     }
                     break;
                 }
@@ -2732,6 +2745,11 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
+        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
+        "D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
+        "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
+        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
         "D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
         "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
@@ -2743,7 +2761,6 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",

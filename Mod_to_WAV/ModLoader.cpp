@@ -368,7 +368,7 @@ int Module::loadModFile() {
         instruments_[i]->load(instrument);
 
 #ifdef debug_mod_loader
-        cout << "\nSample " << i << ": name     = " << instruments_[i]->getName();
+        cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
         if (!instruments_[i]->getSample(0)) _getch();
 
         if (instruments_[i]->getSample(0)) {
@@ -388,7 +388,7 @@ int Module::loadModFile() {
 
             waveFormatEx.wFormatTag     = WAVE_FORMAT_PCM;
             waveFormatEx.nChannels      = 1;
-            waveFormatEx.nSamplesPerSec = 8000; // frequency
+            waveFormatEx.nSamplesPerSec = 8363; // frequency
             waveFormatEx.wBitsPerSample = 16;
             waveFormatEx.nBlockAlign    = waveFormatEx.nChannels * 
                                          (waveFormatEx.wBitsPerSample >> 3);
@@ -590,7 +590,8 @@ int Module::loadModFile() {
                 }
             }
 #ifdef debug_mod_loader
-            if (i == 0) {
+            //if (i == 0) 
+            {
                 char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
                 if (!(n % nChannels_)) cout << "\n";
@@ -615,19 +616,19 @@ int Module::loadModFile() {
 
 #ifdef debug_mod_loader
     cout << "\n";
-    cout << "\nFilename             = " << fileName_;
+    cout << "\nFilename             = " << fileName_.c_str();
     cout << "\nis Loaded            = " << (isLoaded() ? "Yes" : "No");
     cout << "\nnChannels            = " << nChannels_;
     cout << "\nnInstruments         = " << nInstruments_;
     cout << "\nnSamples             = " << nSamples_;
     cout << "\nnPatterns            = " << nPatterns_;
-    cout << "\nSong Title           = " << songTitle_;
+    cout << "\nSong Title           = " << songTitle_.c_str();
     cout << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No");
     cout << "\nSong Length          = " << songLength_;
     cout << "\nSong Restart Positn. = " << songRestartPosition_;
     cout << "\nNST File             = " << (nstFile ? "Yes" : "No");
     cout << "\n.WOW File            = " << (wowFile ? "Yes" : "No");
-    cout << "\nFile Tag             = " << trackerTag_;
+    cout << "\nFile Tag             = " << trackerTag_.c_str();
     cout << "\nTotal Samples Size   = " << sampleDataSize;
     cout << "\nptnHdr               = " << patternHeader;
     cout << "\nptnCalc              = " << patternCalc;
