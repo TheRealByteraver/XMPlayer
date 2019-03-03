@@ -17,8 +17,6 @@
 
 #include "Module.h"
 
-using namespace std;
-
 //#define debug_mod_loader
 
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
@@ -142,8 +140,8 @@ int Module::loadModFile() {
     char        *buf, *bufp;
     HeaderNST   *headerNST;
     HeaderMK    *headerMK;
-    ifstream::pos_type  fileSize = 0;
-    ifstream            modFile(fileName_, ios::in|ios::binary|ios::ate);
+    std::ifstream::pos_type  fileSize = 0;
+    std::ifstream            modFile(fileName_,std::ios::in| std::ios::binary| std::ios::ate);
 
     // initialize mod specific variables:
     minPeriod_ = 14;    // periods[11 * 12 - 1]
@@ -154,8 +152,8 @@ int Module::loadModFile() {
     if (!modFile.is_open()) return 0; // exit on I/O error
     fileSize = modFile.tellg();
     buf = new char [(int)fileSize];
-    modFile.seekg (0, ios::beg);
-    modFile.read (buf, fileSize);
+    modFile.seekg ( 0,std::ios::beg );
+    modFile.read ( buf, fileSize );
     modFile.close();
     headerNST = (HeaderNST *)buf;
     headerMK  = (HeaderMK  *)buf;
@@ -232,7 +230,8 @@ int Module::loadModFile() {
     useLinearFrequencies_ = false;
 
     if (patternHeader > MOD_MAX_PATTERNS) ptnErr = true;
-    if (songRestartPosition_ > songLength_) songRestartPosition_ = 0;
+    if ( (songRestartPosition_ > songLength_) ||
+         (songRestartPosition_ == 127)) songRestartPosition_ = 0;
     isCustomRepeat_ = songRestartPosition_ != 0;
     // now interpret the obtained info
     // this is not a .MOD file, or it's compressed
@@ -259,15 +258,15 @@ int Module::loadModFile() {
         unsigned    missingData = (sampleDataOffset + sampleDataSize) - (int)fileSize;
         unsigned    lastInstrument = nInstruments_;
 #ifdef debug_mod_loader
-        cout << "\nWarning! File misses Sample Data!\n";
-        cout << "\nnPatterns          = " << nPatterns_;
-        cout << "\nPatternHeader      = " << patternHeader;
-        cout << "\nPatternCalc        = " << patternCalc;
-        cout << "\nSample Data Offset = " << sampleDataOffset;
-        cout << "\nSample Data Size   = " << sampleDataSize;
-        cout << "\nOffset + Data      = " << (sampleDataOffset + sampleDataSize);
-        cout << "\nFile Size          = " << fileSize;
-        cout << "\nDifference         = " << missingData;
+        std::cout << "\nWarning! File misses Sample Data!\n";
+        std::cout << "\nnPatterns          = " << nPatterns_;
+        std::cout << "\nPatternHeader      = " << patternHeader;
+        std::cout << "\nPatternCalc        = " << patternCalc;
+        std::cout << "\nSample Data Offset = " << sampleDataOffset;
+        std::cout << "\nSample Data Size   = " << sampleDataSize;
+        std::cout << "\nOffset + Data      = " << (sampleDataOffset + sampleDataSize);
+        std::cout << "\nFile Size          = " << fileSize;
+        std::cout << "\nDifference         = " << missingData;
 #endif
         while (missingData && lastInstrument) {
             ModSampleHeader *sample = &(headerMK->samples[lastInstrument - 1]);
@@ -299,7 +298,7 @@ int Module::loadModFile() {
         }
         if (missingData) {
 #ifdef debug_mod_loader
-        cout << "\nNo Sample data! Some pattern data is missing!\n";
+            std::cout << "\nNo Sample data! Some pattern data is missing!\n";
 #endif
             delete buf;
             return 0;
@@ -368,7 +367,7 @@ int Module::loadModFile() {
         instruments_[i]->load(instrument);
 
 #ifdef debug_mod_loader
-        cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
+        std::cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
         if (!instruments_[i]->getSample(0)) _getch();
 
         if (instruments_[i]->getSample(0)) {
@@ -377,11 +376,11 @@ int Module::loadModFile() {
             MMRESULT        result;
             WAVEHDR         waveHdr;
 
-            cout << "\nSample " << i << ": length   = " << instruments_[i]->getSample(0)->getLength();
-            cout << "\nSample " << i << ": rep ofs  = " << instruments_[i]->getSample(0)->getRepeatOffset();
-            cout << "\nSample " << i << ": rep len  = " << instruments_[i]->getSample(0)->getRepeatLength();
-            cout << "\nSample " << i << ": volume   = " << instruments_[i]->getSample(0)->getVolume();
-            cout << "\nSample " << i << ": finetune = " << instruments_[i]->getSample(0)->getFinetune();
+            std::cout << "\nSample " << i << ": length   = " << instruments_[i]->getSample(0)->getLength();
+            std::cout << "\nSample " << i << ": rep ofs  = " << instruments_[i]->getSample(0)->getRepeatOffset();
+            std::cout << "\nSample " << i << ": rep len  = " << instruments_[i]->getSample(0)->getRepeatLength();
+            std::cout << "\nSample " << i << ": volume   = " << instruments_[i]->getSample(0)->getVolume();
+            std::cout << "\nSample " << i << ": finetune = " << instruments_[i]->getSample(0)->getFinetune();
 
             // not very elegant but hey, is debug code lol
             if (!instruments_[i]->getSample(0)->getData()) break; 
@@ -399,10 +398,10 @@ int Module::loadModFile() {
             result = waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveFormatEx, 
                                  0, 0, CALLBACK_NULL);
             if (result != MMSYSERR_NOERROR) {
-                if (!i) cout << "\nError opening wave mapper!\n";
+                if (!i) std::cout << "\nError opening wave mapper!\n";
             } else {
                 int retry = 0;
-                if (!i) cout << "\nWave mapper successfully opened!\n";
+                if (!i) std::cout << "\nWave mapper successfully opened!\n";
                 waveHdr.dwBufferLength = instruments_[i]->getSample(0)->getLength () * 
                                          waveFormatEx.nBlockAlign;
                 waveHdr.lpData = (LPSTR)(instruments_[i]->getSample(0)->getData ());
@@ -412,26 +411,26 @@ int Module::loadModFile() {
                                                               sizeof(WAVEHDR));
                 while ((result != MMSYSERR_NOERROR) && (retry < 10)) {
                     retry++;
-                    cout << "\nError preparing wave mapper header!";
+                    std::cout << "\nError preparing wave mapper header!";
                     switch (result) {
                         case MMSYSERR_INVALHANDLE : 
                             { 
-                            cout << "\nSpecified device handle is invalid.";
+                            std::cout << "\nSpecified device handle is invalid.";
                             break;
                             }
                         case MMSYSERR_NODRIVER    : 
                             {
-                            cout << "\nNo device driver is present.";
+                            std::cout << "\nNo device driver is present.";
                             break;
                             }
                         case MMSYSERR_NOMEM       : 
                             {
-                            cout << "\nUnable to allocate or lock memory.";
+                            std::cout << "\nUnable to allocate or lock memory.";
                             break;
                             }
                         default:
                             {
-                            cout << "\nOther unknown error " << result;
+                            std::cout << "\nOther unknown error " << result;
                             }
                     }
                     Sleep(1);
@@ -442,31 +441,31 @@ int Module::loadModFile() {
                 retry = 0;
                 while ((result != MMSYSERR_NOERROR) && (retry < 10)) {
                     retry++;
-                    cout << "\nError writing to wave mapper!";
+                    std::cout << "\nError writing to wave mapper!";
                     switch (result) {
                         case MMSYSERR_INVALHANDLE : 
                             { 
-                            cout << "\nSpecified device handle is invalid.";
+                            std::cout << "\nSpecified device handle is invalid.";
                             break;
                             }
                         case MMSYSERR_NODRIVER    : 
                             {
-                            cout << "\nNo device driver is present.";
+                            std::cout << "\nNo device driver is present.";
                             break;
                             }
                         case MMSYSERR_NOMEM       : 
                             {
-                            cout << "\nUnable to allocate or lock memory.";
+                            std::cout << "\nUnable to allocate or lock memory.";
                             break;
                             }
                         case WAVERR_UNPREPARED    : 
                             {
-                            cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
+                            std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
                             break;
                             }
                         default:
                             {
-                            cout << "\nOther unknown error " << result;
+                            std::cout << "\nOther unknown error " << result;
                             }
                     }
                     result = waveOutWrite(hWaveOut, &waveHdr, sizeof(WAVEHDR));            
@@ -590,22 +589,22 @@ int Module::loadModFile() {
                 }
             }
 #ifdef debug_mod_loader
-            //if (i == 0) 
+            if (i == 0) 
             {
                 char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-                if (!(n % nChannels_)) cout << "\n";
-                else cout << "|";
-                cout << noteStrings[iNote->note];
-                cout << ":";
-                if (iNote->instrument < 10) cout << "0";
-                cout << iNote->instrument;
+                if (!(n % nChannels_)) std::cout << "\n";
+                else std::cout << "|";
+                std::cout << noteStrings[iNote->note];
+                std::cout << ":";
+                if (iNote->instrument < 10) std::cout << "0";
+                std::cout << iNote->instrument;
 
                 if (iNote->effects[1].effect > 0xF) 
-                        cout << (char)(iNote->effects[1].effect + 55);
-                else    cout << hex[iNote->effects[1].effect];
-                cout << hex[iNote->effects[1].argument >> 4];
-                cout << hex[iNote->effects[1].argument & 0xF];
+                    std::cout << (char)(iNote->effects[1].effect + 55);
+                else    std::cout << hex[iNote->effects[1].effect];
+                std::cout << hex[iNote->effects[1].argument >> 4];
+                std::cout << hex[iNote->effects[1].argument & 0xF];
             }
 #endif
             iNote++;
@@ -615,24 +614,24 @@ int Module::loadModFile() {
     isLoaded_ = true;
 
 #ifdef debug_mod_loader
-    cout << "\n";
-    cout << "\nFilename             = " << fileName_.c_str();
-    cout << "\nis Loaded            = " << (isLoaded() ? "Yes" : "No");
-    cout << "\nnChannels            = " << nChannels_;
-    cout << "\nnInstruments         = " << nInstruments_;
-    cout << "\nnSamples             = " << nSamples_;
-    cout << "\nnPatterns            = " << nPatterns_;
-    cout << "\nSong Title           = " << songTitle_.c_str();
-    cout << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No");
-    cout << "\nSong Length          = " << songLength_;
-    cout << "\nSong Restart Positn. = " << songRestartPosition_;
-    cout << "\nNST File             = " << (nstFile ? "Yes" : "No");
-    cout << "\n.WOW File            = " << (wowFile ? "Yes" : "No");
-    cout << "\nFile Tag             = " << trackerTag_.c_str();
-    cout << "\nTotal Samples Size   = " << sampleDataSize;
-    cout << "\nptnHdr               = " << patternHeader;
-    cout << "\nptnCalc              = " << patternCalc;
-    cout << "\nRest from Divide     = " << patternDivideRest << " (should be zero)";
+    std::cout << "\n";
+    std::cout << "\nFilename             = " << fileName_.c_str();
+    std::cout << "\nis Loaded            = " << (isLoaded() ? "Yes" : "No");
+    std::cout << "\nnChannels            = " << nChannels_;
+    std::cout << "\nnInstruments         = " << nInstruments_;
+    std::cout << "\nnSamples             = " << nSamples_;
+    std::cout << "\nnPatterns            = " << nPatterns_;
+    std::cout << "\nSong Title           = " << songTitle_.c_str();
+    std::cout << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No");
+    std::cout << "\nSong Length          = " << songLength_;
+    std::cout << "\nSong Restart Positn. = " << songRestartPosition_;
+    std::cout << "\nNST File             = " << (nstFile ? "Yes" : "No");
+    std::cout << "\n.WOW File            = " << (wowFile ? "Yes" : "No");
+    std::cout << "\nFile Tag             = " << trackerTag_.c_str();
+    std::cout << "\nTotal Samples Size   = " << sampleDataSize;
+    std::cout << "\nptnHdr               = " << patternHeader;
+    std::cout << "\nptnCalc              = " << patternCalc;
+    std::cout << "\nRest from Divide     = " << patternDivideRest << " (should be zero)";
 #endif
     return 0;
 }

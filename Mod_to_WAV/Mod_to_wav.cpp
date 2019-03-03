@@ -1,3 +1,55 @@
+/*
+
+PROTRACKER effect implementation status:
+
+---------------
+#   Effect name
+---------------
+0   Arpeggio                            implemented
+1   Slide Up                            implemented
+2   Slide Down                          implemented
+3   Tone Portamento                     implemented
+4   Vibrato                             implemented
+5   Tone Portamento + Volume Slide      implemented
+6   Vibrato + Volume Slide              implemented
+7   Tremolo                             
+8   Set Panning Position                implemented
+9   Set SampleOffset                    implemented // check protracker past sample jump behaviour
+A   VolumeSlide                         implemented
+B   Position Jump                       implemented
+C   Set Volume                          implemented
+D   Pattern Break                       implemented
+E   Extended Effects                    see below
+F   Set Speed / Tempo                   implemented
+
+
+And here are the possible extended effects:
+---------------------------------
+#   Effect name
+---------------------------------
+E0  Set Filter                          not feasible
+E1  FineSlide Up                        implemented
+E2  FineSlide Down                      implemented
+E3  Glissando Control
+E4  Set Vibrato Waveform                implemented
+E5  Set FineTune                        implemented
+E6  Set/Jump to Loop                    implemented
+E7  Set Tremolo Waveform                implemented
+E8  NOT USED                            implemented (MTM panning)
+E9  Retrig Note                         implemented
+EA  Fine VolumeSlide Up                 implemented
+EB  Fine VolumeSlide Down               implemented
+EC  NoteCut                             implemented // check protracker past speed cut
+ED  NoteDelay                           implemented // to check
+EE  PatternDelay                        implemented
+EF  Invert Loop
+---------------------------------
+
+*/
+
+
+
+
 #include <cstdio>
 #include <conio.h>
 #include <windows.h>
@@ -16,19 +68,11 @@
 
 #include "Module.h"
 
-//#define debug_mixer
-
-
 //extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 /*
 bugs:
     - starsmuz.s3m pans full left
-    - ALGRHYTH.MOD: ghost notes / high pitched notes in 2nd half of song
-    - 2ND_PM.S3M: ghost notes / missing notes towards the end of the song
-    - arpeggio counter should not be reset when a new note occurs!
-    - aryx.s3m: too high notes in pattern data
-    - SSI.S3M: ghost notes towards the end
 
 
 Fixed / cleared up:
@@ -38,8 +82,20 @@ Fixed / cleared up:
       --> portamento memory fixed (hopefully)
     - menutune3.s3m: FF1 effect corrupts sample data (??)
       --> FF1 effect fixed (it did not corrupt sample data)
+    - ALGRHYTH.MOD: ghost notes / high pitched notes in 2nd half of song 
+      --> portamento bug
+    - 2ND_PM.S3M: ghost notes / missing notes towards the end of the song
+    - arpeggio counter should not be reset when a new note occurs!
+      --> at least not in FT2
+    - aryx.s3m: too high notes in pattern data
+      --> key off commands, is normal
+    - SSI.S3M: ghost notes towards the end
+      --> should be ok now
 
 */
+
+//#define debug_mixer
+
 
 const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
     "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
@@ -116,14 +172,16 @@ public:
     unsigned        arpeggioNote2;
     unsigned        vibratoWaveForm;
     unsigned        tremoloWaveForm;
+    unsigned        panbrelloWaveForm;
     int             vibratoCount;
-    int             tremeloCount;
+    int             tremoloCount;
+    int             panbrelloCount;
     unsigned        retrigCount;
     unsigned        delayCount;
+    unsigned        portaDestPeriod;
     unsigned        lastPortamentoUp;
     unsigned        lastPortamentoDown;
     unsigned        lastTonePortamento;
-    unsigned        portaDestPeriod;
     unsigned        lastVibrato;
     unsigned        lastTremolo;
     unsigned        lastVolumeSlide;
@@ -133,8 +191,10 @@ public:
     unsigned        lastFineVolumeSlideDown;
     unsigned        lastGlobalVolumeSlide;
     unsigned        lastPanningSlide;
+    unsigned        lastBpmSLide;
     unsigned        lastSampleOffset;
     unsigned        lastMultiNoteRetrig;
+    unsigned        lastExtendedEffect;
     unsigned        lastTremor;
     unsigned        lastExtraFinePortamentoUp;
     unsigned        lastExtraFinePortamentoDown;
@@ -1263,22 +1323,36 @@ int Mixer::updateNotes () {
             const unsigned& effect   = iNote->effects[fxloop].effect;
             const unsigned& argument = iNote->effects[fxloop].argument;
             /* 
-                ScreamTracker uses very little effect memory. The Qxy command
-                (multi retrig) will use the argument of a previous Order jump
-                command (Bxx) if that happens to be the previous command. Or
-                Vibrato or something.
-                Weird.
+                ScreamTracker uses very little effect memory. The following 
+                commands will take the previous non-zero effect argument as
+                their argument if their argument is zero, even if that previous
+                effect has its own effect memory or no effect memory (such as
+                the set tempo command):
+
+                Dxy: volume slide  
+                Exx: portamento down
+                Fxx: portamento up
+                Ixy: tremor
+                Jxy: arpeggio
+                Kxy: volume slide + vibrato
+                Lxy: volume slide + portamento
+                Qxy: retrig + volume change
+                Rxy: tremolo
+                Sxy: extended effects (weird!)
+                
             */
             if ( st3StyleEffectMemory_ && argument &&
                 (fxloop == (MAX_EFFECT_COLUMNS - 1)) )
             {
                 //channel.lastNonZeroFXArg = argument; 
-                channel.lastArpeggio = argument;
+                channel.lastVolumeSlide     = argument;
+                channel.lastPortamentoDown  = argument;
+                channel.lastPortamentoUp    = argument;
+                channel.lastTremor          = argument;
+                channel.lastArpeggio        = argument;
                 channel.lastMultiNoteRetrig = argument;
-                channel.lastTremor = argument;
-                channel.lastTremolo = argument;
-                channel.lastPortamentoUp = argument;
-                channel.lastPortamentoDown = argument;
+                channel.lastTremolo         = argument;
+                channel.lastExtendedEffect  = argument;
             }
             
             if ( (fxloop == (MAX_EFFECT_COLUMNS - 1)) &&
@@ -1292,13 +1366,9 @@ int Mixer::updateNotes () {
             if ( channel.oldNote.effects[fxloop].effect == ARPEGGIO ) {
                 if( ! 
                     ((channel.newNote.effects[fxloop].effect == ARPEGGIO) &&
-                    ft2StyleEffects_)
-                    )
-                setFrequency(
-                    iChannel,
-                    periodToFrequency( channel.period ) );
-            }
-            
+                    ft2StyleEffects_) )
+                    setFrequency( iChannel,periodToFrequency( channel.period ) );
+            }            
 
             switch ( effect ) {
                 case ARPEGGIO : // to be reviewed
@@ -1396,14 +1466,7 @@ int Mixer::updateNotes () {
                                 channel.lastFinePortamentoUp = xfxArg; 
                                 break;
                             }
-                            /*
-                            default: // normal portamento up
-                            {
-                                //std::cout << "^ arg = " << argument << std::endl;
-                                channel.lastPortamentoUp = argument;
-                                break;
-                            }
-                            */
+                            // default: normal portamento up
                         }
                     }
                     break;
@@ -1414,7 +1477,6 @@ int Mixer::updateNotes () {
                     if ( st3StyleEffectMemory_ )
                     {
                         unsigned lastPorta = channel.lastPortamentoDown;
-                        //argument = channel.lastNonZeroFXArg;
                         unsigned xfx = lastPorta >> 4;
                         unsigned xfxArg = lastPorta & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
@@ -1434,52 +1496,23 @@ int Mixer::updateNotes () {
                                 channel.lastFinePortamentoDown = xfxArg;
                                 break;
                             }
-                            /*
-                            default: // normal portamento down
-                            {
-                                //std::cout << "^ arg = " << argument << std::endl;
-                                channel.lastPortamentoDown = argument;
-                                break;
-                            }
-                            */
+                            // default: normal portamento down
                         }
                     }
                     break;
                 }
-                /*
-                case TONE_PORTAMENTO :
-                {
-                    if ( argument ) channel.lastTonePortamento = argument;
-                    if ( channel.pSample )// && isNewNote ) 
-                        channel.portaDestPeriod =
-                            noteToPeriod(
-                                channel.lastNote + channel.pSample->getRelativeNote(),
-                                channel.pSample->getFinetune()
-                        ); 
-                    else // maybe not necessary
-                        channel.portaDestPeriod =
-                        noteToPeriod(
-                            channel.lastNote + 0,
-                            0
-                        );
-                    break;
-                }
-                */
+                // TONE_PORTAMENTO: // handled in a separate loop
                 case SET_VIBRATO_SPEED : // XM volume column command
                 case FINE_VIBRATO :
                 case VIBRATO :
                 {
                     unsigned& lv = channel.lastVibrato;
-                    if (argument & 0xF0) 
+                    if ( argument & 0xF0 ) 
                             lv = (lv & 0xF) + (argument & 0xF0);
-                    if (argument & 0xF) 
+                    if ( argument & 0xF ) 
                             lv = (lv & 0xF0) + (argument & 0xF);
-                    //channel.lastVibrato = lv;
 
-                    if ( //(channel.vibratoWaveForm & VIBRATO_NO_RETRIG_FLAG) && 
-                        ft2StyleEffects_ &&
-                        (effect != SET_VIBRATO_SPEED) 
-                        )
+                    if ( ft2StyleEffects_ && (effect != SET_VIBRATO_SPEED) )
                     {
                         // Hxy: vibrato with x speed and y amplitude
                         channel.vibratoCount += channel.lastVibrato >> 4;
@@ -1512,12 +1545,6 @@ int Mixer::updateNotes () {
                         vibAmp *= channel.lastVibrato & 0xF;
                         vibAmp >>= 7;
                         if ( effect != FINE_VIBRATO ) vibAmp <<= 2;
-                        //vibAmp >>= 1;
-                        //unsigned frequency = periodToFrequency( channel.period );
-                        //if ( channel.vibratoCount >= 0 )    frequency += vibAmp;
-                        //else                                frequency -= vibAmp;
-                        //std::cout << "F = " << frequency << std::endl;    // DEBUG
-                        //setFrequency( iChannel,frequency );
                         unsigned period = channel.period;
                         if ( channel.vibratoCount > 0 ) period += vibAmp;
                         else                            period -= vibAmp;
@@ -1579,30 +1606,46 @@ int Mixer::updateNotes () {
                             channel.sampleOffset = channel.pSample->getLength() - 1;
                             //channel.sampleOffset = channel.pSample->getRepeatOffset();
                         }
-                        if ( isNewNote ) replay = true;
+                        if ( isNewNote ) replay = true; // not necessary?
                     }
                     break;
                 }
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
                 case VIBRATO_AND_VOLUME_SLIDE :
+                // Dxy, x = increase, y = decrease.
+                // In .S3M the volume decrease has priority if both values are 
+                // non zero and different from 0xF (which is a fine slide)
                 {
                     if ( argument ) channel.lastVolumeSlide = argument;
                     if ( st3StyleEffectMemory_ && st300FastVolSlides_ )
                     { 
+                        /*
+                            So, apparently, in .S3M:
+                            D01 = volume slide down by 1
+                            D10 = volume slide up   by 1
+                            DF0 = volume slide up   by F
+                            D0F = volume slide down by F
+                            D82 = volume slide down by 2      (!)
+                            DF1 = fine volume slide down by 1
+                            D1F = fine volume slide up   by 1
+                            DFF = fine volume slide up   by F (!)
+                        */
                         unsigned& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
                         unsigned slide2 = lastSlide & 0xF;
-                        if ( !(slide1 && slide2) ) // these are fine slides
+                        if ( slide1 & slide2 )
                         {
-                            unsigned&   v = channel.volume;
-                            if ( slide1 ) { // slide up
-                                v += slide1;
-                                if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                            } else {       // slide down
-                                if ( slide2 > v ) v = 0;
-                                else             v -= slide2;
-                            }
+                            // these are fine slides:
+                            if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
+                        }
+                        unsigned& v = channel.volume;
+                        if ( slide2 ) { // slide down comes first
+                            if ( slide2 > v ) v = 0;
+                            else             v -= slide2;
+                        } else {        // slide up
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
                         }
                     }
                     break;
@@ -1611,14 +1654,12 @@ int Mixer::updateNotes () {
                 // Warning: position jumps takes s3m marker patterns into account
                 {
                     /*
-                        FastTracker:
                         A Position jump resets the pattern start row set by a
                         pattern break that occured earlier on the same row. If
-                        you want Position Jump + Pattern Break in FT2, you need
+                        you want Position Jump + Pattern Break, you need
                         to put the position jump left of the pattern break.
-
                     */
-                    if ( ft2StyleEffects_ && patternBreak ) patternStartRow = 0;
+                    /*if ( ft2StyleEffects_ && patternBreak )*/ patternStartRow = 0;
                     patternBreak = true;
                     nextPatternDelta = (int)argument - (int)iPatternTable; 
                     break;
@@ -1645,9 +1686,86 @@ int Mixer::updateNotes () {
                 }
                 case EXTENDED_EFFECTS : 
                 {
-                    unsigned xfx = argument >> 4;
-                    unsigned xfxArg = argument & 0xF;
+                    unsigned extFXArg = argument;
+                    if ( st3StyleEffectMemory_ ) 
+                        extFXArg = channel.lastExtendedEffect;
+                    unsigned xfx    = extFXArg >> 4;
+                    unsigned xfxArg = extFXArg & 0xF;
+                    if ( st3StyleEffectMemory_ ) // remap st3 style effects
+                    {
+                        switch ( xfx )
+                        {
+                            case S3M_SET_GLISSANDO_CONTROL: 
+                            {                                    
+                                xfx = SET_GLISSANDO_CONTROL;
+                                break;
+                            }
+                            case S3M_SET_FINETUNE: 
+                            {
+                                xfx = SET_FINETUNE;
+                                break;
+                            }
+                            case S3M_SET_VIBRATO_CONTROL: 
+                            {
+                                xfx = SET_VIBRATO_CONTROL;
+                                break;
+                            }
+                            case S3M_SET_TREMOLO_CONTROL: 
+                            {
+                                xfx = SET_TREMOLO_CONTROL;
+                                break;
+                            }
+                            case S3M_SET_PANBRELLO_CONTROL: 
+                            {
+                                channel.panbrelloWaveForm = xfxArg & 0x7;
+                                xfx = NO_EFFECT;
+                                xfxArg = NO_EFFECT;
+                                break;
+                            }
+                            case S3M_FINE_PATTERN_DELAY:     // todo
+                            {
+                                xfx = NO_EFFECT;
+                                xfxArg = NO_EFFECT;
+                                break;
+                            }
+                            case S3M_SOUND_CONTROL:          // todo
+                            {
+                                xfx = NO_EFFECT;
+                                xfxArg = NO_EFFECT;
+                                break;
+                            }
+                            case S3M_SET_HIGH_SAMPLE_OFFSET: // todo
+                            {
+                                xfx = NO_EFFECT;
+                                xfxArg = NO_EFFECT;
+                                break;
+                            }
+                            case S3M_SET_PATTERN_LOOP: 
+                            {
+                                xfx = SET_PATTERN_LOOP;
+                                break;
+                            }
+                            // S3M_NOTE_CUT:      same as .mod
+                            // S3M_NOTE_DELAY:    same as .mod
+                            // S3M_PATTERN_DELAY: same as .mod
+                            case 0x0:
+                            case 0x7:
+                            case 0xF:
+                            {
+                                xfx = NO_EFFECT;
+                                xfxArg = NO_EFFECT;
+                                break;
+                            }
+                        }
+                        channel.newNote.effects[fxloop].argument = 
+                            (xfx << 4) | xfxArg;
+                    }
+                    // Protracker & XM extended effect handling:
                     switch ( xfx ) {
+                        case NO_EFFECT:
+                        {
+                            break;
+                        }
                         case FINE_PORTAMENTO_UP:
                         {
                             if ( xfxArg ) channel.lastFinePortamentoUp = xfxArg;
@@ -1664,6 +1782,7 @@ int Mixer::updateNotes () {
                         }
                         case SET_VIBRATO_CONTROL: 
                         {
+                            channel.vibratoWaveForm = xfxArg & 0x7;
                             break;
                         }
                         case SET_FINETUNE:
@@ -1696,6 +1815,7 @@ int Mixer::updateNotes () {
                         }
                         case SET_TREMOLO_CONTROL:
                         {
+                            channel.tremoloWaveForm = xfxArg & 0x7;
                             break;
                         }
                         case SET_ROUGH_PANNING: 
@@ -1734,15 +1854,11 @@ int Mixer::updateNotes () {
                             if ( st3StyleEffectMemory_ ) { 
                                 if ( !patternDelay_ ) patternDelay_ = xfxArg;
                             } else patternDelay_ = xfxArg;
-                            /*
-                            if ( !patternDelay_ ) patternDelay_ = xfxArg;
-                            else if ( ft2StyleEffects_ ) patternDelay_ = xfxArg;
-                            */
                             break;
                         }
                     }
                     break;
-                } // end of extended effects
+                } // end of S3M / XM extended effects
                 case SET_TEMPO :
                 {
                     tempo = argument;
@@ -2003,9 +2119,7 @@ int Mixer::updateEffects () {
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
 
-            /*
-                Volume slide + pitch commands: handle volume slide first
-            */
+            //    Volume slide + pitch commands: handle volume slide first
             switch ( effect ) {
                 case VOLUME_SLIDE :
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
@@ -2014,16 +2128,18 @@ int Mixer::updateEffects () {
                     unsigned& lastSlide = channel.lastVolumeSlide;
                     unsigned slide1 = lastSlide >> 4;
                     unsigned slide2 = lastSlide & 0xF;
-                    if ( !(slide1 && slide2) ) // these are s3m fine slides
+                    if ( slide1 & slide2 )
                     {
-                        unsigned&   v = channel.volume;
-                        if ( slide1 ) { // slide up
-                            v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        } else {       // slide down
-                            if ( slide2 > v ) v = 0;
-                            else v -= slide2;
-                        }
+                        // these are fine slides:
+                        if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
+                    }
+                    unsigned& v = channel.volume;
+                    if ( slide2 ) { // slide down comes first
+                        if ( slide2 > v ) v = 0;
+                        else              v -= slide2;
+                    } else {        // slide up
+                        v += slide1;
+                        if ( v > MAX_VOLUME ) v = MAX_VOLUME;
                     }
                     break;
                 }
@@ -2194,11 +2310,11 @@ int Mixer::updateEffects () {
 
                     break;
                 }
-                case TREMOLO : 
+                case TREMOLO: 
                 {
                     break;
                 }
-                case EXTENDED_EFFECTS :
+                case EXTENDED_EFFECTS:
                 {
                     effect = argument >> 4;
                     argument &= 0xF;
@@ -2323,14 +2439,14 @@ int Mixer::updateEffects () {
                             }                                   
                             break;
                         }
-                        case FUNK_REPEAT : 
+                        case INVERT_LOOP: 
                         {
                             break;
                         }
                     }
                     break;
                 }
-                case GLOBAL_VOLUME_SLIDE :
+                case GLOBAL_VOLUME_SLIDE:
                 {
                     unsigned    arg = channel.lastGlobalVolumeSlide;
                     unsigned    slide = (arg & 0xF0) >> 4;                      
@@ -2346,7 +2462,7 @@ int Mixer::updateEffects () {
                     }
                     break;
                 }
-                case PANNING_SLIDE :
+                case PANNING_SLIDE:
                 {
                     unsigned    panning = channel.panning;
                     unsigned    arg = channel.lastPanningSlide;
@@ -2364,7 +2480,7 @@ int Mixer::updateEffects () {
                     channel.panning = panning;
                     break;
                 }
-                case MULTI_NOTE_RETRIG : /* R + volume change + interval */   
+                case MULTI_NOTE_RETRIG: /* R + volume change + interval */   
                 {  
                     if ( channel.pSample ) {
                         channel.retrigCount++;
@@ -2404,7 +2520,7 @@ int Mixer::updateEffects () {
                     }
                     break;
                 }
-                case TREMOR :
+                case TREMOR:
                 {
                     break;
                 }
@@ -2431,86 +2547,85 @@ int Mixer::updateImmediateEffects () {
                         So, apparently:
                         D01 = volume slide down by 1
                         D10 = volume slide up   by 1
-                        DF1 = fine volume slide down by 1
-                        D1F = fine volume slide up   by 1
-                        DFF = fine volume slide up   by F
                         DF0 = volume slide up   by F
                         D0F = volume slide down by F
+                        D82 = volume slide down by 2      (!)
+                        DF1 = fine volume slide down by 1
+                        D1F = fine volume slide up   by 1
+                        DFF = fine volume slide up   by F (!)
                     */
                     if ( st3StyleEffectMemory_ )
                     {
-                        argument = channel.lastVolumeSlide;
-                        unsigned slide1 = argument >> 4;
-                        unsigned slide2 = argument & 0xF;
+                        unsigned& lastSlide = channel.lastVolumeSlide;
+                        unsigned slide1 = lastSlide >> 4;
+                        unsigned slide2 = lastSlide & 0xF;
                         unsigned& v = channel.volume;
-                        if ( (slide2 == 0xF) && slide1 ) 
+                        if ( slide2 == 0xF )
                         {
                             v += slide1;
                             if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        } 
-                        else if ( (slide1 == 0xF) && slide2 ) 
-                        { 
+                        } else if (slide1 == 0xF) {
                             if ( slide2 > v ) v = 0;
-                            else v -= slide2;
-                        }
+                            else              v -= slide2;
+                        } 
                     }
                     break;
                 }
                 case EXTENDED_EFFECTS :
-                    {
-                        effect = argument >> 4;
-                        argument &= 0xF;
-                        switch (effect) {
-                            case FINE_PORTAMENTO_UP :
-                                {
-                                    argument = channel.lastFinePortamentoUp;
-                                    argument <<= 2;
-                                    if ( argument < channel.period )
-                                        channel.period -= argument;
-                                    else channel.period = module->getMinPeriod();
-                                    if ( channel.period < module->getMinPeriod() )
-                                        channel.period = module->getMinPeriod();
-                                    setFrequency( iChannel,
-                                        periodToFrequency( channel.period ) );                                    
-                                    //std::cout << " F ^ by " << channel.lastFinePortamentoUp;
-                                    break;
-                                }
-                            case FINE_PORTAMENTO_DOWN :
-                                {
-                                    argument = channel.lastFinePortamentoDown;
-                                    argument <<= 2;
-                                    channel.period += argument;
-                                    if ( channel.period > module->getMaxPeriod() )
-                                        channel.period = module->getMaxPeriod();
-                                    setFrequency( iChannel,
-                                        periodToFrequency( channel.period ) );
-                                    //std::cout << " F v by " << channel.lastFinePortamentoDown;
-                                    break;
-                                }
-                            case FINE_VOLUME_SLIDE_UP :
-                                {
-                                    if (argument) 
-                                        channel.lastFineVolumeSlideUp = argument;
-                                    channel.volume += 
-                                        channel.lastFineVolumeSlideUp;
-                                    if (channel.volume > MAX_VOLUME) 
-                                        channel.volume = MAX_VOLUME;
-                                    break;
-                                }
-                            case FINE_VOLUME_SLIDE_DOWN :
-                                {
-                                    if (argument) 
-                                        channel.lastFineVolumeSlideDown = argument;
-                                    if (channel.lastFineVolumeSlideDown >= 
-                                        channel.volume) 
-                                            channel.volume = 0;
-                                    else channel.volume -= 
-                                            channel.lastFineVolumeSlideDown;
-                                    break;
-                                }
+                {
+                    effect = argument >> 4;
+                    argument &= 0xF;
+                    switch (effect) {
+                        case FINE_PORTAMENTO_UP :
+                        {
+                            argument = channel.lastFinePortamentoUp;
+                            argument <<= 2;
+                            if ( argument < channel.period )
+                                channel.period -= argument;
+                            else channel.period = module->getMinPeriod();
+                            if ( channel.period < module->getMinPeriod() )
+                                channel.period = module->getMinPeriod();
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );                                    
+                            //std::cout << " F ^ by " << channel.lastFinePortamentoUp;
+                            break;
                         }
-                        break;
+                        case FINE_PORTAMENTO_DOWN :
+                        {
+                            argument = channel.lastFinePortamentoDown;
+                            argument <<= 2;
+                            channel.period += argument;
+                            if ( channel.period > module->getMaxPeriod() )
+                                channel.period = module->getMaxPeriod();
+                            setFrequency( iChannel,
+                                periodToFrequency( channel.period ) );
+                            //std::cout << " F v by " << channel.lastFinePortamentoDown;
+                            break;
+                        }
+                        case FINE_VOLUME_SLIDE_UP :
+                        {
+                            if (argument) 
+                                channel.lastFineVolumeSlideUp = argument;
+                            channel.volume += 
+                                channel.lastFineVolumeSlideUp;
+                            if (channel.volume > MAX_VOLUME) 
+                                channel.volume = MAX_VOLUME;
+                            break;
+                        }
+                        case FINE_VOLUME_SLIDE_DOWN :
+                        {
+                            if (argument) 
+                                channel.lastFineVolumeSlideDown = argument;
+                            if (channel.lastFineVolumeSlideDown >= 
+                                channel.volume) 
+                                    channel.volume = 0;
+                            else channel.volume -= 
+                                    channel.lastFineVolumeSlideDown;
+                            break;
+                        }
                     }
+                    break;
+                }
                 case EXTRA_FINE_PORTAMENTO :
                 {
                     effect = argument >> 4;
@@ -2561,6 +2676,13 @@ int Mixer::updateBpm () {
     if (tick < tempo) { 
         updateEffects ();         
     } else { 
+        tick = 0;
+        if ( !patternDelay_ ) updateNotes();
+        else                  patternDelay_--;
+        updateImmediateEffects();
+
+
+        /*
         if ( patternDelay_ ) { 
             patternDelay_--; 
         } else {
@@ -2568,6 +2690,7 @@ int Mixer::updateBpm () {
         }
         tick = 0;
         updateImmediateEffects();
+        */
 
         /*
         tick = 0; 
@@ -2747,7 +2870,9 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
         //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
-        "D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
+        "D:\\MODS\\M2W_BUGTEST\\ParamMemory2.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
         "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         "D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",

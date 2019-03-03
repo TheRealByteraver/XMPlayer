@@ -609,64 +609,70 @@ int Module::loadS3mFile() {
     for ( unsigned iPtn = 0; iPtn < /*s3mFileHeader.nPatterns*/nPatterns_; iPtn++ )
     {
         memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
-        char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
-        unsigned packedSize = *((unsigned short *)s3mPtn);
-        if( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
+        if ( ptnParaPtrs[iPtn] ) // empty patterns are not stored
         {
+            char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
+            unsigned packedSize = *((unsigned short *)s3mPtn);
+            if ( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
+            {
+
 #ifdef debug_s3m_loader
-            std::cout << std::endl
-                << "Missing pattern data while reading file, exiting!";
+                std::cout << std::endl
+                    << "Missing pattern data while reading file, exiting!"
+                    << std::endl;
 #endif
-            delete[] unPackedPtn;
-            delete[] buf;
-            return 0;
-        }
-        unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
-        int row = 0;
-        for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
-                (row < S3M_ROWS_PER_PATTERN); ) {
-            char pack = *ptnPtr++;
-            if ( pack == S3M_PTN_END_OF_ROW_MARKER ) row++;                
-            else { 
-                unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK]; // may return 255               
-                unsigned char note = 0;
-                unsigned char inst = 0;
-                unsigned char volc = 0;
-                unsigned char fx   = 0;
-                unsigned char fxp  = 0;
-                bool newNote = false;
-                if ( pack & S3M_PTN_NOTE_INST_FLAG )
-                {
-                    newNote = true;
-                    note = *ptnPtr++;
-                    inst = *ptnPtr++;
-                }
-                // we add 0x10 to the volume column so we now an effect is there
-                if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
-                if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
-                {
-                    fx = *ptnPtr++;
-                    fxp = *ptnPtr++;
-                }
-                if ( chn < nChannels_ )
-                {
-                    S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                    if ( newNote )
+                delete[] unPackedPtn;
+                delete[] buf;
+                return 0;
+            }
+            unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
+            int row = 0;
+            for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
+                (row < S3M_ROWS_PER_PATTERN); )
+            {
+                char pack = *ptnPtr++;
+                if ( pack == S3M_PTN_END_OF_ROW_MARKER ) row++;
+                else {
+                    unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK]; // may return 255               
+                    unsigned char note = 0;
+                    unsigned char inst = 0;
+                    unsigned char volc = 0;
+                    unsigned char fx = 0;
+                    unsigned char fxp = 0;
+                    bool newNote = false;
+                    if ( pack & S3M_PTN_NOTE_INST_FLAG )
                     {
-                        if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
-                        else if ( note != 0xFF ) 
-                        {
-                            unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
-                            if ( unpackedNote.note > S3M_MAX_NOTE )
-                                unpackedNote.note = 0;
-                        } else note = 0; // added: 0 or 255 means no note
+                        newNote = true;
+                        note = *ptnPtr++;
+                        inst = *ptnPtr++;
                     }
-                    unpackedNote.inst = inst;
-                    unpackedNote.volc = volc;
-                    unpackedNote.fx = fx;
-                    unpackedNote.fxp = fxp;
-                }                
-            }            
+                    // we add 0x10 to the volume column so we now an effect is there
+                    if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
+                    if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
+                    {
+                        fx = *ptnPtr++;
+                        fxp = *ptnPtr++;
+                    }
+                    if ( chn < nChannels_ )
+                    {
+                        S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
+                        if ( newNote )
+                        {
+                            if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
+                            else if ( note != 0xFF )
+                            {
+                                unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
+                                if ( unpackedNote.note > S3M_MAX_NOTE )
+                                    unpackedNote.note = 0;
+                            } else note = 0; // added: 0 or 255 means no note
+                        }
+                        unpackedNote.inst = inst;
+                        unpackedNote.volc = volc;
+                        unpackedNote.fx = fx;
+                        unpackedNote.fxp = fxp;
+                    }
+                }
+            }
         }
 #ifdef debug_s3m_loader
 #ifdef debug_s3m_show_patterns
@@ -677,7 +683,7 @@ int Module::loadS3mFile() {
             for ( unsigned chn = 0; chn < nChannels_; chn++ )
                 if ( chn < 8 )
                 {
-                    UnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
+                    S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
                     if ( unpackedNote.note ) {
                         if( unpackedNote.note < (12 * 11) )
                             std::cout << notetable[unpackedNote.note];
@@ -909,12 +915,14 @@ int Module::loadS3mFile() {
                 case 18: // R
                 {
                     iNote->effects[1].effect = TREMOLO;
-                        break;
+                    break;
                 }
                 case 19: // extended effects 'S'
                 {
-                    int xfxp = unPackedNote->fxp & 0xF;
                     iNote->effects[1].effect = EXTENDED_EFFECTS;
+                    // moved parser to player because of effect memory handling
+                    /*
+                    int xfxp = unPackedNote->fxp & 0xF;
                     iNote->effects[1].argument = xfxp;
                     switch( unPackedNote->fxp >> 4 )
                     { 
@@ -942,12 +950,12 @@ int Module::loadS3mFile() {
                         case 8:
                         {
                             iNote->effects[1].effect = SET_FINE_PANNING;
-                            iNote->effects[1].argument = xfxp * 17;
+                            iNote->effects[1].argument = xfxp * 16; // * 17;
                             break;
                         }
                         case 10: // stereo control, for panic.s3m :s
                         {
-                            /*
+                            
                             Signed rough panning, meaning:
                                  0 is center
                                 -8 is full left 
@@ -979,11 +987,11 @@ int Module::loadS3mFile() {
                             else nibble = nibble + 8 
 
                             This is according to fs3mdoc.txt
-                            */
+                            
                             iNote->effects[1].effect = SET_FINE_PANNING;
                             if ( xfxp > 7 ) xfxp -= 8;
                             else            xfxp += 8;
-                            iNote->effects[1].argument = xfxp * 17;
+                            iNote->effects[1].argument = xfxp * 16; // * 17;
                             break;
                         }
                         case 11:
@@ -992,7 +1000,8 @@ int Module::loadS3mFile() {
                             break;
                         }
                         // other extended effect commands are again same as in .mod
-                    }                    
+                    }       
+                    */
                     break;
                 }
                 case 20: // T
@@ -1039,6 +1048,11 @@ int Module::loadS3mFile() {
                     iNote->effects[1].argument <<= 1;
                     if ( iNote->effects[1].argument > 0xFF )
                         iNote->effects[1].argument = 0xFF;
+                    break;
+                }
+                case 25: // Y
+                {
+                    iNote->effects[1].effect = PANBRELLO;
                     break;
                 }
                 default: // unknown effect command

@@ -71,8 +71,21 @@
 #define NOTE_CUT                            0xC // XM effect EC
 #define NOTE_DELAY                          0xD // XM effect ED
 #define PATTERN_DELAY                       0xE // XM effect EE
-#define FUNK_REPEAT                         0xF // XM effect EF, end of extended effects
-#define SET_TEMPO                           0xF
+#define INVERT_LOOP                         0xF // XM effect EF, end of XM extended effects
+#define S3M_SET_GLISSANDO_CONTROL           0x1 // S3M effect S1
+#define S3M_SET_FINETUNE                    0x2 // S3M effect S2
+#define S3M_SET_VIBRATO_CONTROL             0x3 // S3M effect S3
+#define S3M_SET_TREMOLO_CONTROL             0x4 // S3M effect S4
+#define S3M_SET_PANBRELLO_CONTROL           0x5 // S3M effect S5
+#define S3M_FINE_PATTERN_DELAY              0x6 // S3M effect S6
+#define S3M_SET_ROUGH_PANNING               0x8 // S3M effect S8
+#define S3M_SOUND_CONTROL                   0x9 // S3M effect S9
+#define S3M_SET_HIGH_SAMPLE_OFFSET          0xA // S3M effect SA
+#define S3M_SET_PATTERN_LOOP                0xB // S3M effect SB
+#define S3M_NOTE_CUT                        0xC // S3M effect SC
+#define S3M_NOTE_DELAY                      0xD // S3M effect SD
+#define S3M_PATTERN_DELAY                   0xE // S3M effect SE, end of S3M extended effects
+#define SET_TEMPO                           0xF 
 #define SET_GLOBAL_VOLUME                   0x10// XM effect G
 #define GLOBAL_VOLUME_SLIDE                 0x11// XM effect H
 #define SET_ENVELOPE_POSITION               0x15// XM effect L
@@ -82,6 +95,7 @@
 #define EXTRA_FINE_PORTAMENTO               0x21// XM effect X
 #define EXTRA_FINE_PORTAMENTO_UP            0x1 // XM effect X1
 #define EXTRA_FINE_PORTAMENTO_DOWN          0x2 // XM effect X2
+#define PANBRELLO                           0x22// S3M effect Y 
 
 // internal remapped effects for the player
 #define SET_BPM                             0x24  // after effect "Z" for XM safety

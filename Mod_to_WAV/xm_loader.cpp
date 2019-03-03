@@ -11,11 +11,11 @@
 
 #include "module.h"
 
-using namespace std;
+//using namespace std;
 
-//#define debug_xm_loader
-//#define debug_xm_show_patterns
-//#define debug_xm_play_samples
+#define debug_xm_loader
+#define debug_xm_show_patterns
+#define debug_xm_play_samples
 
 #ifdef debug_xm_loader
 #include <bitset>
@@ -133,20 +133,20 @@ int Module::loadXmFile()
     XmHeader                    *header;
     XmPatternHeader             *pattern;
     char                        *buf, *bufp;
-    ifstream::pos_type          fileSize = 0;
-    ifstream                    xmFile(fileName_, ios::in|ios::binary|ios::ate);
+    std::ifstream::pos_type     fileSize = 0;
+    std::ifstream               xmFile(fileName_,std::ios::in| std::ios::binary| std::ios::ate);
     
     isLoaded_ = false;
     // load file into byte buffer and then work on that buffer only
     if ( !xmFile.is_open() ) {
-        std::cout << "can't open file";
+         std::cout << "can't open file";
         return 0; // exit on I/O error
     }
     fileSize = xmFile.tellg();
     buf = new char [(unsigned)fileSize];
-    xmFile.seekg (0, ios::beg);
-    xmFile.read (buf, fileSize);
-    xmFile.close ();
+    xmFile.seekg( 0,std::ios::beg );
+    xmFile.read( buf, fileSize );
+    xmFile.close();
 
     // now start reading from memory
     // ultra simple error checking
@@ -163,23 +163,24 @@ int Module::loadXmFile()
         ) {
 #ifdef debug_xm_loader
         char *hex = "0123456789ABCDEF";
-        cout << "\nXm file header:";
-        cout << "\nID                   = ";
-        if (header->id > 0xF) cout << hex[(header->id >> 4) & 0xF];
-        cout << hex[header->id & 0xF];
-        cout << "\nVersion              = ";
-        if (header->version > 0xFFF) cout << hex[(header->version >> 12) & 0xF];
-        if (header->version > 0xFF ) cout << hex[(header->version >>  8) & 0xF] << ".";
-        if (header->version > 0xF  ) cout << hex[(header->version >>  4) & 0xF];
-        cout << hex[header->version & 0xF];
-        cout << "\nSong length          = " << header->songLength;
-        cout << "\nNr of channels       = " << header->nChannels;
-        cout << "\nNr of instruments    = " << header->nInstruments;
-        cout << "\nNr of Patterns       = " << header->nPatterns;
-        cout << "\nDefault Bpm          = " << header->defaultBpm;
-        cout << "\nDefault Tempo        = " << header->defaultTempo;
-        cout << "\nXM MAX Tempo         = " << XM_MAX_TEMPO;
-        cout << "\nError reading header, this is not an xm file.\n";
+        std::cout << "\nXm file header:";
+        std::cout << "\nID                   = ";
+        
+        if (header->id > 0xF) std::cout << hex[(header->id >> 4) & 0xF];
+        std::cout << hex[header->id & 0xF];
+        std::cout << "\nVersion              = ";
+        if (header->version > 0xFFF) std::cout << hex[(header->version >> 12) & 0xF];
+        if (header->version > 0xFF ) std::cout << hex[(header->version >>  8) & 0xF] << ".";
+        if (header->version > 0xF  ) std::cout << hex[(header->version >>  4) & 0xF];
+        std::cout << hex[header->version & 0xF];
+        std::cout << "\nSong length          = " << header->songLength;
+        std::cout << "\nNr of channels       = " << header->nChannels;
+        std::cout << "\nNr of instruments    = " << header->nInstruments;
+        std::cout << "\nNr of Patterns       = " << header->nPatterns;
+        std::cout << "\nDefault Bpm          = " << header->defaultBpm;
+        std::cout << "\nDefault Tempo        = " << header->defaultTempo;
+        std::cout << "\nXM MAX Tempo         = " << XM_MAX_TEMPO;
+        std::cout << "\nError reading header, this is not an xm file.\n";
 #endif
         delete [] buf;
         return 0;
@@ -206,23 +207,23 @@ int Module::loadXmFile()
     songLength_             = header->songLength;
     songRestartPosition_    = header->songRestartPosition;
 #ifdef debug_xm_loader
-    cout << "\nXM Module title          = " << songTitle_.c_str();
-    cout << "\nXM file Tracker ID       = " << trackerTag_.c_str();
-    cout << "\n# Channels               = " << header->nChannels;
-    cout << "\n# Instruments            = " << header->nInstruments;
-    cout << "\n# Patterns               = " << header->nPatterns;
-    cout << "\nDefault Tempo            = " << header->defaultTempo;
-    cout << "\nDefault Bpm              = " << header->defaultBpm;
-    cout << "\nSong Length              = " << header->songLength;
-    cout << "\nSong restart position    = " << header->songRestartPosition;
-    cout << "\nHeader Size              = " << header->headerSize;
-    cout << "\nFrequency / period system: " << (useLinearFrequencies_ ? "Linear" : "Amiga");
-    cout << "\nSize of XmHeader                     = " << sizeof(XmHeader);
-    cout << "\nSize of XmPatternHeader              = " << sizeof(XmPatternHeader);
-    cout << "\nSize of XmInstrumentHeaderPrimary    = " << sizeof(XmInstrumentHeaderPrimary);
-    cout << "\nSize of XmEnvelopePoint              = " << sizeof(XmEnvelopePoint);
-    cout << "\nSize of XmInstrumentHeaderSecondary  = " << sizeof(XmInstrumentHeaderSecondary);
-    cout << "\nSize of XmSampleHeader               = " << sizeof(XmSampleHeader) << "\n";
+    std::cout << "\nXM Module title          = " << songTitle_.c_str();
+    std::cout << "\nXM file Tracker ID       = " << trackerTag_.c_str();
+    std::cout << "\n# Channels               = " << header->nChannels;
+    std::cout << "\n# Instruments            = " << header->nInstruments;
+    std::cout << "\n# Patterns               = " << header->nPatterns;
+    std::cout << "\nDefault Tempo            = " << header->defaultTempo;
+    std::cout << "\nDefault Bpm              = " << header->defaultBpm;
+    std::cout << "\nSong Length              = " << header->songLength;
+    std::cout << "\nSong restart position    = " << header->songRestartPosition;
+    std::cout << "\nHeader Size              = " << header->headerSize;
+    std::cout << "\nFrequency / period system: " << (useLinearFrequencies_ ? "Linear" : "Amiga");
+    std::cout << "\nSize of XmHeader                     = " << sizeof(XmHeader);
+    std::cout << "\nSize of XmPatternHeader              = " << sizeof(XmPatternHeader);
+    std::cout << "\nSize of XmInstrumentHeaderPrimary    = " << sizeof(XmInstrumentHeaderPrimary);
+    std::cout << "\nSize of XmEnvelopePoint              = " << sizeof(XmEnvelopePoint);
+    std::cout << "\nSize of XmInstrumentHeaderSecondary  = " << sizeof(XmInstrumentHeaderSecondary);
+    std::cout << "\nSize of XmSampleHeader               = " << sizeof(XmSampleHeader) << "\n";
     //_getch();
 #endif
     // initialize xm specific variables:
@@ -259,11 +260,11 @@ int Module::loadXmFile()
 #ifdef debug_xm_loader
 #define SHOW_PATTERN_NO 0
         if (iPattern == (SHOW_PATTERN_NO + 1)) _getch();
-        cout << "\nPattern # " << iPattern << ":";
-        cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-        cout << "\nPattern # Rows          = " << pattern->nRows;
-        cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-        cout << "\nPattern Data Size       = " << pattern->patternSize;
+        std::cout << "\nPattern # " << iPattern << ":";
+        std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
+        std::cout << "\nPattern # Rows          = " << pattern->nRows;
+        std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
+        std::cout << "\nPattern Data Size       = " << pattern->patternSize;
 #endif
         if (/*pattern->pack ||*/ (pattern->nRows > XM_MAX_PATTERN_ROWS)) {
             delete [] buf;
@@ -287,15 +288,15 @@ int Module::loadXmFile()
                     iNote->note         = *((unsigned char *)bufp++);
 #ifdef debug_xm_loader
                     if ( iNote->note > XM_KEY_OFF ) {
-                        cout << "\nPattern # " << iPattern << ":";
-                        cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-                        cout << "\nPattern # Rows          = " << pattern->nRows;
-                        cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-                        cout << "\nPattern Data Size       = " << pattern->patternSize;
-                        cout << "\nRow nr                  = " << n / pattern->nRows;
-                        cout << "\nColumn nr               = " << n % pattern->nRows;
-                        cout << "\nIllegal note            = " << iNote->note;
-                        cout << "\n";
+                        std::cout << "\nPattern # " << iPattern << ":";
+                        std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
+                        std::cout << "\nPattern # Rows          = " << pattern->nRows;
+                        std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
+                        std::cout << "\nPattern Data Size       = " << pattern->patternSize;
+                        std::cout << "\nRow nr                  = " << n / pattern->nRows;
+                        std::cout << "\nColumn nr               = " << n % pattern->nRows;
+                        std::cout << "\nIllegal note            = " << iNote->note;
+                        std::cout << "\n";
                         _getch();
                     }
 #endif
@@ -316,15 +317,15 @@ int Module::loadXmFile()
                 iNote->note = pack;
 #ifdef debug_xm_loader
                 if ( iNote->note > XM_KEY_OFF ) {
-                    cout << "\nPattern # " << iPattern << ":";
-                    cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-                    cout << "\nPattern # Rows          = " << pattern->nRows;
-                    cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-                    cout << "\nPattern Data Size       = " << pattern->patternSize;
-                    cout << "\nRow nr                  = " << n / pattern->nRows;
-                    cout << "\nColumn nr               = " << n % pattern->nRows;
-                    cout << "\nIllegal note            = " << iNote->note;
-                    cout << "\n";
+                    std::cout << "\nPattern # " << iPattern << ":";
+                    std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
+                    std::cout << "\nPattern # Rows          = " << pattern->nRows;
+                    std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
+                    std::cout << "\nPattern Data Size       = " << pattern->patternSize;
+                    std::cout << "\nRow nr                  = " << n / pattern->nRows;
+                    std::cout << "\nColumn nr               = " << n % pattern->nRows;
+                    std::cout << "\nIllegal note            = " << iNote->note;
+                    std::cout << "\n";
                     _getch();
                 }
 #endif                
@@ -466,32 +467,32 @@ int Module::loadXmFile()
                 int row = n / nChannels_;
                 int chn = n % nChannels_;
                 if ( chn == 0 ) { 
-                    std::cout << std::endl
+                     std::cout << std::endl
                         << std::hex << std::setw( 2 ) << row << "/"
                         << std::setw( 2 ) << pattern->nRows << "|";
                 } else if ( chn < 16 )
                 {
-                    std::cout << noteStrings[iNote->note] << "|";
-                } //else std::cout << std::endl;
-                std::cout << std::dec;
+                     std::cout << noteStrings[iNote->note] << "|";
+                } //else  std::cout << std::endl;
+                 std::cout << std::dec;
                 /*
                 char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-                if ((!(n % 5)) && (nChannels_ > 5)) cout << "\n";
-                if (!(n % nChannels_)) cout << "\n";
-                else cout << "|";
-                cout << noteStrings[iNote->note];
-                cout << ":";
-                if (iNote->instrument < 10) cout << "0";
-                cout << iNote->instrument;
-                if (iNote->effects[0].effect < 0x10) cout << "0";
-                cout << hex[iNote->effects[0].effect];
-                cout << hex[iNote->effects[0].argument >> 4];
-                cout << hex[iNote->effects[0].argument & 0xF];
-                if (iNote->effects[1].effect < 0x10) cout << "0";
-                cout << hex[iNote->effects[1].effect];
-                cout << hex[iNote->effects[1].argument >> 4];
-                cout << hex[iNote->effects[1].argument & 0xF];
+                if ((!(n % 5)) && (nChannels_ > 5)) std::cout << "\n";
+                if (!(n % nChannels_)) std::cout << "\n";
+                elsestd::cout << "|";
+                std::cout << noteStrings[iNote->note];
+                std::cout << ":";
+                if (iNote->instrument < 10) std::cout << "0";
+                std::cout << iNote->instrument;
+                if (iNote->effects[0].effect < 0x10) std::cout << "0";
+                std::cout << hex[iNote->effects[0].effect];
+                std::cout << hex[iNote->effects[0].argument >> 4];
+                std::cout << hex[iNote->effects[0].argument & 0xF];
+                if (iNote->effects[1].effect < 0x10) std::cout << "0";
+                std::cout << hex[iNote->effects[1].effect];
+                std::cout << hex[iNote->effects[1].argument >> 4];
+                std::cout << hex[iNote->effects[1].argument & 0xF];
                 */
             }
 #endif
@@ -533,12 +534,12 @@ int Module::loadXmFile()
         instrument.name = instrumentName;
 
 #ifdef debug_xm_loader
-        cout << "\n\nInstrument header " << iInstrument << " size = " << instrumentHeader1->headerSize;
-        cout << "\nInstrument name          = " << instrument.name.c_str();
-        cout << "\nInstrument type (0)      = " << (int)(instrumentHeader1->type);
-        cout << "\nNr of samples            = " << instrument.nSamples;
+        std::cout << "\n\nInstrument header " << iInstrument << " size = " << instrumentHeader1->headerSize;
+        std::cout << "\nInstrument name          = " << instrument.name.c_str();
+        std::cout << "\nInstrument type (0)      = " << (int)(instrumentHeader1->type);
+        std::cout << "\nNr of samples            = " << instrument.nSamples;
         if (instrument.nSamples)
-            cout << "\nSample Header Size       = " << instrumentHeader2->sampleHeaderSize;          
+            std::cout << "\nSample Header Size       = " << instrumentHeader2->sampleHeaderSize;          
 #endif
         if (instrument.nSamples) { 
             unsigned        sampleOffset;
@@ -553,7 +554,7 @@ int Module::loadXmFile()
                 instrument.panningEnvelope[i].x = instrumentHeader2->panningEnvelope[i].x;
                 instrument.panningEnvelope[i].y = instrumentHeader2->panningEnvelope[i].y;
 #ifdef debug_xm_loader
-                cout << "\nEnveloppe point #" << i << ": "
+                std::cout << "\nEnveloppe point #" << i << ": "
                     << instrument.volumeEnvelope[i].x << "," 
                     << instrument.volumeEnvelope[i].y;
 #endif
@@ -574,11 +575,11 @@ int Module::loadXmFile()
             instrument.vibratoDepth     = instrumentHeader2->vibratoDepth;
             instrument.vibratoRate      = instrumentHeader2->vibratoRate;
 #ifdef debug_xm_loader
-            cout << "\nSample header size for this instrument = ";
-            cout << instrumentHeader2->sampleHeaderSize;
-            cout << "\n";
+            std::cout << "\nSample header size for this instrument = ";
+            std::cout << instrumentHeader2->sampleHeaderSize;
+            std::cout << "\n";
             for (unsigned i = 0; i < MAXIMUM_NOTES; i++)
-                cout << instrument.sampleForNote[i] << " ";
+                std::cout << instrument.sampleForNote[i] << " ";
 #endif
             for (unsigned iSample = 0; iSample < instrument.nSamples; iSample++) {
                 XmSampleHeader  *xmSample = (XmSampleHeader *)bufp;
@@ -607,24 +608,24 @@ int Module::loadXmFile()
                 samples[iSample].isPingpongSample = 
                     ((xmSample->type & XM_PINGPONG_LOOP_FLAG) ? true : false);
                 if (xmSample->compression == XM_ADPCM_COMPRESSION) {
-                    cout << "\n\nADPCM compressed sample data is not supported yet!\n";
+                    std::cout << "\n\nADPCM compressed sample data is not supported yet!\n";
                     delete [] buf;
                     return 0;
                 }
 #ifdef debug_xm_loader
-                cout << "\n\nSample # " << iSample << ":";
-                cout << "\nName             = " << samples[iSample].name.c_str();
-                cout << "\nFinetune         = " << samples[iSample].finetune;
-                cout << "\nLength           = " << samples[iSample].length;
-                cout << "\nRepeatLength     = " << samples[iSample].repeatLength;
-                cout << "\nRepeatOffset     = " << samples[iSample].repeatOffset;
-                cout << "\nRepeatSample     = " << samples[iSample].isRepeatSample;
-                cout << "\nVolume           = " << samples[iSample].volume;
-                cout << "\nRelative Note    = " << samples[iSample].relativeNote;
-                cout << "\nPanning          = " << samples[iSample].panning;
-                cout << "\n16 bit sample    = " << 
+                std::cout << "\n\nSample # " << iSample << ":";
+                std::cout << "\nName             = " << samples[iSample].name.c_str();
+                std::cout << "\nFinetune         = " << samples[iSample].finetune;
+                std::cout << "\nLength           = " << samples[iSample].length;
+                std::cout << "\nRepeatLength     = " << samples[iSample].repeatLength;
+                std::cout << "\nRepeatOffset     = " << samples[iSample].repeatOffset;
+                std::cout << "\nRepeatSample     = " << samples[iSample].isRepeatSample;
+                std::cout << "\nVolume           = " << samples[iSample].volume;
+                std::cout << "\nRelative Note    = " << samples[iSample].relativeNote;
+                std::cout << "\nPanning          = " << samples[iSample].panning;
+                std::cout << "\n16 bit sample    = " << 
                     ((samples[iSample].dataType == SIGNED_SIXTEEN_BIT_SAMPLE) ? "Yes" : "No");
-                cout << "\nPing Loop active = " << 
+                std::cout << "\nPing Loop active = " << 
                     (samples[iSample].isPingpongSample ? "Yes" : "No");
 #endif
             }
@@ -654,32 +655,32 @@ int Module::loadXmFile()
                         signed char *pd = ps;
 #ifdef debug_xm_loader
 #define SHOWNR 19
-                        cout << "\nStart: " << (int)oldSample8 << "\n";
+                        std::cout << "\nStart: " << (int)oldSample8 << "\n";
                         for (unsigned iData = 0; iData < SHOWNR; iData++) {
                             SHORT   t = (SHORT)ps[iData];
-                            if (t >= 0) cout << " ";
-                            if (abs(t) < 100) cout << " ";
-                            if (abs(t) < 10 ) cout << " ";
-                            cout << t;
+                            if (t >= 0) std::cout << " ";
+                            if (abs(t) < 100) std::cout << " ";
+                            if (abs(t) < 10 ) std::cout << " ";
+                            std::cout << t;
                             //cout << " ";
                         }
-                        cout << "\n";
+                        std::cout << "\n";
 #endif
                         for (unsigned iData = 0; iData < samples[iSample].length; iData++) {
                             newSample8 = *ps++ + oldSample8;
 #ifdef debug_xm_loader
                             if (iData < SHOWNR) {
                                 SHORT   t = newSample8;
-                                if (t >= 0) cout << " ";
-                                if (abs(t) < 100) cout << " ";
-                                if (abs(t) < 10 ) cout << " ";
-                                cout << t;
+                                if (t >= 0) std::cout << " ";
+                                if (abs(t) < 100) std::cout << " ";
+                                if (abs(t) < 10 ) std::cout << " ";
+                                std::cout << t;
                                 //cout << " ";
                             } 
-                            if (iData == SHOWNR) cout << "\n";
+                            if (iData == SHOWNR) std::cout << "\n";
                             /*
-                            if      (newSample8 < -128) { cout << " " << newSample8; *pd++ = -128; }
-                            else if (newSample8 >  127) { cout << " " << newSample8; *pd++ =  127; }
+                            if      (newSample8 < -128) {std::cout << " " << newSample8; *pd++ = -128; }
+                            else if (newSample8 >  127) {std::cout << " " << newSample8; *pd++ =  127; }
                             else */
 #endif
                             *pd++      = newSample8; 
@@ -689,7 +690,7 @@ int Module::loadXmFile()
                     instrument.samples[iSample] = new Sample;
                     instrument.samples[iSample]->load(samples[iSample]);
 #ifdef debug_xm_loader
-                    cout << "\n"; 
+                    std::cout << "\n"; 
                     // _getch();
 #endif
                 } else {
@@ -705,11 +706,11 @@ int Module::loadXmFile()
                     WAVEFORMATEX    waveFormatEx;
                     MMRESULT        result;
                     WAVEHDR         waveHdr;
-//                    cout << "\nFile size                = " << fileSize;
-//                    cout << "\nFile offset              = " << (unsigned)(bufp - buf);
-//                    cout << "\nSample data offset       = " << (unsigned)((char *)samples[iSample].data - buf);
-//                    cout << "\nSample length (bytes)    = " << samples[iSample].length;
-//                    cout << "\nSample length (samples)  = " << samples[iSample].length;
+//                    std::cout << "\nFile size                = " << fileSize;
+//                    std::cout << "\nFile offset              = " << (unsigned)(bufp - buf);
+//                    std::cout << "\nSample data offset       = " << (unsigned)((char *)samples[iSample].data - buf);
+//                    std::cout << "\nSample length (bytes)    = " << samples[iSample].length;
+//                    std::cout << "\nSample length (samples)  = " << samples[iSample].length;
                     waveFormatEx.wFormatTag     = WAVE_FORMAT_PCM;
                     waveFormatEx.nChannels      = 1;
                     waveFormatEx.nSamplesPerSec = 8000; // frequency
@@ -723,11 +724,11 @@ int Module::loadXmFile()
                     result = waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveFormatEx, 
                                          0, 0, CALLBACK_NULL);
                     if (result != MMSYSERR_NOERROR) {
-                        if (!iInstrument) cout << "\nError opening wave mapper!\n";
+                        if (!iInstrument) std::cout << "\nError opening wave mapper!\n";
                     } else {
                         int retry = 0;
-                        if (!iInstrument) cout << "\nWave mapper successfully opened!\n";
-                        cout << "\nPlaying sample # " << iSample;
+                        if (!iInstrument) std::cout << "\nWave mapper successfully opened!\n";
+                        std::cout << "\nPlaying sample # " << iSample;
                         waveHdr.dwBufferLength = 
                             instrument.samples[iSample]->getLength ()                  
                             * waveFormatEx.nBlockAlign;
@@ -739,26 +740,26 @@ int Module::loadXmFile()
                                                                       sizeof(WAVEHDR));
                         while ((result != MMSYSERR_NOERROR) && (retry < 10)) {
                             retry++;
-                            cout << "\nError preparing wave mapper header!";
+                            std::cout << "\nError preparing wave mapper header!";
                             switch (result) {
                                 case MMSYSERR_INVALHANDLE : 
                                     { 
-                                    cout << "\nSpecified device handle is invalid.";
+                                    std::cout << "\nSpecified device handle is invalid.";
                                     break;
                                     }
                                 case MMSYSERR_NODRIVER    : 
                                     {
-                                    cout << "\nNo device driver is present.";
+                                    std::cout << "\nNo device driver is present.";
                                     break;
                                     }
                                 case MMSYSERR_NOMEM       : 
                                     {
-                                    cout << "\nUnable to allocate or lock memory.";
+                                    std::cout << "\nUnable to allocate or lock memory.";
                                     break;
                                     }
                                 default:
                                     {
-                                    cout << "\nOther unknown error " << result;
+                                    std::cout << "\nOther unknown error " << result;
                                     }
                             }
                             Sleep(1);
@@ -769,31 +770,31 @@ int Module::loadXmFile()
                         retry = 0;
                         while ((result != MMSYSERR_NOERROR) && (retry < 10)) {
                             retry++;
-                            cout << "\nError writing to wave mapper!";
+                            std::cout << "\nError writing to wave mapper!";
                             switch (result) {
                                 case MMSYSERR_INVALHANDLE : 
                                     { 
-                                    cout << "\nSpecified device handle is invalid.";
+                                    std::cout << "\nSpecified device handle is invalid.";
                                     break;
                                     }
                                 case MMSYSERR_NODRIVER    : 
                                     {
-                                    cout << "\nNo device driver is present.";
+                                    std::cout << "\nNo device driver is present.";
                                     break;
                                     }
                                 case MMSYSERR_NOMEM       : 
                                     {
-                                    cout << "\nUnable to allocate or lock memory.";
+                                    std::cout << "\nUnable to allocate or lock memory.";
                                     break;
                                     }
                                 case WAVERR_UNPREPARED    : 
                                     {
-                                    cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
+                                    std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
                                     break;
                                     }
                                 default:
                                     {
-                                    cout << "\nOther unknown error " << result;
+                                    std::cout << "\nOther unknown error " << result;
                                     }
                             }
                             result = waveOutWrite(hWaveOut, &waveHdr, sizeof(WAVEHDR));            
