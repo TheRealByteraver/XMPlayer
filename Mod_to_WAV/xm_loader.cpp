@@ -13,9 +13,9 @@
 
 //using namespace std;
 
-#define debug_xm_loader
-#define debug_xm_show_patterns
-#define debug_xm_play_samples
+//#define debug_xm_loader
+//#define debug_xm_show_patterns
+//#define debug_xm_play_samples
 
 #ifdef debug_xm_loader
 #include <bitset>
@@ -396,18 +396,18 @@ int Module::loadXmFile()
                         }
                         break;
                     }
-                    case PANNING_SLIDE : 
+                    case PANNING_SLIDE: 
                     {
                         if (volumeColumn > 0xE0) // slide right
                                 iNote->effects[0].argument <<= 4;
                         break;
                     }
-                    case SET_FINE_PANNING : // rough panning, really
+                    case SET_FINE_PANNING: // rough panning, really
                     {
                         iNote->effects[0].argument <<= 4; // *= 17; // ?
                         break;
                     }
-                    case SET_VIBRATO_SPEED :
+                    case SET_VIBRATO_SPEED:
                     {
                         iNote->effects[0].argument <<= 4;
                         break;
@@ -423,7 +423,7 @@ int Module::loadXmFile()
                         break;
                     }
                     */
-                    case VOLUME_SLIDE : 
+                    case VOLUME_SLIDE: 
                     {
                         if (volumeColumn > 0x70) // slide up
                                 iNote->effects[0].argument <<= 4;                          
@@ -441,7 +441,19 @@ int Module::loadXmFile()
                             iNote->effects[fxloop].effect = ARPEGGIO;
                         break;
                     }
-                    case SET_GLOBAL_VOLUME : 
+                    case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
+                    case VIBRATO_AND_VOLUME_SLIDE:
+                    case VOLUME_SLIDE:
+                    {
+                        // in .mod & .xm files volume slide up has
+                        // priority over volume slide down
+                        unsigned& argument = iNote->effects[fxloop].argument;
+                        unsigned volUp = argument & 0xF0;
+                        unsigned volDn = argument & 0x0F;
+                        if ( volUp && volDn ) argument = volUp;
+                        break;
+                    }
+                    case SET_GLOBAL_VOLUME:
                     case SET_VOLUME :
                     {
                         if (iNote->effects[fxloop].argument > MAX_VOLUME)

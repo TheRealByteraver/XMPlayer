@@ -1257,8 +1257,24 @@ int Mixer::updateNotes () {
                     isValidInstrument = false;
                     replay = false;
                     stopChannelPrimary( iChannel ); // sundance.mod illegal sample
-                    std::cout << " cut at " << std::dec << std::setw( 2 ) << patternRow
-                        << ":" << std::setw( 2 ) << iChannel << ", inst " << instrument << std::endl;
+                    std::cout << std::dec
+                        << "Sample cut by illegal inst "
+                        << std::setw( 2 ) << instrument
+                        << " in pattern " 
+                        << std::setw( 2 ) << module->getPatternTable( iPatternTable )
+                        << ", order " << std::setw( 3 ) << iPatternTable
+                        << ", row " << std::setw( 2 ) << patternRow                        
+                        << ", channel " << std::setw( 2 ) << iChannel 
+                        << std::endl;
+                    if ( channel.pInstrument )
+                    {
+                        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
+                        {
+                            std::cout << channel.pInstrument->getSampleForNote( i )
+                                << " ";
+                        }
+                        std::cout << std::endl;
+                    }
                 }
             }
             channel.sampleOffset = 0;
@@ -1626,10 +1642,15 @@ int Mixer::updateNotes () {
                             D10 = volume slide up   by 1
                             DF0 = volume slide up   by F
                             D0F = volume slide down by F
-                            D82 = volume slide down by 2      (!)
+                            D82 = volume slide down by 2      (!) (*)
                             DF1 = fine volume slide down by 1
                             D1F = fine volume slide up   by 1
                             DFF = fine volume slide up   by F (!)
+                            (*) note that this is different from .mod where
+                                volume slide up has priority over volume slide
+                                down if both values are specified. Impulse 
+                                tracker (.IT) ignores illegal volume slide 
+                                altogether.
                         */
                         unsigned& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
@@ -1676,6 +1697,8 @@ int Mixer::updateNotes () {
                         ST3 & FT2 can't jump past row 64. Impulse Tracker can,
                         values higher than the nr of rows of the next pattern
                         are converted to zero.
+                        ST3 ignores illegal pattern breaks, IT jumps to the 
+                        next pattern though.
                     */
                     if ( startRow < 64 )
                     {
@@ -1993,6 +2016,11 @@ int Mixer::updateNotes () {
                     << std::setw( 2 ) << iNote->effects[0].argument;
             else std::cout << "   ";
             */
+            // display volume:
+            SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
+            std::cout << std::hex << std::uppercase
+                << std::setw( 2 ) << channel.volume;
+
             // effect
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
             for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
@@ -2119,11 +2147,35 @@ int Mixer::updateEffects () {
             unsigned    effect   = note.effects[fxloop].effect;
             unsigned    argument = note.effects[fxloop].argument;
 
-            //    Volume slide + pitch commands: handle volume slide first
+            // Volume slide + pitch commands: handle volume slide first
+            /* 
+                MOD / XM: command Axy where x = increase, y = decrease volume
+                S3M / IT / MPT: command Dxy, same parameters, with Fy / xF
+                                being fine slides.
+
+                So, apparently, in .S3M:
+                D01 = volume slide down by 1
+                D10 = volume slide up   by 1
+                DF0 = volume slide up   by F
+                D0F = volume slide down by F
+                D82 = volume slide down by 2      (!) (*)
+                DF1 = fine volume slide down by 1
+                D1F = fine volume slide up   by 1
+                DFF = fine volume slide up   by F (!)
+
+                (*) Note that this is different from .mod where
+                volume slide up has priority over volume slide
+                down if both values are specified. Impulse
+                tracker (.IT) ignores illegal volume slide effects
+                altogether. Illegal volume slide arguments are
+                corrected in the .mod and .xm loaders. This is
+                not possible with .s3m because of the way effect
+                memory works in .s3m.                
+            */
             switch ( effect ) {
-                case VOLUME_SLIDE :
-                case TONE_PORTAMENTO_AND_VOLUME_SLIDE :
-                case VIBRATO_AND_VOLUME_SLIDE :
+                case VOLUME_SLIDE:
+                case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
+                case VIBRATO_AND_VOLUME_SLIDE:
                 {
                     unsigned& lastSlide = channel.lastVolumeSlide;
                     unsigned slide1 = lastSlide >> 4;
@@ -2132,15 +2184,31 @@ int Mixer::updateEffects () {
                     {
                         // these are fine slides:
                         if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
+                        // if ( impulse tracker ) break; // impulse tracker ignores illegal vol slides!
                     }
                     unsigned& v = channel.volume;
-                    if ( slide2 ) { // slide down comes first
-                        if ( slide2 > v ) v = 0;
-                        else              v -= slide2;
-                    } else {        // slide up
-                        v += slide1;
-                        if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                    //if ( st3StyleEffectMemory_ )
+                    //{
+                        // slide down has priority in .s3m
+                        if ( slide2 ) { 
+                            if ( slide2 > v ) v = 0;
+                            else              v -= slide2;
+                        } else {        // slide up
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        }
+                    /* // fixed in .mod and .xm loader
+                    } else { 
+                        // slide up has priority in .mod
+                        if ( slide1 ) {
+                            v += slide1;
+                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                        } else {        // slide down
+                            if ( slide2 > v ) v = 0;
+                            else              v -= slide2;
+                        }
                     }
+                    */
                     break;
                 }
             }
@@ -2604,20 +2672,20 @@ int Mixer::updateImmediateEffects () {
                         }
                         case FINE_VOLUME_SLIDE_UP :
                         {
-                            if (argument) 
+                            if ( argument ) 
                                 channel.lastFineVolumeSlideUp = argument;
                             channel.volume += 
                                 channel.lastFineVolumeSlideUp;
-                            if (channel.volume > MAX_VOLUME) 
+                            if ( channel.volume > MAX_VOLUME ) 
                                 channel.volume = MAX_VOLUME;
                             break;
                         }
                         case FINE_VOLUME_SLIDE_DOWN :
                         {
-                            if (argument) 
+                            if ( argument ) 
                                 channel.lastFineVolumeSlideDown = argument;
-                            if (channel.lastFineVolumeSlideDown >= 
-                                channel.volume) 
+                            if ( channel.lastFineVolumeSlideDown >= 
+                                channel.volume ) 
                                     channel.volume = 0;
                             else channel.volume -= 
                                     channel.lastFineVolumeSlideDown;
@@ -2871,18 +2939,21 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
-        "D:\\MODS\\M2W_BUGTEST\\ParamMemory2.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\believe.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\believe-wrong notes.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\ParamMemory2.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
         "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
+        "D:\\MODS\\M2W_BUGTEST\\slow-motion-pos15-porta.mod",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
         "D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
-        "D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\algrhyth2.s3m",
-        "D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
+        //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",

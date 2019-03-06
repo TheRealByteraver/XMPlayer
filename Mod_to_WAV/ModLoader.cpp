@@ -28,6 +28,7 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define MOD_MAX_PATTERNS                    128
 #define MOD_DEFAULT_BPM                     125
 #define MOD_DEFAULT_TEMPO                   6
+#define MOD_MAX_PERIOD                      7248 // chosen a bit arbitrarily!
 //#define MAX_SAMPLES_SIZE_NST  (0xFFFF * 2 * 15)
 //#define MAX_SAMPLES_SIZE_MK   (0xFFFF * 2 * 31)
 
@@ -365,7 +366,6 @@ int Module::loadModFile() {
         fileOffset += sample.length;
         instruments_[i] = new Instrument;
         instruments_[i]->load(instrument);
-
 #ifdef debug_mod_loader
         std::cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
         if (!instruments_[i]->getSample(0)) _getch();
@@ -534,6 +534,17 @@ int Module::loadModFile() {
                 for (j = 0; j < (MAXIMUM_NOTES); j++) {
                   if ( /* iNote-> */ period >= periods[j]) break;
                 }
+                // ***** added for believe.mod:
+                int periodA;
+                int periodB;                
+                if ( j ) periodA = (int)periods[j - 1];
+                else periodA = MOD_MAX_PERIOD;
+                if( j < MAXIMUM_NOTES ) periodB = (int)periods[j];
+                else periodB = 0;
+                int diffA = periodA - (int)period;
+                int diffB = (int)period - periodB;
+                if ( diffA < diffB ) j--;
+                // ***** end of addition                
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
                 else                      iNote->note = j + 1 - 24; // two octaves down
             }
@@ -552,22 +563,51 @@ int Module::loadModFile() {
                 */
                 case PORTAMENTO_UP:
                 case PORTAMENTO_DOWN:
-                case VOLUME_SLIDE: 
                 {
                     if ( !iNote->effects[1].argument )
                         iNote->effects[1].effect = NO_EFFECT;
                     break;
                 }
+                case VOLUME_SLIDE:
+                {
+                    unsigned& argument = iNote->effects[1].argument;
+                    if ( !argument )
+                        iNote->effects[1].effect = NO_EFFECT;
+                    else { 
+                        // in .mod & .xm files volume slide up has
+                        // priority over volume slide down
+                        unsigned volUp = argument & 0xF0;
+                        unsigned volDn = argument & 0x0F;
+                        if ( volUp && volDn ) argument = volUp;
+                    }
+                    break;
+                }
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
                 {
-                    if ( !iNote->effects[1].argument )
+                    unsigned& argument = iNote->effects[1].argument;
+                    if ( !argument )
                         iNote->effects[1].effect = TONE_PORTAMENTO;
+                    else {
+                        // in .mod & .xm files volume slide up has
+                        // priority over volume slide down
+                        unsigned volUp = argument & 0xF0;
+                        unsigned volDn = argument & 0x0F;
+                        if ( volUp && volDn ) argument = volUp;
+                    }
                     break;
                 }
                 case VIBRATO_AND_VOLUME_SLIDE:
                 {
-                    if ( !iNote->effects[1].argument )
+                    unsigned& argument = iNote->effects[1].argument;
+                    if ( !argument )
                         iNote->effects[1].effect = VIBRATO;
+                    {
+                        // in .mod & .xm files volume slide up has
+                        // priority over volume slide down
+                        unsigned volUp = argument & 0xF0;
+                        unsigned volDn = argument & 0x0F;
+                        if ( volUp && volDn ) argument = volUp;
+                    }
                     break;
                 }
                 case SET_VOLUME :

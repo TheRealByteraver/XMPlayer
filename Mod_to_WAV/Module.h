@@ -98,12 +98,41 @@
 #define PANBRELLO                           0x22// S3M effect Y 
 
 // internal remapped effects for the player
-#define SET_BPM                             0x24  // after effect "Z" for XM safety
+#define SET_BPM                             0x24// after effect "Z" for XM safety
 #define ARPEGGIO                            0x25
-#define FINE_VIBRATO                        0x26  // S3M fine vibrato
-#define SET_VIBRATO_SPEED                   0x27  // XM Volc command
+#define FINE_VIBRATO                        0x26// S3M fine vibrato
+#define SET_VIBRATO_SPEED                   0x27// XM Volc command
 #define KEY_OFF                             (12 * 11 + 1) // 12 octaves
 
+
+/*
+    From MPT's test suite:
+    Arpeggio behavior is very weird with more than 16 ticks per row. This comes 
+    from the fact that Fasttracker 2 uses a LUT for computing the arpeggio note
+    (instead of doing something like tick%3 or similar). The LUT only has 16 
+    entries, so when there are more than 16 ticks, it reads beyond array 
+    boundaries. The vibrato table happens to be stored right after arpeggio 
+    table. The tables look like this in memory:
+
+    ArpTab: 0,1,2,0,1,2,0,1,2,0,1,2,0,1,2,0
+    VibTab: 0,24,49,74,97,120,141,161,180,197,...
+
+    All values except for the first in the vibrato table are greater than 1, so 
+    they trigger the third arpeggio note. Keep in mind that Fasttracker 2 
+    counts downwards, so the table has to be read from back to front, i.e. at 
+    16 ticks per row, the 16th entry in the LUT is the first to be read. This 
+    is also the reason why Arpeggio is played “backwards” in Fasttracker 2.
+*/
+const int FT2_ArpeggioTable[] = {
+    0,1,2,
+    0,1,2,
+    0,1,2,
+    0,1,2,
+    0,1,2,
+    0,           // 16 values, now intrude into sine table:
+    0,2,2,2,2,2,2,2,
+    2,2,2,2,2,2,2,2 // 32 values in total
+};
 /*
     Vibrato / Tremelo / Panbrello curve tables & constants:
 */
