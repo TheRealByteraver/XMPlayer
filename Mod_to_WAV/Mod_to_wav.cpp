@@ -215,8 +215,6 @@ public:
     bool            isPrimary;
     bool            isFadingOut;
     Sample          *sample;
-    //unsigned long long  sampleOffset_; // changed
-    // added:
     unsigned        sampleOffset;      // samples can be up to 4 GB in theory
     unsigned        sampleOffsetFrac;
 
@@ -626,7 +624,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 mChn.isPrimary = false;
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
-                                for ( k = 0; k < MAX_SAMPLES; k++ ) {
+                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; k++ ) {
                                     if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
                                 }
                                 channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
@@ -685,7 +683,7 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                                 mChn.isPrimary = false;
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
-                                for ( k = 0; k < MAX_SAMPLES; k++ ) {
+                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; k++ ) {
                                     if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
                                 }
                                 channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
@@ -948,16 +946,19 @@ unsigned Mixer::periodToFrequency(unsigned period) {
     :   (period ? ((8363 * 1712) / period ) : 0);
 }
 
-int Mixer::setMixerVolume(unsigned fromChannel) {
+int Mixer::setMixerVolume( unsigned fromChannel ) {
     unsigned        gp = globalPanning_;
     bool            invchn = (gp >= PANNING_CENTER);
     unsigned        soften = (invchn ? (PANNING_FULL_RIGHT - gp) : gp);
 
-    for (int i = 0; i < MAX_SAMPLES; i++) {
+    //std::cout << " fc " << fromChannel << ",";
+    for (int i = 0; i < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; i++) {
         unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
+        //assert( mc <= 16 );
+        //std::cout << " mc " << mc;
         if ( mc ) {
             MixerChannel& pmc = mixerChannels[mc];
-            if (pmc.isActive) {
+            if ( pmc.isActive ) {
                 unsigned        p = channels[fromChannel].panning;
                 unsigned        v = channels[fromChannel].volume
                                         * globalVolume_;
@@ -976,6 +977,7 @@ int Mixer::setMixerVolume(unsigned fromChannel) {
                 }
             }
         }
+        //std::cout << std::endl;
     }
     return 0;
 }
@@ -995,7 +997,7 @@ int Mixer::setPanning  (unsigned fromChannel, unsigned panning) {
 }
 */
 int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
-    for (int i = 0; i < MAX_SAMPLES; i++) {
+    for (int i = 0; i < MAX_NOTES_PER_CHANNEL /*MAX_SAMPLES */; i++) {
         unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
         if (mc) {
             MixerChannel&    pmc = mixerChannels[mc];
@@ -1029,7 +1031,7 @@ int Mixer::setGlobalBalance(int balance) { // range: -100...0...+100
     return 0;
 }
 
-int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffset, bool direction) {
+int Mixer::playSample ( unsigned fromChannel, Sample *sample, unsigned sampleOffset, bool direction ) {
     unsigned    oldestSlot;
     unsigned    emptySlot;
     unsigned    age;
@@ -1037,12 +1039,12 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
     unsigned    mcIndex;
     bool        sampleStarted = false;
 
-    // stop previous note in same logical Channel
-    
-    for (unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++) {
+    //assert( sample != nullptr );
+    // stop previous note in same logical Channel    
+    for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
         unsigned j = channels[fromChannel].mixerChannelsTable[i]; 
-        if (j) {
-            if (mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel)) {
+        if ( j ) {
+            if ( mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel) ) {
                 mixerChannels[j].isPrimary = false;
                 channels[fromChannel].mixerChannelsTable[i] = 0;
                 // temp: 
@@ -1058,17 +1060,17 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
     channels[fromChannel].mixerChannelsTable[channels[fromChannel].iPrimary] = 0;
     */
     // find an empty slot in mixer channels table
-    for (emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++) {
-        if(!channels[fromChannel].mixerChannelsTable[emptySlot]) break;
+    for ( emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++ ) {
+        if( !channels[fromChannel].mixerChannelsTable[emptySlot] ) break;
     }
     // None found, remove oldest sample (the longest playing one)
     // and use it's channel for the new sample
-    if (emptySlot >= MAX_NOTES_PER_CHANNEL) {
+    if ( emptySlot >= MAX_NOTES_PER_CHANNEL ) {
         oldestSlot = 0;
         age = 0;
-        for (unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++) {
+        for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
             mcIndex = channels[fromChannel].mixerChannelsTable[i];
-            if (mixerChannels[mcIndex].age > age) {
+            if ( mixerChannels[mcIndex].age > age ) {
                 age = mixerChannels[mcIndex].age;
                 oldestSlot = i;
             }
@@ -1078,13 +1080,13 @@ int Mixer::playSample (unsigned fromChannel, Sample *sample, unsigned sampleOffs
     } else {
     // find a new channel for mixing
         newMc = 1; // mix channel 0 is never used
-        while (newMc < MIXER_MAX_CHANNELS) {
-            if (!mixerChannels[newMc].isActive) break;
+        while ( newMc < MIXER_MAX_CHANNELS ) {
+            if ( !mixerChannels[newMc].isActive ) break;
             newMc++;
         }
     }
 
-    if (newMc < MIXER_MAX_CHANNELS) { // should be unnecessary  (the check)
+    if ( newMc < MIXER_MAX_CHANNELS ) { // should be unnecessary  (the check)
         mixerChannels[newMc].isActive = true;
         mixerChannels[newMc].isPrimary = true;
         mixerChannels[newMc].isPlayingBackwards = direction;
@@ -1185,7 +1187,7 @@ int Mixer::updateNotes () {
 #ifdef debug_mixer
     
     char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    unsigned p = module->getPatternTable(iPatternTable);
+    unsigned p = module->getPatternTable( iPatternTable );
     std::cout << std::setw( 2 ) << patternRow;
     //std::cout << "\n";
     /*
@@ -1213,8 +1215,6 @@ int Mixer::updateNotes () {
         unsigned    oldInstrument;      
         int         finetune = 0;
 
-        
-
         note       = iNote->note;        
         instrument = iNote->instrument;
 
@@ -1230,28 +1230,45 @@ int Mixer::updateNotes () {
                 channel.retrigCount = 0; // to check if that resets the counter, and when
                 if( (channel.vibratoWaveForm & VIBRATO_NO_RETRIG_FLAG) == 0 ) 
                     channel.vibratoCount = 0;
-                if ( ft2StyleEffects_ ) channel.sampleOffset = 0;
+                if ( ft2StyleEffects_ ) channel.sampleOffset = 0;  // ??
                 //if ( ft2StyleEffects_ ) std::cout << "ft2!";
             }
         } else {
             isNewNote = false;
         }
+        /*
+            When an illegal instrument is specified together with a note, all 
+            players stop playback but:
+            - Protracker, Impulse Tracker & MPT start replay if a valid 
+              instrument (without a note) is specified afterwards
+            - FastTracker 2 and ScreamTracker 3 stay silent when the valid
+              instrument (without a note) is specified afterwards
+
+            Bottom line: stopping replay on encountering an illegal instrument
+            is the way to go. The new valid instrument is played at the 
+            frequency that was specified together with the invalid instrument.
+        */
         
         oldInstrument = channel.instrumentNo;
         if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
-            channel.pInstrument = module->getInstrument(instrument - 1); 
-            if ( channel.pInstrument ) {
-                if ( channel.lastNote ) {
+            channel.pInstrument = module->getInstrument( instrument /* - 1 */ ); 
+            if ( channel.pInstrument ) 
+            {
+                if ( channel.lastNote ) 
+                {
                     sample = channel.pInstrument->getSampleForNote
-                        (channel.lastNote - 1);
+                        ( channel.lastNote - 1 );
+                    // std::cout << std::setw( 4 ) << sample; // DEBUG
                     channel.pSample = 
-                        channel.pInstrument->getSample( sample );
+                        //channel.pInstrument->getSample( sample );
+                        module->getSample( sample );
+
                 }
-                if ( channel.pSample ) {
-                    channel.volume = 
-                        channel.pSample->getVolume();
+                if ( channel.pSample ) 
+                {
+                    channel.volume = channel.pSample->getVolume();
                     isValidInstrument = true;
                 } else {
                     isValidInstrument = false;
@@ -1266,6 +1283,7 @@ int Mixer::updateNotes () {
                         << ", row " << std::setw( 2 ) << patternRow                        
                         << ", channel " << std::setw( 2 ) << iChannel 
                         << std::endl;
+                    /*
                     if ( channel.pInstrument )
                     {
                         for ( int i = 0; i < MAXIMUM_NOTES; i++ )
@@ -1275,19 +1293,22 @@ int Mixer::updateNotes () {
                         }
                         std::cout << std::endl;
                     }
+                    */
                 }
             }
             channel.sampleOffset = 0;
         } else {
             isNewInstrument = false;
             channel.pInstrument = 
-                module->getInstrument( oldInstrument - 1 );
+                module->getInstrument( oldInstrument /* - 1 */ );
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
                         ( channel.lastNote - 1 );
+                    // std::cout << std::setw( 4 ) << sample; // DEBUG
                     channel.pSample = 
-                        channel.pInstrument->getSample( sample ); 
+                        //channel.pInstrument->getSample( sample ); 
+                        module->getSample( sample );
                 }
             }
         }
@@ -2741,7 +2762,7 @@ int Mixer::setVolumes () {
 
 int Mixer::updateBpm () {
     tick++;
-    if (tick < tempo) { 
+    if ( tick < tempo ) { 
         updateEffects ();         
     } else { 
         tick = 0;
@@ -2943,8 +2964,12 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\believe-wrong notes.mod",
         //"D:\\MODS\\M2W_BUGTEST\\ParamMemory2.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\CHINA1.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
+        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
+        "D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
-        "D:\\MODS\\M2W_BUGTEST\\slow-motion-pos15-porta.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\slow-motion-pos15-porta.mod",
         "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
         "D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
@@ -2957,7 +2982,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         "D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\dosprog\\mods\\women.s3m",
@@ -2971,7 +2996,6 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\lchina.s3m",
         //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
         //"D:\\MODS\\dosprog\\mods\\againstr.mod",
-        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
         "D:\\MODS\\dosprog\\mods\\un-land2.s3m",
         "D:\\MODS\\dosprog\\mods\\un-land.s3m",
@@ -3103,6 +3127,17 @@ int main(int argc, char *argv[])  {
                       << "\" into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data"  << std::endl 
                       << "Hit any key to start mixing." << std::endl;
+
+            // show instruments
+            for ( unsigned i = 0; i <= sourceFile.getnInstruments(); i++ )
+            {
+                std::cout 
+                    << i << ":" 
+                    << sourceFile.getInstrument( i )->getName().c_str() 
+                    << std::endl;
+            }
+
+
             _getch();
             mixer.initialise( &sourceFile );          
             double benchTime = 0.0L;

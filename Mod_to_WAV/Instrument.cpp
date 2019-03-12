@@ -4,35 +4,10 @@
 
 Instrument::~Instrument () {
 //    std::cout << "\nInst destructor called";
-    //delete name_;
-    for (int i = 0; i < MAX_SAMPLES; i++) delete samples_[i];
+    //for (int i = 0; i < MAX_SAMPLES; i++) delete samples_[i];
 }
-
-/*
-char *Instrument::getName (char *name) {
-    int         max = (unsigned)strlen(name);
-    char        *s = name_;
-    char        *d = name;
-    int         i = 0;
-
-    while (*d && (i < max)) { *d++ = *s++; i++; }
-    *d = '\0';
-    return name;
-}
-*/
 
 void Instrument::load(const InstrumentHeader &instrumentHeader) {
-    /*
-    int     i = 0;
-    char    *s, *d;
-    name_ = new char[strlen(instrumentHeader.name) + 1];
-    d = name_;
-    s = instrumentHeader.name;
-    while (*s && (i < MAX_INSTRUMENTNAME_LENGTH)) {
-        *d++ = *s++; i++;
-    }
-    *d = '\0';
-    */
     name_ = instrumentHeader.name;
     for (int i = 0; i < MAXIMUM_NOTES; i++) {
         sampleForNote_[i] = instrumentHeader.sampleForNote[i];
@@ -43,9 +18,11 @@ void Instrument::load(const InstrumentHeader &instrumentHeader) {
         volumeEnvelope_ [i].y = instrumentHeader.volumeEnvelope [i].y;
         panningEnvelope_[i].y = instrumentHeader.panningEnvelope[i].y;
     }
+    /*
     for (int i = 0; i < MAX_SAMPLES; i++) {       // NEED COPY CONSTRUCTOR?
         samples_[i] = instrumentHeader.samples[i];// DANGER PTR 2 OBJECT
     }
+    */
     nSamples_           = instrumentHeader.nSamples;
     nVolumePoints_      = instrumentHeader.nVolumePoints;
     volumeSustain_      = instrumentHeader.volumeSustain;

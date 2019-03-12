@@ -363,11 +363,11 @@ int Module::loadS3mFile() {
     int smpDataPtrs[S3M_MAX_INSTRUMENTS];
     if ( s3mFileHeader.nInstruments > S3M_MAX_INSTRUMENTS )
         s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
-    for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ )
+    for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ )
     {
-        bufOffset = 16 * instrParaPtrs[nInst];
+        bufOffset = 16 * instrParaPtrs[nInst - 1];
         S3mInstHeader& s3mInstHeader = *((S3mInstHeader *)(buf + bufOffset));
-        smpDataPtrs[nInst] = 
+        smpDataPtrs[nInst - 1] = 
             16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
         if ( !s3mInstHeader.c4Speed ) s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
 #ifdef debug_s3m_loader
@@ -416,6 +416,9 @@ int Module::loadS3mFile() {
         for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
             sample.name += s3mInstHeader.name[i];
         instrument.name = sample.name;
+        instrument.nSamples = 1; // redundant?
+        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
+            instrument.sampleForNote[i] = nInst;
         sample.length = s3mInstHeader.length;
         sample.repeatOffset = s3mInstHeader.loopStart;
         sample.volume = (int)s3mInstHeader.volume;
@@ -430,9 +433,9 @@ int Module::loadS3mFile() {
             sample.repeatLength = sample.length - sample.repeatOffset;
         sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
         if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
-            (smpDataPtrs[nInst] != 0)) {
+            (smpDataPtrs[nInst - 1] != 0)) {
             nSamples_++;
-            sample.data = (SHORT *)(buf + smpDataPtrs[nInst]);
+            sample.data = (SHORT *)(buf + smpDataPtrs[nInst - 1]);
             if ( (char *)((char *)sample.data + sample.length) > (buf + (unsigned)fileSize) )
             {
 #ifdef debug_s3m_loader
@@ -449,8 +452,9 @@ int Module::loadS3mFile() {
                 delete[] buf;
                 return 0;
             }
-            instrument.samples[0] = new Sample;
-            sample.dataType = SIGNED_EIGHT_BIT_SAMPLE;
+            //instrument.samples[0] = new Sample;
+
+            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             // convert sample data from unsigned to signed:
             if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
                 unsigned char *s = (unsigned char *)sample.data;
@@ -478,7 +482,13 @@ int Module::loadS3mFile() {
                 << "finetune:      " << sample.finetune
                 << std::endl;
 #endif
-            instrument.samples[0]->load( sample );
+            if ( sample.length )
+            {
+                //instrument.samples[0]->load( sample );
+                samples_[nInst] = new Sample;
+                sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+                samples_[nInst]->load( sample );
+            }
         }
         instruments_[nInst] = new Instrument;
         instruments_[nInst]->load( instrument );
@@ -726,7 +736,7 @@ int Module::loadS3mFile() {
         S3mUnpackedNote* unPackedNote = unPackedPtn;
         patterns_[iPtn] = new Pattern;
         patternData = new Note[nChannels_ * S3M_ROWS_PER_PATTERN];
-        patterns_[iPtn]->Initialise( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
+        patterns_[iPtn]->initialise( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
         iNote = patternData;
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;

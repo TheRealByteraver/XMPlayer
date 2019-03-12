@@ -13,7 +13,7 @@
 
 //using namespace std;
 
-//#define debug_xm_loader
+#define debug_xm_loader
 //#define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
@@ -272,7 +272,7 @@ int Module::loadXmFile()
         }  
         patterns_[iPattern] = new Pattern;
         patternData = new Note[nChannels_ * pattern->nRows];
-        patterns_[iPattern]->Initialise(nChannels_, pattern->nRows, patternData);
+        patterns_[iPattern]->initialise(nChannels_, pattern->nRows, patternData);
         iNote = patternData;
         // below (memset) is done in pattern class
         //memset(patternData, 0, sizeof(Note) * nChannels_ * pattern->nRows);
@@ -516,11 +516,22 @@ int Module::loadXmFile()
     Create the empty pattern
     */
     patterns_[nPatterns_] = new Pattern;
-    patterns_[nPatterns_]->Initialise(nChannels_, XM_MAX_PATTERN_ROWS, 
-                                      new Note[nChannels_ * XM_MAX_PATTERN_ROWS]);
-
+    patterns_[nPatterns_]->initialise( nChannels_, XM_MAX_PATTERN_ROWS, 
+                                      new Note[nChannels_ * XM_MAX_PATTERN_ROWS] );
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
+    // ************************************************************************
     // Now read all the instruments & sample data
-    for (unsigned iInstrument = 0; iInstrument < nInstruments_; iInstrument++) {
+    unsigned smpIdx = 1;
+    for ( unsigned iInstrument = 1; iInstrument <= nInstruments_; iInstrument++ ) {
         XmInstrumentHeaderPrimary   *instrumentHeader1;
         XmInstrumentHeaderSecondary *instrumentHeader2;
         InstrumentHeader            instrument;
@@ -528,15 +539,16 @@ int Module::loadXmFile()
         char                        *thisInstrument;
         
         thisInstrument = bufp;
-        instrumentHeader1 = (XmInstrumentHeaderPrimary   *)bufp;
+        instrumentHeader1 = (XmInstrumentHeaderPrimary *)bufp;
 
-        if (instrumentHeader1->headerSize < sizeof(XmInstrumentHeaderPrimary)) {
+        if ( instrumentHeader1->headerSize < sizeof( XmInstrumentHeaderPrimary ) ) {
             instrumentName[0] = '\0';
             instrument.nSamples = 0;
         } else {
             instrumentHeader2 = (XmInstrumentHeaderSecondary *)
-                                (bufp + sizeof(XmInstrumentHeaderPrimary));
-            for (int i = 0; i < XM_MAX_INSTRUMENT_NAME_LENGTH; i++) {
+                                (bufp + sizeof( XmInstrumentHeaderPrimary ));
+            for ( int i = 0; i < XM_MAX_INSTRUMENT_NAME_LENGTH; i++ ) 
+            {
                 instrumentName[i] = instrumentHeader1->name[i];
             }
             instrumentName[XM_MAX_INSTRUMENT_NAME_LENGTH] = '\0';
@@ -553,14 +565,16 @@ int Module::loadXmFile()
         if (instrument.nSamples)
             std::cout << "\nSample Header Size       = " << instrumentHeader2->sampleHeaderSize;          
 #endif
-        if (instrument.nSamples) { 
+        if ( instrument.nSamples ) 
+        { 
             unsigned        sampleOffset;
             SampleHeader    samples[MAX_SAMPLES];
-            char            sampleNames[MAX_SAMPLES][XM_MAX_SAMPLE_NAME_LENGTH + 1];
+            char            sampleNames[MAX_SAMPLES][XM_MAX_SAMPLE_NAME_LENGTH + 1];   
 
-            for (unsigned i = 0; i < MAXIMUM_NOTES; i++)
-                instrument.sampleForNote[i] = instrumentHeader2->sampleForNote[i];
-            for (unsigned i = 0; i < 12; i++) {
+            for ( unsigned i = 0; i < MAXIMUM_NOTES; i++ )
+                instrument.sampleForNote[i] = instrumentHeader2->sampleForNote[i] + smpIdx;
+            for ( unsigned i = 0; i < 12; i++ ) 
+            {
                 instrument.volumeEnvelope [i].x = instrumentHeader2->volumeEnvelope [i].x;
                 instrument.volumeEnvelope [i].y = instrumentHeader2->volumeEnvelope [i].y;
                 instrument.panningEnvelope[i].x = instrumentHeader2->panningEnvelope[i].x;
@@ -593,13 +607,14 @@ int Module::loadXmFile()
             for (unsigned i = 0; i < MAXIMUM_NOTES; i++)
                 std::cout << instrument.sampleForNote[i] << " ";
 #endif
-            for (unsigned iSample = 0; iSample < instrument.nSamples; iSample++) {
+            for ( unsigned iSample = 0; iSample < instrument.nSamples; iSample++ ) 
+            {
                 XmSampleHeader  *xmSample = (XmSampleHeader *)bufp;
                 bufp += instrumentHeader2->sampleHeaderSize;
-                if (instrumentHeader2->sampleHeaderSize < sizeof(XmSampleHeader)) {
+                if ( instrumentHeader2->sampleHeaderSize < sizeof( XmSampleHeader ) ) {
                     sampleNames[iSample][0] = '\0';
                 } else {
-                    for (unsigned i = 0; i < XM_MAX_SAMPLE_NAME_LENGTH; i++) {
+                    for ( unsigned i = 0; i < XM_MAX_SAMPLE_NAME_LENGTH; i++ ) {
                         sampleNames[iSample][i] = xmSample->name[i];                   
                     }
                     sampleNames[iSample][XM_MAX_SAMPLE_NAME_LENGTH] = '\0';
@@ -615,11 +630,11 @@ int Module::loadXmFile()
                 samples[iSample].relativeNote   = xmSample->relativeNote;
                 samples[iSample].panning        = xmSample->panning;
                 samples[iSample].dataType       = 
-                    ((xmSample->type & XM_SIXTEEN_BIT_SAMPLE_FLAG) ? 
-                     SIGNED_SIXTEEN_BIT_SAMPLE : SIGNED_EIGHT_BIT_SAMPLE);
+                      xmSample->type & XM_SIXTEEN_BIT_SAMPLE_FLAG ? 
+                        SAMPLEDATA_SIGNED_16BIT : SAMPLEDATA_SIGNED_8BIT;
                 samples[iSample].isPingpongSample = 
-                    ((xmSample->type & XM_PINGPONG_LOOP_FLAG) ? true : false);
-                if (xmSample->compression == XM_ADPCM_COMPRESSION) {
+                     xmSample->type & XM_PINGPONG_LOOP_FLAG ? true : false;
+                if ( xmSample->compression == XM_ADPCM_COMPRESSION ) {
                     std::cout << "\n\nADPCM compressed sample data is not supported yet!\n";
                     delete [] buf;
                     return 0;
@@ -636,14 +651,16 @@ int Module::loadXmFile()
                 std::cout << "\nRelative Note    = " << samples[iSample].relativeNote;
                 std::cout << "\nPanning          = " << samples[iSample].panning;
                 std::cout << "\n16 bit sample    = " << 
-                    ((samples[iSample].dataType == SIGNED_SIXTEEN_BIT_SAMPLE) ? "Yes" : "No");
+                    ((samples[iSample].dataType == SAMPLEDATA_SIGNED_16BIT) ? "Yes" : "No");
                 std::cout << "\nPing Loop active = " << 
                     (samples[iSample].isPingpongSample ? "Yes" : "No");
 #endif
             }
             sampleOffset = 0;
-            for (unsigned iSample = 0; iSample < instrument.nSamples; iSample++) {
-                if (samples[iSample].length) {
+            for ( unsigned iSample = 0; iSample < instrument.nSamples; iSample++ ) 
+            {
+                if ( samples[iSample].length ) 
+                {
                     SHORT           oldSample16 = 0;
                     SHORT           newSample16 = 0;
                     signed char     oldSample8 = 0;
@@ -651,13 +668,13 @@ int Module::loadXmFile()
                     nSamples_++;
                     samples[iSample].data = (SHORT *)(bufp + sampleOffset);                 
                     sampleOffset += samples[iSample].length;
-                    if (samples[iSample].dataType == SIGNED_SIXTEEN_BIT_SAMPLE) {
+                    if (samples[iSample].dataType == SAMPLEDATA_SIGNED_16BIT ) {
                         SHORT   *ps = (SHORT *)samples[iSample].data;
                         SHORT   *pd = ps;
                         samples[iSample].length       >>= 1; 
                         samples[iSample].repeatLength >>= 1;
                         samples[iSample].repeatOffset >>= 1;
-                        for (unsigned iData = 0; iData < samples[iSample].length; iData++) {
+                        for ( unsigned iData = 0; iData < samples[iSample].length; iData++ ) {
                             newSample16 = *ps++ + oldSample16;
                             *pd++       = newSample16;
                             oldSample16 = newSample16;
@@ -678,7 +695,7 @@ int Module::loadXmFile()
                         }
                         std::cout << "\n";
 #endif
-                        for (unsigned iData = 0; iData < samples[iSample].length; iData++) {
+                        for ( unsigned iData = 0; iData < samples[iSample].length; iData++ ) {
                             newSample8 = *ps++ + oldSample8;
 #ifdef debug_xm_loader
                             if (iData < SHOWNR) {
@@ -699,15 +716,20 @@ int Module::loadXmFile()
                             oldSample8 = newSample8;
                         }
                     }
+                    samples_[smpIdx] = new Sample;
+                    samples_[smpIdx]->load( samples[iSample] );
+                    smpIdx++;
+                    /*
                     instrument.samples[iSample] = new Sample;
                     instrument.samples[iSample]->load(samples[iSample]);
+                    */
 #ifdef debug_xm_loader
                     std::cout << "\n"; 
                     // _getch();
 #endif
-                } else {
+                } /*else {
                     samples[iSample].data = 0;
-                }
+                }*/
             }
             bufp += sampleOffset;
 #ifdef debug_xm_loader
@@ -736,10 +758,10 @@ int Module::loadXmFile()
                     result = waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveFormatEx, 
                                          0, 0, CALLBACK_NULL);
                     if (result != MMSYSERR_NOERROR) {
-                        if (!iInstrument) std::cout << "\nError opening wave mapper!\n";
+                        if ( !iInstrument ) std::cout << "\nError opening wave mapper!\n";
                     } else {
                         int retry = 0;
-                        if (!iInstrument) std::cout << "\nWave mapper successfully opened!\n";
+                        if ( !iInstrument ) std::cout << "\nWave mapper successfully opened!\n";
                         std::cout << "\nPlaying sample # " << iSample;
                         waveHdr.dwBufferLength = 
                             instrument.samples[iSample]->getLength ()                  
@@ -823,7 +845,7 @@ int Module::loadXmFile()
 #endif
         }
         instruments_[iInstrument] = new Instrument;
-        instruments_[iInstrument]->load(instrument);        
+        instruments_[iInstrument]->load( instrument );        
     }
     isLoaded_ = true;
     delete [] buf;

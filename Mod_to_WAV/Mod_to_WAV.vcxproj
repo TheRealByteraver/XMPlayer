@@ -161,6 +161,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Instrument.cpp" />
+    <ClCompile Include="ITLoader.cpp" />
     <ClCompile Include="ModLoader.cpp" />
     <ClCompile Include="Module.cpp" />
     <ClCompile Include="Mod_to_wav.cpp" />

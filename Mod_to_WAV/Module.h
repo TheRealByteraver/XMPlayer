@@ -12,16 +12,18 @@
 #define PANNING_STYLE_MOD                   1   // LRRL etc
 #define PANNING_STYLE_XM                    2   // ALL CENTER
 #define PANNING_STYLE_S3M                   3   // LRLR etc
-#define MARKER_PATTERN                      0x10000 // S3M compatibility
+#define PANNING_STYLE_IT                    4
+#define MARKER_PATTERN                      0x10000 // S3M/IT compatibility
 
 #define MAX_VOLUME                          64
 #define MAX_SAMPLENAME_LENGTH               22
 #define MAX_INSTRUMENTNAME_LENGTH           (MAX_SAMPLENAME_LENGTH + 2)
 #define MAX_PATTERNS                        256
 #define MAX_INSTRUMENTS                     256
-#define MAX_SAMPLES                         16   // max.samples / instrument
-#define SIGNED_EIGHT_BIT_SAMPLE             1
-#define SIGNED_SIXTEEN_BIT_SAMPLE           2
+#define MAX_SAMPLES                         256
+#define SAMPLEDATA_TYPE_UNKNOWN             0
+#define SAMPLEDATA_SIGNED_8BIT              1
+#define SAMPLEDATA_SIGNED_16BIT             2
 #define INTERPOLATION_SPACER                2
 #define MAX_EFFECT_COLUMNS                  2
 #define MAXIMUM_NOTES                       (11 * 12)
@@ -39,6 +41,7 @@
 #define TRACKER_ST300                       2
 #define TRACKER_ST321                       3
 #define TRACKER_FT2                         4
+#define TRACKER_IT                          5
 
 // effect nrs:
 #define NO_EFFECT                           0x0 // ARPEGGIO is remapped to 0x25
@@ -214,27 +217,38 @@ class Pattern {
     Note            *data_;
 public:
                     Pattern ()                  
-                    { memset(this, 0, sizeof(Pattern)); }
-                    ~Pattern ()                 { delete data_;             }
-    unsigned        getnRows ()                 { return nRows_;            }
+                    { 
+                        nChannels_ = 0;
+                        nRows_ = 0;
+                        data_ = nullptr;
+                    }
+                    Pattern( unsigned nChannels,unsigned nRows ) :
+                        nChannels_ ( nChannels ),
+                        nRows_ ( nRows )
+                    {
+                        data_ = new Note[nChannels * nRows];
+                        memset( data_,0,nChannels * nRows * sizeof( Note ) );
+                    }
+                    ~Pattern () { delete data_; }
+                    void            initialise( unsigned nChannels,unsigned nRows,Note *data )
+                    {
+                        nChannels_ = nChannels;
+                        nRows_ = nRows;
+                        data_ = data;
+                        memset( data,0,nChannels * nRows * sizeof( Note ) );
+                    }
+                    unsigned        getnRows ()                 { return nRows_;            }
     Note            getNote( unsigned n )       { return data_[n];          }
     /*
         - returns a pointer to the beginning of the pattern if row exceeds the
           maximum nr of rows in this particular pattern.
         - returns nullptr if no pattern data is present.
     */
-    Note             *getRow (unsigned row) 
-    { 
-        if ( !data_ ) return nullptr;
-        if ( row > nRows_ ) row = 0;
-        return data_ + nChannels_ * row; 
-    }
-    void            Initialise(unsigned nChannels, unsigned nRows, Note *data)
+    Note             *getRow ( unsigned row ) 
                     { 
-                        nChannels_ = nChannels; 
-                        nRows_ = nRows; 
-                        data_ = data; 
-                        memset( data,0,nChannels * nRows * sizeof( Note ));
+                        if ( !data_ ) return nullptr;
+                        if ( row > nRows_ ) row = 0;
+                        return data_ + nChannels_ * row; 
                     }
 };
 
@@ -242,7 +256,19 @@ class SampleHeader {
 public:
                     SampleHeader () 
                     { 
-                        memset(this, 0, sizeof(SampleHeader)); 
+                        name.clear();
+                        length = 0;
+                        repeatOffset = 0;
+                        repeatLength = 0;
+                        isRepeatSample = false;
+                        isPingpongSample = false;
+                        isUsed = false;
+                        volume = false;
+                        relativeNote = 0;
+                        panning = PANNING_CENTER;
+                        finetune = 0;
+                        dataType = SAMPLEDATA_TYPE_UNKNOWN;
+                        data = nullptr;
                     }
     std::string     name;
     unsigned        length;
@@ -263,10 +289,22 @@ class Sample {
 public:
                     Sample () 
                     { 
-                        memset(this, 0, sizeof(Sample)); 
+                        name_.clear();
+                        length_ = 0;
+                        repeatOffset_ = 0;
+                        repeatLength_ = 0;
+                        isRepeatSample_ = false;
+                        isPingpongSample_ = false;
+                        isUsed_ = false;
+                        volume_ = false;
+                        relativeNote_ = 0;
+                        panning_ = PANNING_CENTER;
+                        finetune_ = 0;
+                        data_ = nullptr;
                     }
                     ~Sample ();
-    bool            load (const SampleHeader &sampleHeader);
+    bool            load ( const SampleHeader &sampleHeader );
+    std::string     getName ()          { return name_;             }
     unsigned        getLength ()        { return length_;           }
     unsigned        getRepeatOffset ()  { return repeatOffset_;     }
     unsigned        getRepeatLength ()  { return repeatLength_;     }
@@ -303,7 +341,35 @@ public:
 
 class InstrumentHeader {
 public:
-    //char            *name;
+    InstrumentHeader()  { 
+                            name.clear();
+                            nSamples = 0;
+                            for( int i = 0; i < MAXIMUM_NOTES; i++ )
+                                sampleForNote[i] = 0;
+                            for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
+                            {
+                                volumeEnvelope[i].x = 0;
+                                volumeEnvelope[i].y = 0;
+                                panningEnvelope[i].x = 0;
+                                panningEnvelope[i].y = 0;
+                            }
+                            nVolumePoints = 0;
+                            volumeSustain = 0;
+                            volumeLoopStart = 0;
+                            volumeLoopEnd = 0;
+                            volumeType = 0;
+                            volumeFadeOut = 0;
+                            
+                            nPanningPoints = 0;
+                            panningSustain = 0;
+                            panningLoopStart = 0;
+                            panningLoopEnd = 0;
+                            panningType = 0;
+                            vibratoType = 0;
+                            vibratoSweep = 0;
+                            vibratoDepth = 0;
+                            vibratoRate = 0;
+                        }
     std::string     name;
     unsigned        nSamples;
     unsigned        sampleForNote[MAXIMUM_NOTES];
@@ -324,14 +390,39 @@ public:
     unsigned        vibratoSweep;
     unsigned        vibratoDepth;
     unsigned        vibratoRate;
-    Sample          *samples[MAX_SAMPLES];
-    InstrumentHeader() { memset(this, 0, sizeof(InstrumentHeader)); }
 };
 
 class Instrument {
 public:
                     Instrument ()
-                    { memset(this, 0, sizeof(Instrument)); }    // still ok w/ std::string?
+                    { 
+                        name_.clear();
+                        nSamples_ = 1;
+                        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
+                            sampleForNote_[i] = 0;
+                        for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
+                        {
+                            volumeEnvelope_[i].x = 0;
+                            volumeEnvelope_[i].y = 0;
+                            panningEnvelope_[i].x = 0;
+                            panningEnvelope_[i].y = 0;
+                        }
+                        nVolumePoints_ = 0;
+                        volumeSustain_ = 0;
+                        volumeLoopStart_ = 0;
+                        volumeLoopEnd_ = 0;
+                        volumeType_ = 0;
+                        volumeFadeOut_ = 0;
+                        nPanningPoints_ = 0;
+                        panningSustain_ = 0;
+                        panningLoopStart_ = 0;
+                        panningLoopEnd_ = 0;
+                        panningType_ = 0;
+                        vibratoType_ = 0;
+                        vibratoSweep_ = 0;
+                        vibratoDepth_ = 0;
+                        vibratoRate_ = 0;
+                    }
                     ~Instrument ();
     void            load(const InstrumentHeader &instrumentHeader);
     std::string     getName() { return name_; }
@@ -354,8 +445,7 @@ public:
     unsigned        getVibratoSweep ()              { return vibratoSweep_;       }
     unsigned        getVibratoDepth ()              { return vibratoDepth_;       }
     unsigned        getVibratoRate ()               { return vibratoRate_;        }
-    Sample          *getSample (unsigned sample)    
-                    { return ((sample < MAX_SAMPLES) ? samples_[sample] : 0);     }
+
 private:
     std::string     name_;
     unsigned        nSamples_;
@@ -377,14 +467,16 @@ private:
     unsigned        vibratoSweep_;
     unsigned        vibratoDepth_;
     unsigned        vibratoRate_;
-    Sample          *samples_[MAX_SAMPLES];
 };
 
 class Module {
 public:
-                    Module ()               { memset(this, 0, sizeof(Module)); } 
-                    Module( std::string &fileName ) : Module() { loadFile( fileName ); }
-                    ~Module();
+    Module();
+    Module( std::string &fileName ) : Module() 
+    { 
+        loadFile( fileName ); 
+    }
+    ~Module();
     std::string     getFileName()               { return fileName_;             }
     void            setFileName( std::string &fileName ) { fileName_ = fileName; }
     int             loadFile ();
@@ -412,12 +504,26 @@ public:
         assert( i < nChannels_ );
         return defaultPanPositions_[i];
     }
-    unsigned        getPatternTable (unsigned i)
-                    { return ((i < MAX_PATTERNS) ? patternTable_[i] : 0);   }
-    Instrument      *getInstrument(unsigned instrument) 
-       { return ((instrument < MAX_INSTRUMENTS) ? instruments_[instrument] : 0); }
-    Pattern         *getPattern(unsigned pattern) 
-       { return ((pattern < MAX_PATTERNS) ? patterns_[pattern] : 0); }
+    unsigned        getPatternTable( unsigned i )
+    { 
+        assert( i < MAX_PATTERNS );
+        return patternTable_[i];   
+    }
+    Sample          *getSample( unsigned sample )
+    {
+        assert( sample < MAX_SAMPLES );
+        return samples_[sample] ? samples_[sample] : &emptySample_;
+    }
+    Instrument      *getInstrument( unsigned instrument )  
+    { 
+        assert( instrument < MAX_INSTRUMENTS );
+        return instruments_[instrument] ? instruments_[instrument] : &emptyInstrument_;
+    }
+    Pattern         *getPattern( unsigned pattern ) 
+    { 
+        assert( pattern < MAX_PATTERN );
+        return patterns_[pattern] ? patterns_[pattern] : &emptyPattern_;
+    }
 
 private:
     std::string     fileName_;
@@ -440,12 +546,17 @@ private:
     unsigned        songRestartPosition_;
     unsigned char   defaultPanPositions_[PLAYER_MAX_CHANNELS];
     unsigned        patternTable_[MAX_PATTERNS];
+    Sample          *samples_[MAX_SAMPLES];
     Instrument      *instruments_[MAX_INSTRUMENTS];
     Pattern         *patterns_[MAX_PATTERNS];
+    Pattern         emptyPattern_;
+    Sample          emptySample_;
+    Instrument      emptyInstrument_;
 
     int             loadModFile ();
     int             loadS3mFile ();
     int             loadXmFile ();
+    int             loadItFile();
 };
 
 #endif // MODULE_H

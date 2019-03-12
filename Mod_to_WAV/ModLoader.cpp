@@ -330,42 +330,48 @@ int Module::loadModFile() {
     for ( int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++ ) songTitle_ += headerMK->songTitle[i]; 
     // now, the sample headers & sample data.
     fileOffset = sampleDataOffset;
-    for (unsigned i = 0; i < nInstruments_; i++) {
+    for ( unsigned iSample = 1; iSample <= nInstruments_; iSample++ ) {
         InstrumentHeader    instrument;
         SampleHeader        sample;
-        char                sampleName[MAX_SAMPLENAME_LENGTH + 1];
-
-        sampleName[MAX_SAMPLENAME_LENGTH] = '\0';
-        strncpy_s(sampleName, MAX_SAMPLENAME_LENGTH + 1, headerMK->samples[i].name, MAX_SAMPLENAME_LENGTH);
-        sample.name     = sampleName;
-        instrument.name = sampleName; 
+        //char                sampleName[MAX_SAMPLENAME_LENGTH + 1];
+        //sampleName[MAX_SAMPLENAME_LENGTH] = '\0';
+        //strncpy_s(sampleName, MAX_SAMPLENAME_LENGTH + 1, headerMK->samples[i].name, MAX_SAMPLENAME_LENGTH);
+        for ( char *c = headerMK->samples[iSample - 1].name; 
+            c < headerMK->samples[iSample - 1].name + MAX_SAMPLENAME_LENGTH;
+            c++ )
+        {
+            sample.name += *c;
+            instrument.name += *c;
+        }
+        instrument.nSamples = 1; // redundant?
+        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
+            instrument.sampleForNote[i] = iSample;
         sample.length       = 
-            ((unsigned)headerMK->samples[i].length)       << 1;
+            ((unsigned)headerMK->samples[iSample - 1].length)       << 1;
         sample.repeatOffset = 
-            ((unsigned)headerMK->samples[i].repeatOffset) << 1;
+            ((unsigned)headerMK->samples[iSample - 1].repeatOffset) << 1;
         sample.repeatLength = 
-            ((unsigned)headerMK->samples[i].repeatLength) << 1;
-        sample.volume       = headerMK->samples[i].linearVolume;
-        // better be safe than GPF ;)
-        if (sample.volume > MAX_VOLUME) sample.volume = MAX_VOLUME;
-        if (sample.repeatOffset > sample.length) sample.repeatOffset = 3;
+            ((unsigned)headerMK->samples[iSample - 1].repeatLength) << 1;
+        sample.volume       = headerMK->samples[iSample - 1].linearVolume;
+        if ( sample.volume > MAX_VOLUME ) sample.volume = MAX_VOLUME;
+        if ( sample.repeatOffset > sample.length ) sample.repeatOffset = 3;
         sample.isRepeatSample = (sample.repeatLength > 2);
-        if ((sample.repeatOffset + sample.repeatLength) > sample.length)
+        if ( (sample.repeatOffset + sample.repeatLength) > sample.length )
             sample.repeatLength = sample.length - sample.repeatOffset;
-
         // convert signed nibble to int and scale it up
-        sample.finetune = (signed char)(headerMK->samples[i].finetune << 4);
+        sample.finetune = (signed char)(headerMK->samples[iSample - 1].finetune << 4);
 
         if (sample.length > 2) {
             nSamples_++;
             sample.data = (SHORT *)(buf + fileOffset);
-            instrument.samples[0] = new Sample;
-            sample.dataType = SIGNED_EIGHT_BIT_SAMPLE;
-            instrument.samples[0]->load(sample);
-        }
-        fileOffset += sample.length;
-        instruments_[i] = new Instrument;
-        instruments_[i]->load(instrument);
+            samples_[iSample] = new Sample;
+            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+            samples_[iSample]->load( sample );
+            //fileOffset += sample.length; // ??
+        }   
+        fileOffset += sample.length; // ??
+        instruments_[iSample] = new Instrument;
+        instruments_[iSample]->load( instrument );
 #ifdef debug_mod_loader
         std::cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
         if (!instruments_[i]->getSample(0)) _getch();
@@ -514,7 +520,7 @@ int Module::loadModFile() {
 
         patterns_[i] = new Pattern;
         patternData = new Note[nChannels_ * MOD_ROWS];
-        patterns_[i]->Initialise(nChannels_, MOD_ROWS, patternData);
+        patterns_[i]->initialise(nChannels_, MOD_ROWS, patternData);
         iNote = patternData;
         for (unsigned n = 0; n < (nChannels_ * MOD_ROWS); n++) {
             j1 = *((unsigned char *)bufp++);

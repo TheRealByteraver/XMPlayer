@@ -7,19 +7,6 @@
 using namespace std;
 
 bool Sample::load(const SampleHeader &sampleHeader) {
-    /*
-    char        *s = sampleHeader.name;
-    char        *d;
-    unsigned    k = strlen(sampleHeader.name);
-    unsigned    i = 0;
-
-    if (k > MAX_SAMPLENAME_LENGTH) k = MAX_SAMPLENAME_LENGTH;
-    name_ = new char[k + 1];
-    name_[k] = '\0';
-    d = name_;
-    while (*s && (i < k)) { *d++ = *s++; i++; }
-    *d = '\0';
-    */
     name_ = sampleHeader.name;
     if (sampleHeader.data) { 
         length_           = sampleHeader.length;
@@ -42,7 +29,7 @@ bool Sample::load(const SampleHeader &sampleHeader) {
         data_ = new SHORT [k]; 
 
         switch (sampleHeader.dataType) {
-            case SIGNED_SIXTEEN_BIT_SAMPLE : 
+            case SAMPLEDATA_SIGNED_16BIT:
                 {
                     SHORT  *ps = (SHORT *) sampleHeader.data;
                     SHORT  *pd = (data_ + INTERPOLATION_SPACER);
@@ -52,12 +39,12 @@ bool Sample::load(const SampleHeader &sampleHeader) {
                     }
                     break;
                 }
-            case SIGNED_EIGHT_BIT_SAMPLE : 
+            case SAMPLEDATA_SIGNED_8BIT:
                 {
                     signed char *ps = (signed char *)(sampleHeader.data);
                     SHORT       *pd = (data_ + INTERPOLATION_SPACER);
 
-                    for (unsigned j = 0; j < length_; j++) {
+                    for ( unsigned j = 0; j < length_; j++ ) {
                         *pd++ = *ps++ << 8;
                     }
                     break;
@@ -67,7 +54,7 @@ bool Sample::load(const SampleHeader &sampleHeader) {
                     return false;
                 }
         }
-        if (INTERPOLATION_SPACER) {
+        if ( INTERPOLATION_SPACER ) {
             SHORT   *iData = data_ + INTERPOLATION_SPACER;
             for (unsigned iSamples = INTERPOLATION_SPACER; iSamples; iSamples--) {
                 data_[iSamples - 1] = 
@@ -76,8 +63,8 @@ bool Sample::load(const SampleHeader &sampleHeader) {
                     //data_[INTERPOLATION_SPACER + INTERPOLATION_SPACER - iSamples + 1];
             }
 
-            for (unsigned iSamples = 0; iSamples < INTERPOLATION_SPACER; iSamples++) {
-                if (sampleHeader.isRepeatSample) {
+            for ( unsigned iSamples = 0; iSamples < INTERPOLATION_SPACER; iSamples++ ) {
+                if ( sampleHeader.isRepeatSample ) {
                     iData[repeatEnd_ + iSamples] = iData[repeatOffset_ + iSamples];
                 } else {
                     iData[length_ + iSamples] = 
@@ -91,8 +78,5 @@ bool Sample::load(const SampleHeader &sampleHeader) {
 }
 
 Sample::~Sample() {
-    /*
-    delete name_;
-    */
     delete data_;
 }
