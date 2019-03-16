@@ -1,3 +1,44 @@
+/*
+
+Idea's for performance gain (less memory):
+    - use flags instead of booleans
+    - store sample and instrument names in a separate vector list rather than
+      storing it together with the data needed by the mixer
+    - store small values in smaller variables (volume in unsigned char etc)
+    - 4-byte align them in the struct
+
+Flags for samples:
+    - is sample used in song
+    - is looping sample
+    - is sustain loop used
+    - is ping pong loop
+    - is ping pong sustain loop
+
+Flags for instruments:
+    - New Note Action: cut
+    - New Note Action: continue
+    - New Note Action: note off
+    - New Note Action: note fade
+    - Duplicate Check Type: off
+    - Duplicate Check Type: note
+    - Duplicate Check Type: sample
+    - Duplicate Check Type: instrument
+    - Duplicate Check Action: cut
+    - Duplicate Check Action: note off
+    - Duplicate Check Action: note fade
+
+Other idea's:
+    - create a virtual file class to read files in a safer way
+    - further reduce pointer usage (replace with const reference)
+
+Todo:
+    - implement IT & S3M effects
+    - verify panning slide egde cases for different trackers
+
+
+*/
+
+
 #ifndef MODULE_H
 #define MODULE_H
 
@@ -207,7 +248,6 @@ class Note {
 public:
     unsigned        note;
     unsigned        instrument;
-    //unsigned        period;
     Effect          effects[MAX_EFFECT_COLUMNS];
 };
 
@@ -216,93 +256,111 @@ class Pattern {
     unsigned        nRows_;
     Note            *data_;
 public:
-                    Pattern ()                  
-                    { 
-                        nChannels_ = 0;
-                        nRows_ = 0;
-                        data_ = nullptr;
-                    }
-                    Pattern( unsigned nChannels,unsigned nRows ) :
-                        nChannels_ ( nChannels ),
-                        nRows_ ( nRows )
-                    {
-                        data_ = new Note[nChannels * nRows];
-                        memset( data_,0,nChannels * nRows * sizeof( Note ) );
-                    }
-                    ~Pattern () { delete data_; }
-                    void            initialise( unsigned nChannels,unsigned nRows,Note *data )
-                    {
-                        nChannels_ = nChannels;
-                        nRows_ = nRows;
-                        data_ = data;
-                        memset( data,0,nChannels * nRows * sizeof( Note ) );
-                    }
-                    unsigned        getnRows ()                 { return nRows_;            }
+    Pattern ()                  
+    { 
+        nChannels_ = 0;
+        nRows_ = 0;
+        data_ = nullptr;
+    }
+    Pattern( unsigned nChannels,unsigned nRows ) :
+        nChannels_ ( nChannels ),
+        nRows_ ( nRows )
+    {
+        data_ = new Note[nChannels * nRows];
+        memset( data_,0,nChannels * nRows * sizeof( Note ) );
+    }
+    ~Pattern () { delete data_; }
+    void            initialise( unsigned nChannels,unsigned nRows,Note *data )
+    {
+        nChannels_ = nChannels;
+        nRows_ = nRows;
+        data_ = data;
+        memset( data,0,nChannels * nRows * sizeof( Note ) );
+    }
+    unsigned        getnRows ()                 { return nRows_;            }
     Note            getNote( unsigned n )       { return data_[n];          }
     /*
         - returns a pointer to the beginning of the pattern if row exceeds the
           maximum nr of rows in this particular pattern.
         - returns nullptr if no pattern data is present.
     */
-    Note             *getRow ( unsigned row ) 
-                    { 
-                        if ( !data_ ) return nullptr;
-                        if ( row > nRows_ ) row = 0;
-                        return data_ + nChannels_ * row; 
-                    }
+    Note            *getRow ( unsigned row ) 
+    { 
+        if ( !data_ ) return nullptr;
+        if ( row > nRows_ ) row = 0;
+        return data_ + nChannels_ * row; 
+    }
 };
 
 class SampleHeader {
 public:
-                    SampleHeader () 
-                    { 
-                        name.clear();
-                        length = 0;
-                        repeatOffset = 0;
-                        repeatLength = 0;
-                        isRepeatSample = false;
-                        isPingpongSample = false;
-                        isUsed = false;
-                        volume = false;
-                        relativeNote = 0;
-                        panning = PANNING_CENTER;
-                        finetune = 0;
-                        dataType = SAMPLEDATA_TYPE_UNKNOWN;
-                        data = nullptr;
-                    }
+    SampleHeader()
+    {
+        name.clear();
+        length = 0;
+        repeatOffset = 0;
+        repeatLength = 0;
+        sustainRepeatStart = 0;
+        sustainRepeatEnd = 0;
+        isRepeatSample = false;
+        isSustainedSample = false;
+        isPingpongSample = false;
+        isUsed = false;
+        globalVolume = 64;
+        volume = 64;
+        relativeNote = 0;
+        panning = PANNING_CENTER;
+        finetune = 0;
+        vibratoSpeed = 0;     // 0..64
+        vibratoDepth = 0;     // 0..64
+        vibratoWaveForm = 0;  // 0 = sine,1 = ramp down,2 = square,3 = random
+        vibratoRate = 0;      // 0..64
+        dataType = SAMPLEDATA_TYPE_UNKNOWN;
+        data = nullptr;
+    }
     std::string     name;
     unsigned        length;
     unsigned        repeatOffset;
     unsigned        repeatLength;
     bool            isRepeatSample;
     bool            isPingpongSample;
-    bool            isUsed;             // if the sample is used in the song
+    bool            isSustainedSample;
+    bool            isUsed;           // if the sample is used in the song
+    int             globalVolume;
     int             volume;
     int             relativeNote;
     unsigned        panning;
     int             finetune;
-    int             dataType;           // 8 or 16 bit, compressed, etc
-    SHORT           *data;              // only 16 bit samples allowed                    
+    int             dataType;         // 8 or 16 bit, compressed, etc
+    unsigned        sustainRepeatStart;
+    unsigned        sustainRepeatEnd;
+    unsigned        vibratoSpeed;     // 0..64
+    unsigned        vibratoDepth;     // 0..64
+    unsigned        vibratoWaveForm;  // 0 = sine,1 = ramp down,2 = square,3 = random
+    unsigned        vibratoRate;      // 0..64
+    SHORT           *data;            // only 16 bit samples allowed                    
 };
 
 class Sample {
 public:
-                    Sample () 
-                    { 
-                        name_.clear();
-                        length_ = 0;
-                        repeatOffset_ = 0;
-                        repeatLength_ = 0;
-                        isRepeatSample_ = false;
-                        isPingpongSample_ = false;
-                        isUsed_ = false;
-                        volume_ = false;
-                        relativeNote_ = 0;
-                        panning_ = PANNING_CENTER;
-                        finetune_ = 0;
-                        data_ = nullptr;
-                    }
-                    ~Sample ();
+    Sample()
+    {
+        name_.clear();
+        length_ = 0;
+        repeatOffset_ = 0;
+        repeatLength_ = 0;
+        isRepeatSample_ = false;
+        isPingpongSample_ = false;
+        isSustainedSample_ = false;
+        isPingpongSustainedSample_ = false;
+        isUsed_ = false;
+        volume_ = false;
+        relativeNote_ = 0;
+        panning_ = PANNING_CENTER;
+        finetune_ = 0;
+        data_ = nullptr;
+    }
+    ~Sample();
     bool            load ( const SampleHeader &sampleHeader );
     std::string     getName ()          { return name_;             }
     unsigned        getLength ()        { return length_;           }
@@ -323,9 +381,14 @@ private:
     unsigned        repeatOffset_;
     unsigned        repeatEnd_;
     unsigned        repeatLength_;
+    unsigned        sustainRepeatStart_;
+    unsigned        sustainRepeatEnd_;
     bool            isRepeatSample_;
     bool            isPingpongSample_;
-    bool            isUsed_;              // if the sample is used in the song
+    bool            isSustainedSample_;
+    bool            isPingpongSustainedSample_;
+    bool            isUsed_;            // if the sample is used in the song
+    int             globalVolume_;
     int             volume_;
     int             relativeNote_;
     unsigned        panning_;
@@ -337,6 +400,11 @@ class EnvelopePoint {
 public:
     unsigned        x;
     unsigned        y;
+};
+
+struct RelativeNoteAndSampleMap {
+    unsigned        note;
+    unsigned        sampleNr;
 };
 
 class InstrumentHeader {
@@ -511,12 +579,12 @@ public:
     }
     Sample          *getSample( unsigned sample )
     {
-        assert( sample < MAX_SAMPLES );
+        assert( sample <= MAX_SAMPLES );
         return samples_[sample] ? samples_[sample] : &emptySample_;
     }
     Instrument      *getInstrument( unsigned instrument )  
     { 
-        assert( instrument < MAX_INSTRUMENTS );
+        assert( instrument <= MAX_INSTRUMENTS );
         return instruments_[instrument] ? instruments_[instrument] : &emptyInstrument_;
     }
     Pattern         *getPattern( unsigned pattern ) 

@@ -172,6 +172,7 @@
   <ItemGroup>
     <ClInclude Include="Module.h" />
     <ClInclude Include="thanks.h" />
+    <ClInclude Include="virtualfile.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
