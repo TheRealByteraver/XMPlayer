@@ -28,7 +28,6 @@ Flags for instruments:
     - Duplicate Check Action: note fade
 
 Other idea's:
-    - create a virtual file class to read files in a safer way
     - further reduce pointer usage (replace with const reference)
 
 Todo:

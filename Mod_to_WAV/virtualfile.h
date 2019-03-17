@@ -16,6 +16,29 @@
 */
 typedef int IOError;
 
+template <class P> class MemoryBlock 
+{
+public:
+    MemoryBlock( P *source,unsigned nElements ) :
+        data_( source ),
+        size_( nElements )
+    {
+        assert( source != nullptr );
+        assert( nElements != 0 );
+    }
+    P& operator[] ( unsigned i ) {
+        if ( i < nElements_ ) return data_[i];
+        else return data_[nElements_ - 1];
+    }
+    unsigned    nElements()
+    {
+        return nElements_;
+    }
+private:
+    P           *data_ = nullptr;
+    unsigned    nElements_;
+};
+
 class VirtualFile {
 public:
     VirtualFile( std::string &fileName ) :
@@ -74,10 +97,10 @@ public:
             ioError_ = VIRTFILE_READ_ERROR;
             return ioError_;
         }
-        if ( (position < 0) && 
+        ioError_ = VIRTFILE_NO_ERROR;
+        if ( (position < 0) &&
             ( (- position) > (int)filePos_ ) ) filePos_ = 0;
         else filePos_ += position;
-        ioError_ = VIRTFILE_NO_ERROR;
         if ( filePos_ < data_ )
         {
             filePos_ = data_;
@@ -129,6 +152,35 @@ public:
         }
         return fileEOF_ - filePos_;
     }
+    template<class PTR> MemoryBlock<PTR> getPointer( unsigned nElements )
+    {
+        unsigned byteSize = nElements * sizeof( *PTR );
+        if ( filePos_ + byteSize <= fileEOF_ )
+        {
+            ioError_ = VIRTFILE_NO_ERROR;
+            MemoryBlock<PTR> memoryBlock( (PTR *)filePos_,nElements );
+            return memoryBlock;
+        } 
+        else
+        {
+            ioError_ = VIRTFILE_EOF;
+            MemoryBlock<PTR> memoryBlock( nullptr,0 );
+            return memoryBlock;
+        }
+    }
+    //const void * const getSafePointer( unsigned byteSize )
+    void       *getSafePointer( unsigned byteSize )
+    {
+        if ( filePos_ + byteSize <= fileEOF_ )
+        {
+            ioError_ = VIRTFILE_NO_ERROR;
+            return filePos_;
+        } else
+        {
+            ioError_ = VIRTFILE_EOF;
+            return nullptr;
+        }
+    }
 
 private:
     std::string     fileName_;
@@ -138,3 +190,4 @@ private:
     char            *fileEOF_;
     std::ifstream::pos_type  fileSize_;
 };
+

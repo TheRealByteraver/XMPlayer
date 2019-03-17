@@ -14,8 +14,9 @@ Thanks must go to:
 #include <fstream>
 
 #include "Module.h"
+#include "virtualfile.h"
 
-//#define debug_s3m_loader
+#define debug_s3m_loader
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
@@ -29,6 +30,7 @@ Thanks must go to:
                                              sizeof(S3mInstHeader) + 64 + 16)
 #define S3M_MAX_CHANNELS                    32
 #define S3M_MAX_INSTRUMENTS                 100
+#define S3M_MAX_PATTERNS                    200
 #define S3M_CHN_UNUSED                      255
 #define S3M_DEFAULT_PAN_LEFT                48
 #define S3M_DEFAULT_PAN_RIGHT               207
@@ -141,15 +143,20 @@ const char *notetable[] = {
 #endif
 
 int Module::loadS3mFile() {
+    /*
     char                    *buf;
     std::ifstream::pos_type  fileSize = 0;
     std::ifstream            s3mFile( 
         fileName_,std::ios::in | std::ios::binary | std::ios::ate );
+    */
+
     // initialize s3m specific variables:
     minPeriod_ = 56;    // periods[9 * 12 - 1]
     maxPeriod_ = 27392; // periods[0]
     // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
+
+    /*
     if ( !s3mFile.is_open() ) return 0; // exit on I/O error
     fileSize = s3mFile.tellg();
     buf = new char[(int)fileSize];
@@ -157,6 +164,14 @@ int Module::loadS3mFile() {
     s3mFile.read( buf,fileSize );
     s3mFile.close();
     S3mFileHeader& s3mFileHeader = *((S3mFileHeader *)buf);
+    */
+
+    VirtualFile s3mFile( fileName_ );
+    if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+    S3mFileHeader s3mFileHeader;
+    unsigned fileSize = s3mFile.fileSize();
+    if ( s3mFile.read( &s3mFileHeader,sizeof( S3mFileHeader ) ) ) return 0;
+
     // some very basic checking
     if ( (fileSize < S3M_MIN_FILESIZE) ||
          ( ! ((s3mFileHeader.tag[0] == 'S') &&
@@ -172,7 +187,7 @@ int Module::loadS3mFile() {
         std::cout << std::endl
             << "SCRM tag not found or file is too small, exiting.";
 #endif
-        delete[] buf;
+        //delete[] buf;
         return 0;
     }
     s3mFileHeader.id = '\0'; // use the DOS EOF marker as end of cstring marker    
@@ -258,8 +273,14 @@ int Module::loadS3mFile() {
     memset( patternTable_,0,sizeof( *patternTable_ ) * MAX_PATTERNS );
     nPatterns_ = 0;
     songLength_ = 0;
-    int bufOffset = sizeof( S3mFileHeader );
-    unsigned char *OrderList = (unsigned char *)(buf + bufOffset);
+
+
+    //int bufOffset = sizeof( S3mFileHeader );
+    //unsigned char *OrderList = (unsigned char *)(buf + bufOffset);
+
+
+
+
     /*
     for ( int i = 0; i < s3mFileHeader.songLength; i++ )
     {
@@ -277,7 +298,11 @@ int Module::loadS3mFile() {
     */
     for ( int i = 0; i < s3mFileHeader.songLength; i++ )
     {
-        unsigned order = OrderList[i];
+        //unsigned order = OrderList[i];       
+        unsigned char readOrder;
+        if ( s3mFile.read( &readOrder,sizeof( unsigned char ) ) ) return 0;
+        unsigned order = readOrder;
+
         if ( order >= S3M_MARKER_PATTERN ) order = MARKER_PATTERN;
         else if ( order > nPatterns_ ) nPatterns_ = order;
         patternTable_[songLength_] = order;
@@ -293,11 +318,14 @@ int Module::loadS3mFile() {
         << "SongLength (corr.): " << songLength_ << std::endl
         << "Number of Patterns: " << nPatterns_ << std::endl;
 #endif
+    /*
     bufOffset += s3mFileHeader.songLength;
     const unsigned short *instrParaPtrs = (unsigned short *)(buf + bufOffset);
     bufOffset += s3mFileHeader.nInstruments * 2; // sizeof( unsigned short ) == 2
+
     const unsigned short *ptnParaPtrs = (unsigned short *)(buf + bufOffset);
     bufOffset += s3mFileHeader.nPatterns    * 2; // sizeof( unsigned short ) == 2
+
     const unsigned char *defPanPositions = (unsigned char *)(buf + bufOffset); // 32 bytes
     if ( (bufOffset + 32) > fileSize ) { 
 #ifdef debug_s3m_loader
@@ -307,11 +335,32 @@ int Module::loadS3mFile() {
         delete[] buf;
         return 0;
     }
+    */
+    unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
+    unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
+    unsigned char   defPanPositions[S3M_MAX_CHANNELS];
+    for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ )
+    {
+        unsigned short instPointer;
+        if ( s3mFile.read( &instPointer,sizeof( unsigned short ) ) ) return 0;
+        instrParaPtrs[nInst] = instPointer;
+    }
+    for ( int nPtn = 0; nPtn < s3mFileHeader.nPatterns; nPtn++ )
+    {
+        unsigned short ptnPointer;
+        if ( s3mFile.read( &ptnPointer,sizeof( unsigned short ) ) ) return 0;
+        ptnParaPtrs[nPtn] = ptnPointer;
+    }
+    if ( s3mFile.read( &defPanPositions,sizeof( unsigned char ) * S3M_MAX_CHANNELS ) ) return 0;
+    s3mFile.relSeek( -(int)(sizeof( unsigned char ) * S3M_MAX_CHANNELS) );
+
+
+
     // to be reviewed (ugly code) --------------------------
     if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
     {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-            defaultPanPositions_[i] = (defPanPositions[i] & 0xF) * 17; // convert to 8 bit pan
+            defaultPanPositions_[i] = (defPanPositions[i] & 0xF) * 16; // convert to 8 bit pan
     } else {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             defaultPanPositions_[i] = S3M_DEFAULT_PAN_CENTER;
@@ -328,6 +377,7 @@ int Module::loadS3mFile() {
         defaultPanPositions_[i] = chnPanVals[i];
     }
     // end "to be reviewed" marker -------------------------
+
 #ifdef debug_s3m_loader
     std::cout << std::endl << "Instrument pointers: ";
     for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
@@ -365,10 +415,16 @@ int Module::loadS3mFile() {
         s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
     for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ )
     {
-        bufOffset = 16 * instrParaPtrs[nInst - 1];
-        S3mInstHeader& s3mInstHeader = *((S3mInstHeader *)(buf + bufOffset));
+        //bufOffset = 16 * instrParaPtrs[nInst - 1];
+        //S3mInstHeader& s3mInstHeader = *((S3mInstHeader *)(buf + bufOffset));
+        S3mInstHeader   s3mInstHeader;
+        s3mFile.absSeek( 16 * instrParaPtrs[nInst - 1] );
+        if ( s3mFile.read( &s3mInstHeader,sizeof( S3mInstHeader ) ) ) return 0;
+
+
         smpDataPtrs[nInst - 1] = 
             16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
+
         if ( !s3mInstHeader.c4Speed ) s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
 #ifdef debug_s3m_loader
         s3mInstHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
@@ -435,6 +491,9 @@ int Module::loadS3mFile() {
         if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
             (smpDataPtrs[nInst - 1] != 0)) {
             nSamples_++;
+
+
+            /*
             sample.data = (SHORT *)(buf + smpDataPtrs[nInst - 1]);
             if ( (char *)((char *)sample.data + sample.length) > (buf + (unsigned)fileSize) )
             {
@@ -449,9 +508,31 @@ int Module::loadS3mFile() {
                     << (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
                     << std::endl;
 #endif
-                delete[] buf;
+                //delete[] buf;
                 return 0;
             }
+            */
+
+            s3mFile.absSeek( smpDataPtrs[nInst - 1] );
+            sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
+            // temp DEBUG:
+            if ( sample.data == nullptr )
+            {
+#ifdef debug_s3m_loader
+                std::cout << std::endl
+                    << "Missing sample data while reading file, exiting!" << std::endl
+                    << "sample.data:   " << std::dec << (unsigned)sample.data << std::endl
+                    << "sample.length: " << sample.length << std::endl
+                    << "data + length: " << (unsigned)(sample.data + sample.length) << std::endl
+                    << "filesize:      " << fileSize << std::endl
+                    << "overshoot:     "
+                    << "NOT AVAILABLE  "
+                    //<< (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
+                    << std::endl;
+#endif
+                return 0;
+            }
+
             //instrument.samples[0] = new Sample;
 
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
@@ -621,9 +702,22 @@ int Module::loadS3mFile() {
         memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
         if ( ptnParaPtrs[iPtn] ) // empty patterns are not stored
         {
-            char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
+
+            //char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
+
+            s3mFile.absSeek( (unsigned)16 * (unsigned)ptnParaPtrs[iPtn] );
+            unsigned ptnMaxSize = s3mFile.dataLeft();
+            char *s3mPtn = (char *)s3mFile.getSafePointer( ptnMaxSize );
+            // temp DEBUG:
+            if ( s3mPtn == nullptr )
+            {
+                return 0;
+            }
+
+
             unsigned packedSize = *((unsigned short *)s3mPtn);
-            if ( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
+            //if ( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
+            if( packedSize > ptnMaxSize )
             {
 
 #ifdef debug_s3m_loader
@@ -632,9 +726,12 @@ int Module::loadS3mFile() {
                     << std::endl;
 #endif
                 delete[] unPackedPtn;
-                delete[] buf;
+                //delete[] buf;
                 return 0;
             }
+
+
+
             unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
             int row = 0;
             for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
@@ -1078,7 +1175,7 @@ int Module::loadS3mFile() {
         }
     }
     delete[] unPackedPtn;
-    delete[] buf;
+    //delete[] buf;
     isLoaded_ = true;
     return 0;
 }

@@ -1,6 +1,11 @@
 /*
     XM files with ADPCM compressed sample data are not supported yet.
     Stripped XM files should load normally.
+
+    crystals.wow is detected as a valid .xm file
+
+
+
 */
 #include <conio.h>
 #include <windows.h>
@@ -10,11 +15,12 @@
 #include <fstream>
 
 #include "module.h"
+#include "virtualfile.h"
 
 //using namespace std;
 
-//#define debug_xm_loader
-//#define debug_xm_show_patterns
+#define debug_xm_loader
+#define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
 #ifdef debug_xm_loader
@@ -22,7 +28,9 @@
 #include <iomanip>
 #endif
 
+#ifdef debug_xm_loader
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
+#endif
 
 #define XM_HEADER_SIZE_PART_ONE         60
 #define XM_MAX_SONG_NAME_LENGTH         20
@@ -31,6 +39,8 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define XM_MAX_SAMPLE_NAME_LENGTH       22
 #define XM_MAX_PATTERNS                 256
 #define XM_MAX_INSTRUMENTS              128
+#define XM_MIN_CHANNELS                 2
+#define XM_MAX_CHANNELS                 32
 #define XM_MAX_SONG_LENGTH              256
 #define XM_MAX_CHANNELS                 32
 #define XM_LINEAR_FREQUENCIES_FLAG      1
@@ -52,13 +62,13 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 #pragma pack (1)
 
-struct XmHeader {                   // the header of the xm file... global info.
+struct XmHeader {                   // the xmHeader of the xm file... global info.
   char              fileTag[17];    // = "Extended Module"
   char              songTitle[20];  // Name of the XM
   unsigned char     id;             // 0x1A
   char              trackerName[20];// = "FastTracker v2.00"
   unsigned short    version;        // 0x01 0x04
-  unsigned          headerSize;     // size of header from here: min. 20 + 1 bytes
+  unsigned          headerSize;     // size of xmHeader from here: min. 20 + 1 bytes
   unsigned short    songLength;
   unsigned short    songRestartPosition;
   unsigned short    nChannels;
@@ -70,7 +80,7 @@ struct XmHeader {                   // the header of the xm file... global info.
   unsigned char     patternTable[XM_MAX_SONG_LENGTH];
 };                                  // size = 336 max
 
-struct XmPatternHeader {            // typedef of the pattern header
+struct XmPatternHeader {            // typedef of the pattern xmHeader
   unsigned          headerSize;
   unsigned char     pack;
   unsigned short    nRows;
@@ -130,93 +140,102 @@ struct XmSampleHeader {
 
 int Module::loadXmFile() 
 {
-    XmHeader                    *header;
-    XmPatternHeader             *pattern;
+    /*
     char                        *buf, *bufp;
     std::ifstream::pos_type     fileSize = 0;
     std::ifstream               xmFile(fileName_,std::ios::in| std::ios::binary| std::ios::ate);
-    
+    */
+    unsigned fileSize = 0;
     isLoaded_ = false;
+    VirtualFile xmFile( fileName_ );
+    if ( xmFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+
+    /*
     // load file into byte buffer and then work on that buffer only
     if ( !xmFile.is_open() ) {
          std::cout << "can't open file";
         return 0; // exit on I/O error
     }
-    fileSize = xmFile.tellg();
+    */
+    fileSize = xmFile.fileSize();
+    /*
     buf = new char [(unsigned)fileSize];
     xmFile.seekg( 0,std::ios::beg );
     xmFile.read( buf, fileSize );
     xmFile.close();
-
+    */
     // now start reading from memory
     // ultra simple error checking
-    header = (XmHeader *)buf;
+    //xmHeader = (XmHeader *)buf;
+    XmHeader xmHeader;
+    if ( xmFile.read( &xmHeader,sizeof( XmHeader ) ) ) return 0;
     if (
-        //(header->id != 0x1A                         ) ||  // removed for stripped xm compatibility
-        //((header->version >> 8) != 1                ) ||  // removed for stripped xm compatibility
-        (header->songLength     > XM_MAX_SONG_LENGTH) ||
-        (header->nChannels      > XM_MAX_CHANNELS   ) ||
-        (header->nInstruments   > XM_MAX_INSTRUMENTS) ||
-        (header->nPatterns      > XM_MAX_PATTERNS)    ||
-        (header->defaultBpm     > XM_MAX_BPM)         ||
-        (header->defaultTempo   > XM_MAX_TEMPO)
+        //(xmHeader.id != 0x1A                         ) ||  // removed for stripped xm compatibility
+        //((xmHeader.version >> 8) != 1                ) ||  // removed for stripped xm compatibility
+        (xmHeader.songLength     > XM_MAX_SONG_LENGTH) ||
+        (xmHeader.nChannels      > XM_MAX_CHANNELS   ) ||
+        (xmHeader.nChannels      < XM_MIN_CHANNELS   ) ||
+        (xmHeader.nInstruments   > XM_MAX_INSTRUMENTS) ||
+        (xmHeader.nPatterns      > XM_MAX_PATTERNS)    ||
+        (xmHeader.defaultBpm     > XM_MAX_BPM)         ||
+        (xmHeader.defaultTempo   > XM_MAX_TEMPO)
         ) {
 #ifdef debug_xm_loader
         char *hex = "0123456789ABCDEF";
-        std::cout << "\nXm file header:";
+        std::cout << "\nXm file xmHeader:";
         std::cout << "\nID                   = ";
         
-        if (header->id > 0xF) std::cout << hex[(header->id >> 4) & 0xF];
-        std::cout << hex[header->id & 0xF];
+        if (xmHeader.id > 0xF) std::cout << hex[(xmHeader.id >> 4) & 0xF];
+        std::cout << hex[xmHeader.id & 0xF];
         std::cout << "\nVersion              = ";
-        if (header->version > 0xFFF) std::cout << hex[(header->version >> 12) & 0xF];
-        if (header->version > 0xFF ) std::cout << hex[(header->version >>  8) & 0xF] << ".";
-        if (header->version > 0xF  ) std::cout << hex[(header->version >>  4) & 0xF];
-        std::cout << hex[header->version & 0xF];
-        std::cout << "\nSong length          = " << header->songLength;
-        std::cout << "\nNr of channels       = " << header->nChannels;
-        std::cout << "\nNr of instruments    = " << header->nInstruments;
-        std::cout << "\nNr of Patterns       = " << header->nPatterns;
-        std::cout << "\nDefault Bpm          = " << header->defaultBpm;
-        std::cout << "\nDefault Tempo        = " << header->defaultTempo;
+        if (xmHeader.version > 0xFFF) std::cout << hex[(xmHeader.version >> 12) & 0xF];
+        if (xmHeader.version > 0xFF ) std::cout << hex[(xmHeader.version >>  8) & 0xF] << ".";
+        if (xmHeader.version > 0xF  ) std::cout << hex[(xmHeader.version >>  4) & 0xF];
+        std::cout << hex[xmHeader.version & 0xF];
+        std::cout << "\nSong length          = " << xmHeader.songLength;
+        std::cout << "\nNr of channels       = " << xmHeader.nChannels;
+        std::cout << "\nNr of instruments    = " << xmHeader.nInstruments;
+        std::cout << "\nNr of Patterns       = " << xmHeader.nPatterns;
+        std::cout << "\nDefault Bpm          = " << xmHeader.defaultBpm;
+        std::cout << "\nDefault Tempo        = " << xmHeader.defaultTempo;
         std::cout << "\nXM MAX Tempo         = " << XM_MAX_TEMPO;
-        std::cout << "\nError reading header, this is not an xm file.\n";
+        std::cout << "\nError reading xmHeader, this is not an xm file.\n";
 #endif
-        delete [] buf;
+        //delete [] buf;
         return 0;
     }
     trackerType_ = TRACKER_FT2;
     songTitle_ = "";
     for ( int i = 0; i < XM_MAX_SONG_NAME_LENGTH; i++ ) {
-        songTitle_ += header->songTitle[i];
+        songTitle_ += xmHeader.songTitle[i];
     }
     trackerTag_ = "";
     for ( int i = 0; i < XM_TRACKER_NAME_LENGTH; i++ ) {
-        trackerTag_ += header->trackerName[i];
+        trackerTag_ += xmHeader.trackerName[i];
     }
-    header->id              = 0; // use as zero terminator
-    useLinearFrequencies_   = (bool)(header->flags & XM_LINEAR_FREQUENCIES_FLAG);
+    xmHeader.id              = 0; // use as zero terminator
+    useLinearFrequencies_   = (bool)(xmHeader.flags & XM_LINEAR_FREQUENCIES_FLAG);
     isCustomRepeat_         = true;
     panningStyle_           = PANNING_STYLE_XM;
-    nChannels_              = header->nChannels;
-    nInstruments_           = header->nInstruments;
+    nChannels_              = xmHeader.nChannels;
+    nInstruments_           = xmHeader.nInstruments;
     nSamples_               = 0;
-    nPatterns_              = header->nPatterns;
-    defaultTempo_           = header->defaultTempo;
-    defaultBpm_             = header->defaultBpm;
-    songLength_             = header->songLength;
-    songRestartPosition_    = header->songRestartPosition;
+    nPatterns_              = xmHeader.nPatterns;
+    defaultTempo_           = xmHeader.defaultTempo;
+    defaultBpm_             = xmHeader.defaultBpm;
+    songLength_             = xmHeader.songLength;
+    songRestartPosition_    = xmHeader.songRestartPosition;
 #ifdef debug_xm_loader
     std::cout << "\nXM Module title          = " << songTitle_.c_str();
     std::cout << "\nXM file Tracker ID       = " << trackerTag_.c_str();
-    std::cout << "\n# Channels               = " << header->nChannels;
-    std::cout << "\n# Instruments            = " << header->nInstruments;
-    std::cout << "\n# Patterns               = " << header->nPatterns;
-    std::cout << "\nDefault Tempo            = " << header->defaultTempo;
-    std::cout << "\nDefault Bpm              = " << header->defaultBpm;
-    std::cout << "\nSong Length              = " << header->songLength;
-    std::cout << "\nSong restart position    = " << header->songRestartPosition;
-    std::cout << "\nHeader Size              = " << header->headerSize;
+    std::cout << "\n# Channels               = " << xmHeader.nChannels;
+    std::cout << "\n# Instruments            = " << xmHeader.nInstruments;
+    std::cout << "\n# Patterns               = " << xmHeader.nPatterns;
+    std::cout << "\nDefault Tempo            = " << xmHeader.defaultTempo;
+    std::cout << "\nDefault Bpm              = " << xmHeader.defaultBpm;
+    std::cout << "\nSong Length              = " << xmHeader.songLength;
+    std::cout << "\nSong restart position    = " << xmHeader.songRestartPosition;
+    std::cout << "\nHeader Size              = " << xmHeader.headerSize;
     std::cout << "\nFrequency / period system: " << (useLinearFrequencies_ ? "Linear" : "Amiga");
     std::cout << "\nSize of XmHeader                     = " << sizeof(XmHeader);
     std::cout << "\nSize of XmPatternHeader              = " << sizeof(XmPatternHeader);
@@ -245,94 +264,143 @@ int Module::loadXmFile()
     */
     memset(patternTable_, 0, sizeof(*patternTable_) * XM_MAX_SONG_LENGTH);
     for (unsigned i = 0; i < songLength_/*XM_MAX_SONG_LENGTH*/; i++) {
-        unsigned k = header->patternTable[i];
+        unsigned k = xmHeader.patternTable[i];
         if ((k + 1) > nPatterns_) k = nPatterns_; 
         patternTable_[i] = k;
     }
     // start reading the patterns
-    //bufp = buf + sizeof(XmHeader);
-    bufp = buf + XM_HEADER_SIZE_PART_ONE + header->headerSize;
-    for (unsigned iPattern = 0; iPattern < nPatterns_; iPattern++) {
-        Note        *iNote, *patternData;
-        unsigned    pack, volumeColumn;
 
-        pattern = (XmPatternHeader *)bufp;
+
+    //bufp = buf + sizeof(XmHeader);
+    //bufp = buf + XM_HEADER_SIZE_PART_ONE + xmHeader.headerSize;
+
+
+
+    for (unsigned iPattern = 0; iPattern < nPatterns_; iPattern++) {
+        Note            *iNote, *patternData;
+        //unsigned        pack, volumeColumn;
+        XmPatternHeader xmPatternHeader;
+
+        //xmPatternHeader = (XmPatternHeader *)bufp;
+        xmFile.read( &xmPatternHeader,sizeof( XmPatternHeader ) );
+        xmFile.relSeek( (int)xmPatternHeader.headerSize - (int)sizeof( XmPatternHeader ) );
+        if ( xmFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+
 #ifdef debug_xm_loader
 #define SHOW_PATTERN_NO 0
         if (iPattern == (SHOW_PATTERN_NO + 1)) _getch();
         std::cout << "\nPattern # " << iPattern << ":";
-        std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-        std::cout << "\nPattern # Rows          = " << pattern->nRows;
-        std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-        std::cout << "\nPattern Data Size       = " << pattern->patternSize;
+        std::cout << "\nPattern Header Size (9) = " << xmPatternHeader.headerSize;
+        std::cout << "\nPattern # Rows          = " << xmPatternHeader.nRows;
+        std::cout << "\nPattern Pack system     = " << (unsigned)xmPatternHeader.pack;
+        std::cout << "\nPattern Data Size       = " << xmPatternHeader.patternSize;
 #endif
-        if (/*pattern->pack ||*/ (pattern->nRows > XM_MAX_PATTERN_ROWS)) {
-            delete [] buf;
+        if (/*xmPatternHeader.pack ||*/ (xmPatternHeader.nRows > XM_MAX_PATTERN_ROWS) ) {
+            //delete [] buf;
             return 0;
         }  
         patterns_[iPattern] = new Pattern;
-        patternData = new Note[nChannels_ * pattern->nRows];
-        patterns_[iPattern]->initialise(nChannels_, pattern->nRows, patternData);
+        patternData = new Note[nChannels_ * xmPatternHeader.nRows];
+        patterns_[iPattern]->initialise(nChannels_, xmPatternHeader.nRows, patternData );
         iNote = patternData;
         // below (memset) is done in pattern class
-        //memset(patternData, 0, sizeof(Note) * nChannels_ * pattern->nRows);
+        //memset(patternData, 0, sizeof(Note) * nChannels_ * xmPatternHeader.nRows);
         //bufp += sizeof(XmPatternHeader);
-        bufp += pattern->headerSize;
-        // empty patterns are not stored
-        if (!pattern->patternSize) continue; // ?
+        //bufp += xmPatternHeader.headerSize;
 
-        for (unsigned n = 0; n < (nChannels_ * pattern->nRows); n++) {
-            pack = *((unsigned char *)bufp++);
-            if (pack & XM_NOTE_IS_PACKED) {
-                if (pack & XM_NOTE_AVAIL) {
-                    iNote->note         = *((unsigned char *)bufp++);
+        // empty patterns are not stored
+        if ( !xmPatternHeader.patternSize ) continue; // ?
+
+        for ( unsigned n = 0; n < (nChannels_ * xmPatternHeader.nRows); n++ ) 
+        {
+            //pack = *((unsigned char *)bufp++);
+            unsigned char pack;
+            unsigned char volumeColumn;
+            if ( xmFile.read( &pack,sizeof( unsigned char ) ) ) return 0;
+
+            if ( pack & XM_NOTE_IS_PACKED ) 
+            {
+                if ( pack & XM_NOTE_AVAIL ) 
+                {
+                    //iNote->note         = *((unsigned char *)bufp++);
+                    unsigned char note;
+                    if( xmFile.read( &note,sizeof( unsigned char ) ) ) return 0;
+                    iNote->note = note;
 #ifdef debug_xm_loader
                     if ( iNote->note > XM_KEY_OFF ) {
                         std::cout << "\nPattern # " << iPattern << ":";
-                        std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-                        std::cout << "\nPattern # Rows          = " << pattern->nRows;
-                        std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-                        std::cout << "\nPattern Data Size       = " << pattern->patternSize;
-                        std::cout << "\nRow nr                  = " << n / pattern->nRows;
-                        std::cout << "\nColumn nr               = " << n % pattern->nRows;
+                        std::cout << "\nPattern Header Size (9) = " << xmPatternHeader.headerSize;
+                        std::cout << "\nPattern # Rows          = " << xmPatternHeader.nRows;
+                        std::cout << "\nPattern Pack system     = " << (unsigned)xmPatternHeader.pack;
+                        std::cout << "\nPattern Data Size       = " << xmPatternHeader.patternSize;
+                        std::cout << "\nRow nr                  = " << n / xmPatternHeader.nRows;
+                        std::cout << "\nColumn nr               = " << n % xmPatternHeader.nRows;
                         std::cout << "\nIllegal note            = " << iNote->note;
                         std::cout << "\n";
                         _getch();
                     }
 #endif
                 } 
-                if (pack & XM_INSTRUMENT_AVAIL) {
-                    iNote->instrument   = *((unsigned char *)bufp++);
-                } 
-                if (pack & XM_VOLUME_COLUMN_AVAIL) {
-                    volumeColumn        = *((unsigned char *)bufp++);
+                if ( pack & XM_INSTRUMENT_AVAIL ) 
+                {
+                    //iNote->instrument   = *((unsigned char *)bufp++);
+                    unsigned char instrument;
+                    if ( xmFile.read( &instrument,sizeof( unsigned char ) ) ) return 0;
+                    iNote->instrument = instrument;
+                }
+                if ( pack & XM_VOLUME_COLUMN_AVAIL ) 
+                {
+                    //volumeColumn        = *((unsigned char *)bufp++);
+                    if ( xmFile.read( &volumeColumn,sizeof( unsigned char ) ) ) return 0;
                 } else volumeColumn = 0;
-                if (pack & XM_EFFECT_AVAIL) {
-                    iNote->effects[1].effect = *((unsigned char *)bufp++);
+
+                if ( pack & XM_EFFECT_AVAIL ) 
+                {
+                    //iNote->effects[1].effect = *((unsigned char *)bufp++);
+                    unsigned char effect;
+                    if ( xmFile.read( &effect,sizeof( unsigned char ) ) ) return 0;
+                    iNote->effects[1].effect = effect;
                 } 
-                if (pack & XM_EFFECT_ARGUMENT_AVAIL) {
-                    iNote->effects[1].argument = *((unsigned char *)bufp++);
+                if ( pack & XM_EFFECT_ARGUMENT_AVAIL ) 
+                {
+                    //iNote->effects[1].argument = *((unsigned char *)bufp++);
+                    unsigned char argument;
+                    if ( xmFile.read( &argument,sizeof( unsigned char ) ) ) return 0;
+                    iNote->effects[1].argument = argument;
                 } 
             } else {
                 iNote->note = pack;
 #ifdef debug_xm_loader
                 if ( iNote->note > XM_KEY_OFF ) {
                     std::cout << "\nPattern # " << iPattern << ":";
-                    std::cout << "\nPattern Header Size (9) = " << pattern->headerSize;
-                    std::cout << "\nPattern # Rows          = " << pattern->nRows;
-                    std::cout << "\nPattern Pack system     = " << (unsigned)pattern->pack;
-                    std::cout << "\nPattern Data Size       = " << pattern->patternSize;
-                    std::cout << "\nRow nr                  = " << n / pattern->nRows;
-                    std::cout << "\nColumn nr               = " << n % pattern->nRows;
+                    std::cout << "\nPattern Header Size (9) = " << xmPatternHeader.headerSize;
+                    std::cout << "\nPattern # Rows          = " << xmPatternHeader.nRows;
+                    std::cout << "\nPattern Pack system     = " << (unsigned)xmPatternHeader.pack;
+                    std::cout << "\nPattern Data Size       = " << xmPatternHeader.patternSize;
+                    std::cout << "\nRow nr                  = " << n / xmPatternHeader.nRows;
+                    std::cout << "\nColumn nr               = " << n % xmPatternHeader.nRows;
                     std::cout << "\nIllegal note            = " << iNote->note;
                     std::cout << "\n";
                     _getch();
                 }
-#endif                
+#endif           
+                /*
                 iNote->instrument           = *((unsigned char *)bufp++);
                 volumeColumn                = *((unsigned char *)bufp++);
                 iNote->effects[1].effect    = *((unsigned char *)bufp++);
                 iNote->effects[1].argument  = *((unsigned char *)bufp++);
+                */
+                unsigned char instrument;
+                unsigned char effect;
+                unsigned char argument;
+
+                if ( xmFile.read( &instrument,sizeof( unsigned char ) ) ) return 0;
+                if ( xmFile.read( &volumeColumn,sizeof( unsigned char ) ) ) return 0;
+                if ( xmFile.read( &effect,sizeof( unsigned char ) ) ) return 0;
+                if ( xmFile.read( &argument,sizeof( unsigned char ) ) ) return 0;
+                iNote->instrument = instrument;
+                iNote->effects[1].effect = effect;
+                iNote->effects[1].argument = argument;
             }
             if ( iNote->note == XM_KEY_OFF ) iNote->note = KEY_OFF;
             /*
@@ -481,7 +549,7 @@ int Module::loadXmFile()
                 if ( chn == 0 ) { 
                      std::cout << std::endl
                         << std::hex << std::setw( 2 ) << row << "/"
-                        << std::setw( 2 ) << pattern->nRows << "|";
+                        << std::setw( 2 ) << xmPatternHeader.nRows << "|";
                 } else if ( chn < 16 )
                 {
                      std::cout << noteStrings[iNote->note] << "|";
@@ -532,38 +600,54 @@ int Module::loadXmFile()
     // Now read all the instruments & sample data
     unsigned smpIdx = 1;
     for ( unsigned iInstrument = 1; iInstrument <= nInstruments_; iInstrument++ ) {
-        XmInstrumentHeaderPrimary   *instrumentHeader1;
-        XmInstrumentHeaderSecondary *instrumentHeader2;
         InstrumentHeader            instrument;
         char                        instrumentName[XM_MAX_INSTRUMENT_NAME_LENGTH + 1];
+        /*
         char                        *thisInstrument;
-        
+        XmInstrumentHeaderPrimary   *instrumentHeader1;
+        XmInstrumentHeaderSecondary *instrumentHeader2;
+
         thisInstrument = bufp;
         instrumentHeader1 = (XmInstrumentHeaderPrimary *)bufp;
+        */
+        XmInstrumentHeaderPrimary   xmInstrumentHeaderPrimary;
+        XmInstrumentHeaderSecondary xmInstrumentHeaderSecondary;
 
-        if ( instrumentHeader1->headerSize < sizeof( XmInstrumentHeaderPrimary ) ) {
+        if ( xmFile.read( &xmInstrumentHeaderPrimary,sizeof( XmInstrumentHeaderPrimary ) ) ) return 0;
+
+
+        if ( xmInstrumentHeaderPrimary.headerSize < sizeof( XmInstrumentHeaderPrimary ) ) {
             instrumentName[0] = '\0';
             instrument.nSamples = 0;
+            xmFile.relSeek( 
+                (int)xmInstrumentHeaderPrimary.headerSize - 
+                (int)sizeof( XmInstrumentHeaderPrimary ) 
+            );
         } else {
-            instrumentHeader2 = (XmInstrumentHeaderSecondary *)
-                                (bufp + sizeof( XmInstrumentHeaderPrimary ));
+            //instrumentHeader2 = (XmInstrumentHeaderSecondary *)(bufp + sizeof( XmInstrumentHeaderPrimary ));
+            if ( xmFile.read( &xmInstrumentHeaderSecondary,sizeof( XmInstrumentHeaderSecondary ) ) ) return 0;
+
             for ( int i = 0; i < XM_MAX_INSTRUMENT_NAME_LENGTH; i++ ) 
             {
-                instrumentName[i] = instrumentHeader1->name[i];
+                instrumentName[i] = xmInstrumentHeaderPrimary.name[i];
             }
             instrumentName[XM_MAX_INSTRUMENT_NAME_LENGTH] = '\0';
-            instrument.nSamples = instrumentHeader1->nSamples;
+            instrument.nSamples = xmInstrumentHeaderPrimary.nSamples;
+
+            xmFile.relSeek( (int)xmInstrumentHeaderPrimary.headerSize -
+                (int)(sizeof( XmInstrumentHeaderPrimary ) + sizeof( XmInstrumentHeaderSecondary )) );
         }
-        bufp += instrumentHeader1->headerSize;
+        //bufp += xmInstrumentHeaderPrimary.headerSize;
+
         instrument.name = instrumentName;
 
 #ifdef debug_xm_loader
-        std::cout << "\n\nInstrument header " << iInstrument << " size = " << instrumentHeader1->headerSize;
+        std::cout << "\n\nInstrument xmHeader " << iInstrument << " size = " << xmInstrumentHeaderPrimary.headerSize;
         std::cout << "\nInstrument name          = " << instrument.name.c_str();
-        std::cout << "\nInstrument type (0)      = " << (int)(instrumentHeader1->type);
+        std::cout << "\nInstrument type (0)      = " << (int)(xmInstrumentHeaderPrimary.type);
         std::cout << "\nNr of samples            = " << instrument.nSamples;
         if (instrument.nSamples)
-            std::cout << "\nSample Header Size       = " << instrumentHeader2->sampleHeaderSize;          
+            std::cout << "\nSample Header Size       = " << xmInstrumentHeaderSecondary.sampleHeaderSize;          
 #endif
         if ( instrument.nSamples ) 
         { 
@@ -572,71 +656,78 @@ int Module::loadXmFile()
             char            sampleNames[MAX_SAMPLES][XM_MAX_SAMPLE_NAME_LENGTH + 1];   
 
             for ( unsigned i = 0; i < MAXIMUM_NOTES; i++ )
-                instrument.sampleForNote[i] = instrumentHeader2->sampleForNote[i] + smpIdx;
+                instrument.sampleForNote[i] = xmInstrumentHeaderSecondary.sampleForNote[i] + smpIdx;
             for ( unsigned i = 0; i < 12; i++ ) 
             {
-                instrument.volumeEnvelope [i].x = instrumentHeader2->volumeEnvelope [i].x;
-                instrument.volumeEnvelope [i].y = instrumentHeader2->volumeEnvelope [i].y;
-                instrument.panningEnvelope[i].x = instrumentHeader2->panningEnvelope[i].x;
-                instrument.panningEnvelope[i].y = instrumentHeader2->panningEnvelope[i].y;
+                instrument.volumeEnvelope [i].x = xmInstrumentHeaderSecondary.volumeEnvelope [i].x;
+                instrument.volumeEnvelope [i].y = xmInstrumentHeaderSecondary.volumeEnvelope [i].y;
+                instrument.panningEnvelope[i].x = xmInstrumentHeaderSecondary.panningEnvelope[i].x;
+                instrument.panningEnvelope[i].y = xmInstrumentHeaderSecondary.panningEnvelope[i].y;
 #ifdef debug_xm_loader
                 std::cout << "\nEnveloppe point #" << i << ": "
                     << instrument.volumeEnvelope[i].x << "," 
                     << instrument.volumeEnvelope[i].y;
 #endif
             }
-            instrument.nVolumePoints    = instrumentHeader2->nVolumePoints;
-            instrument.volumeSustain    = instrumentHeader2->volumeSustain;
-            instrument.volumeLoopStart  = instrumentHeader2->volumeLoopStart;
-            instrument.volumeLoopEnd    = instrumentHeader2->volumeLoopEnd;
-            instrument.volumeType       = instrumentHeader2->volumeType;
-            instrument.volumeFadeOut    = instrumentHeader2->volumeFadeOut;
-            instrument.nPanningPoints   = instrumentHeader2->nPanningPoints;
-            instrument.panningSustain   = instrumentHeader2->panningSustain;
-            instrument.panningLoopStart = instrumentHeader2->panningLoopStart;
-            instrument.panningLoopEnd   = instrumentHeader2->panningLoopEnd;
-            instrument.panningType      = instrumentHeader2->panningType;
-            instrument.vibratoType      = instrumentHeader2->vibratoType;
-            instrument.vibratoSweep     = instrumentHeader2->vibratoSweep;
-            instrument.vibratoDepth     = instrumentHeader2->vibratoDepth;
-            instrument.vibratoRate      = instrumentHeader2->vibratoRate;
+            instrument.nVolumePoints    = xmInstrumentHeaderSecondary.nVolumePoints;
+            instrument.volumeSustain    = xmInstrumentHeaderSecondary.volumeSustain;
+            instrument.volumeLoopStart  = xmInstrumentHeaderSecondary.volumeLoopStart;
+            instrument.volumeLoopEnd    = xmInstrumentHeaderSecondary.volumeLoopEnd;
+            instrument.volumeType       = xmInstrumentHeaderSecondary.volumeType;
+            instrument.volumeFadeOut    = xmInstrumentHeaderSecondary.volumeFadeOut;
+            instrument.nPanningPoints   = xmInstrumentHeaderSecondary.nPanningPoints;
+            instrument.panningSustain   = xmInstrumentHeaderSecondary.panningSustain;
+            instrument.panningLoopStart = xmInstrumentHeaderSecondary.panningLoopStart;
+            instrument.panningLoopEnd   = xmInstrumentHeaderSecondary.panningLoopEnd;
+            instrument.panningType      = xmInstrumentHeaderSecondary.panningType;
+            instrument.vibratoType      = xmInstrumentHeaderSecondary.vibratoType;
+            instrument.vibratoSweep     = xmInstrumentHeaderSecondary.vibratoSweep;
+            instrument.vibratoDepth     = xmInstrumentHeaderSecondary.vibratoDepth;
+            instrument.vibratoRate      = xmInstrumentHeaderSecondary.vibratoRate;
 #ifdef debug_xm_loader
-            std::cout << "\nSample header size for this instrument = ";
-            std::cout << instrumentHeader2->sampleHeaderSize;
+            std::cout << "\nSample xmHeader size for this instrument = ";
+            std::cout << xmInstrumentHeaderSecondary.sampleHeaderSize;
             std::cout << "\n";
             for (unsigned i = 0; i < MAXIMUM_NOTES; i++)
                 std::cout << instrument.sampleForNote[i] << " ";
 #endif
             for ( unsigned iSample = 0; iSample < instrument.nSamples; iSample++ ) 
             {
-                XmSampleHeader  *xmSample = (XmSampleHeader *)bufp;
-                bufp += instrumentHeader2->sampleHeaderSize;
-                if ( instrumentHeader2->sampleHeaderSize < sizeof( XmSampleHeader ) ) {
+                //XmSampleHeader  *xmSample = (XmSampleHeader *)bufp;
+                XmSampleHeader  xmSampleHeader;        
+                if ( xmFile.read( &xmSampleHeader,sizeof( XmSampleHeader ) ) ) return 0;
+
+                //bufp += xmInstrumentHeaderSecondary.sampleHeaderSize;
+                xmFile.relSeek(
+                    (int)xmInstrumentHeaderSecondary.sampleHeaderSize
+                    -(int)sizeof( XmSampleHeader ) 
+                );
+                if ( xmInstrumentHeaderSecondary.sampleHeaderSize < sizeof( XmSampleHeader ) ) {
                     sampleNames[iSample][0] = '\0';
                 } else {
                     for ( unsigned i = 0; i < XM_MAX_SAMPLE_NAME_LENGTH; i++ ) {
-                        sampleNames[iSample][i] = xmSample->name[i];                   
+                        sampleNames[iSample][i] = xmSampleHeader.name[i];                   
                     }
                     sampleNames[iSample][XM_MAX_SAMPLE_NAME_LENGTH] = '\0';
                 }
                 samples[iSample].name           = sampleNames[iSample];
-                samples[iSample].finetune       = xmSample->finetune;
-                samples[iSample].length         = xmSample->length;
-                samples[iSample].repeatLength   = xmSample->repeatLength;
-                samples[iSample].repeatOffset   = xmSample->repeatOffset;
+                samples[iSample].finetune       = xmSampleHeader.finetune;
+                samples[iSample].length         = xmSampleHeader.length;
+                samples[iSample].repeatLength   = xmSampleHeader.repeatLength;
+                samples[iSample].repeatOffset   = xmSampleHeader.repeatOffset;
                 samples[iSample].isRepeatSample = (samples[iSample].repeatLength > 0) &&
-                                                  (xmSample->type & XM_SAMPLE_LOOP_MASK);
-                samples[iSample].volume         = xmSample->volume;
-                samples[iSample].relativeNote   = xmSample->relativeNote;
-                samples[iSample].panning        = xmSample->panning;
+                                                  (xmSampleHeader.type & XM_SAMPLE_LOOP_MASK);
+                samples[iSample].volume         = xmSampleHeader.volume;
+                samples[iSample].relativeNote   = xmSampleHeader.relativeNote;
+                samples[iSample].panning        = xmSampleHeader.panning;
                 samples[iSample].dataType       = 
-                      xmSample->type & XM_SIXTEEN_BIT_SAMPLE_FLAG ? 
+                      xmSampleHeader.type & XM_SIXTEEN_BIT_SAMPLE_FLAG ? 
                         SAMPLEDATA_SIGNED_16BIT : SAMPLEDATA_SIGNED_8BIT;
                 samples[iSample].isPingpongSample = 
-                     xmSample->type & XM_PINGPONG_LOOP_FLAG ? true : false;
-                if ( xmSample->compression == XM_ADPCM_COMPRESSION ) {
+                     xmSampleHeader.type & XM_PINGPONG_LOOP_FLAG ? true : false;
+                if ( xmSampleHeader.compression == XM_ADPCM_COMPRESSION ) {
                     std::cout << "\n\nADPCM compressed sample data is not supported yet!\n";
-                    delete [] buf;
+                    //delete [] buf;
                     return 0;
                 }
 #ifdef debug_xm_loader
@@ -666,7 +757,15 @@ int Module::loadXmFile()
                     signed char     oldSample8 = 0;
                     signed char     newSample8 = 0;
                     nSamples_++;
-                    samples[iSample].data = (SHORT *)(bufp + sampleOffset);                 
+
+
+                    //samples[iSample].data = (SHORT *)(bufp + sampleOffset);
+                    samples[iSample].data = (SHORT *)xmFile.getSafePointer( samples[iSample].length );                    
+                    if ( samples[iSample].data == nullptr )  // temp DEBUG:
+                    {
+                        return 0;
+                    }
+
                     sampleOffset += samples[iSample].length;
                     if (samples[iSample].dataType == SAMPLEDATA_SIGNED_16BIT ) {
                         SHORT   *ps = (SHORT *)samples[iSample].data;
@@ -731,7 +830,8 @@ int Module::loadXmFile()
                     samples[iSample].data = 0;
                 }*/
             }
-            bufp += sampleOffset;
+            //bufp += sampleOffset;
+            xmFile.relSeek( sampleOffset );
 #ifdef debug_xm_loader
 #ifdef debug_xm_play_samples
             for (unsigned iSample = 0; iSample < instrument.nSamples; iSample++) {
@@ -774,7 +874,7 @@ int Module::loadXmFile()
                                                                       sizeof(WAVEHDR));
                         while ((result != MMSYSERR_NOERROR) && (retry < 10)) {
                             retry++;
-                            std::cout << "\nError preparing wave mapper header!";
+                            std::cout << "\nError preparing wave mapper xmHeader!";
                             switch (result) {
                                 case MMSYSERR_INVALHANDLE : 
                                     { 
@@ -848,6 +948,6 @@ int Module::loadXmFile()
         instruments_[iInstrument]->load( instrument );        
     }
     isLoaded_ = true;
-    delete [] buf;
+    //delete [] buf;
     return 0;
 }

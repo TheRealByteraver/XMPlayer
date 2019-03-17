@@ -2946,7 +2946,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
-        //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
+        "D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
         //"D:\\MODS\\M2W_BUGTEST\\2nd_pm-porta.s3m",
@@ -2966,9 +2966,12 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
         //"D:\\MODS\\M2W_BUGTEST\\CHINA1.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia.it",   // impulse tracker unknown
+        /*
+        //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
         "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
+        */
         "D:\\MODS\\dosprog\\mods\\pullmax.xm",
         "D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",

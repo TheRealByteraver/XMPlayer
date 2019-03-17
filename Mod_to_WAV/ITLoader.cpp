@@ -205,7 +205,9 @@ struct ItPatternHeader {
 
 #pragma pack (8) 
 
-int Module::loadItFile() {
+int Module::loadItFile() 
+{
+    isLoaded_ = false;
     VirtualFile itFile( fileName_ );
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
     ItFileHeader itFileHeader;

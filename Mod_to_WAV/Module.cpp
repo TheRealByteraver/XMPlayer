@@ -89,6 +89,6 @@ int Module::loadFile() {
     if ( !isLoaded() ) result = loadS3mFile();
     if ( !isLoaded() ) result = loadXmFile();
     if ( !isLoaded() ) result = loadItFile();
-    //if ( !isLoaded() ) result = loadModFile();
+    if ( !isLoaded() ) result = loadModFile();
     return result;
 }

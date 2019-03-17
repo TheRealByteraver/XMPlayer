@@ -16,16 +16,20 @@
 #include <fstream>
 
 #include "Module.h"
+#include "virtualfile.h"
 
-//#define debug_mod_loader
+#define debug_mod_loader
 
+#ifdef debug_mod_loader
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
+#endif
 
 // Constants for the .MOD Format:
 #define MOD_LIMIT                           8    // nr of illegal chars permitted in smp names
 #define MOD_ROWS                            64   // always 64 rows in a MOD pattern
 #define MOD_MAX_SONGNAME_LENGTH             20
 #define MOD_MAX_PATTERNS                    128
+#define MOD_MAX_CHANNELS                    32
 #define MOD_DEFAULT_BPM                     125
 #define MOD_DEFAULT_TEMPO                   6
 #define MOD_MAX_PERIOD                      7248 // chosen a bit arbitrarily!
@@ -138,18 +142,27 @@ int Module::loadModFile() {
     bool        nstFile  = false;   // if it is an NST file (15 instruments)
     unsigned    patternHeader, patternCalc, patternDivideRest;
     unsigned    k, sampleDataSize, sampleDataOffset, patternDataOffset, fileOffset;
+    unsigned    fileSize;
+    /*
     char        *buf, *bufp;
     HeaderNST   *headerNST;
     HeaderMK    *headerMK;
+    */
+    VirtualFile modFile( fileName_ );
+    if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+    fileSize = modFile.fileSize();
+
+    /*
     std::ifstream::pos_type  fileSize = 0;
     std::ifstream            modFile(fileName_,std::ios::in| std::ios::binary| std::ios::ate);
-
+    */
     // initialize mod specific variables:
     minPeriod_ = 14;    // periods[11 * 12 - 1]
     maxPeriod_ = 27392; // periods[0]  // ?
 
-    // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
+    /*
+    // load file into byte buffer and then work on that buffer only
     if (!modFile.is_open()) return 0; // exit on I/O error
     fileSize = modFile.tellg();
     buf = new char [(int)fileSize];
@@ -158,6 +171,14 @@ int Module::loadModFile() {
     modFile.close();
     headerNST = (HeaderNST *)buf;
     headerMK  = (HeaderMK  *)buf;
+    */
+    HeaderMK    modHeader;
+    HeaderNST  *headerNST = (HeaderNST *)(&modHeader);
+    HeaderMK   *headerMK  = &modHeader;
+
+    modFile.read( &modHeader,sizeof( HeaderMK ) );
+    if ( modFile.getIOError() > VIRTFILE_EOF ) return 0;
+
     // check extension for the wow factor ;)
     wowFile = isWowFile(fileName_);
     // check if a valid tag is present
@@ -183,7 +204,7 @@ int Module::loadModFile() {
         nChannels_ = 4; 
         trackerTag_ = "NST";
     }
-    patternCalc = (unsigned)fileSize; 
+    patternCalc = fileSize; 
     if (nstFile)    { nInstruments_ = 15; patternCalc -= sizeof(HeaderNST); } 
     else            { nInstruments_ = 31; patternCalc -= sizeof(HeaderMK ); }
     nSamples_ = 0;
@@ -212,7 +233,7 @@ int Module::loadModFile() {
         songRestartPosition_ = headerNST->restartPosition;
         songLength_ = headerNST->songLength;
     } else {
-        if (flt8Err)
+        if ( flt8Err )
             for (int i = 0; i < MOD_MAX_PATTERNS; i++) 
                                             headerMK->patternTable[i] >>= 1;
         for (int i = 0; i < MOD_MAX_PATTERNS; i++) {
@@ -223,7 +244,14 @@ int Module::loadModFile() {
         songLength_ = headerMK->songLength;
     }
     // patterns are numbered starting from zero
-    patternHeader++; 
+    patternHeader++;
+    if ( patternHeader > MOD_MAX_PATTERNS )
+    {
+#ifdef debug_mod_loader
+        std::cout << "\nPattern table has illegal values, exiting.\n";
+#endif
+        return 0;
+    }
 
     panningStyle_ = PANNING_STYLE_MOD;
     defaultTempo_ = MOD_DEFAULT_TEMPO;
@@ -237,7 +265,7 @@ int Module::loadModFile() {
     // now interpret the obtained info
     // this is not a .MOD file, or it's compressed
     if (ptnErr && tagErr && smpErr) { 
-        delete buf;
+        //delete buf;
         return 0;
     }
     // check file integrity, correct nr of channels if necessary
@@ -248,14 +276,21 @@ int Module::loadModFile() {
         if (!nstFile) {         // ptnCalc and chn were not initialised
             patternDivideRest = patternCalc % (MOD_ROWS * 4);
             patternCalc >>= 8;
-            nChannels_ = patternCalc / patternHeader;
+            nChannels_ = patternCalc / patternHeader; 
+            if ( nChannels_ > MOD_MAX_CHANNELS )
+            {
+#ifdef debug_mod_loader
+                std::cout << "\nUnable to detect # of channels, exiting.\n";
+#endif
+                return 0;
+            }
         }
     }
 
     //if ((patternCalc < nPatterns_) && (!patternDivideRest)) nPatterns_ = patternCalc;
     patternDataOffset = (nstFile ? sizeof(HeaderNST) : sizeof(HeaderMK));
     sampleDataOffset = patternDataOffset + nPatterns_ * nChannels_ * MOD_ROWS * 4;
-    if ((sampleDataOffset + sampleDataSize) > (unsigned)fileSize) {
+    if ((sampleDataOffset + sampleDataSize) > fileSize) {
         unsigned    missingData = (sampleDataOffset + sampleDataSize) - (int)fileSize;
         unsigned    lastInstrument = nInstruments_;
 #ifdef debug_mod_loader
@@ -297,15 +332,16 @@ int Module::loadModFile() {
             sample->repeatLength = (unsigned)repeatLength >> 1;
             lastInstrument--;
         }
-        if (missingData) {
+        if ( missingData ) {
 #ifdef debug_mod_loader
             std::cout << "\nNo Sample data! Some pattern data is missing!\n";
 #endif
-            delete buf;
+            //delete buf;
             return 0;
         }
     }  
     // take care of default panning positions:
+    //std::cout << "  nChannels = " << nChannels_ << " " << std::endl;
     for ( unsigned i = 0; i < nChannels_; i++ )
     {
         switch ( i & 3 )
@@ -328,14 +364,12 @@ int Module::loadModFile() {
     // we start with the song title :)
     songTitle_ = ""; 
     for ( int i = 0; i < MOD_MAX_SONGNAME_LENGTH; i++ ) songTitle_ += headerMK->songTitle[i]; 
+
     // now, the sample headers & sample data.
     fileOffset = sampleDataOffset;
     for ( unsigned iSample = 1; iSample <= nInstruments_; iSample++ ) {
         InstrumentHeader    instrument;
         SampleHeader        sample;
-        //char                sampleName[MAX_SAMPLENAME_LENGTH + 1];
-        //sampleName[MAX_SAMPLENAME_LENGTH] = '\0';
-        //strncpy_s(sampleName, MAX_SAMPLENAME_LENGTH + 1, headerMK->samples[i].name, MAX_SAMPLENAME_LENGTH);
         for ( char *c = headerMK->samples[iSample - 1].name; 
             c < headerMK->samples[iSample - 1].name + MAX_SAMPLENAME_LENGTH;
             c++ )
@@ -363,7 +397,17 @@ int Module::loadModFile() {
 
         if (sample.length > 2) {
             nSamples_++;
-            sample.data = (SHORT *)(buf + fileOffset);
+            
+            //sample.data = (SHORT *)(buf + fileOffset);
+            modFile.absSeek( fileOffset );
+            //MemoryBlock<char> sampleData = modFile.getPointer<char>( sample.length );
+            sample.data = (SHORT *)modFile.getSafePointer( sample.length );
+            // temp DEBUG:
+            if ( sample.data == nullptr )
+            {
+                return 0;
+            }
+
             samples_[iSample] = new Sample;
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             samples_[iSample]->load( sample );
@@ -373,20 +417,21 @@ int Module::loadModFile() {
         instruments_[iSample] = new Instrument;
         instruments_[iSample]->load( instrument );
 #ifdef debug_mod_loader
-        std::cout << "\nSample " << i << ": name     = " << instruments_[i]->getName().c_str();
-        if (!instruments_[i]->getSample(0)) _getch();
+        /*
+        std::cout << "\nSample " << iSample << ": name     = " << instruments_[iSample - 1]->getName().c_str();
+        if (!instruments_[iSample]->getSample(0)) _getch();
 
-        if (instruments_[i]->getSample(0)) {
+        if (instruments_[iSample]->getSample(0)) {
             HWAVEOUT        hWaveOut;
             WAVEFORMATEX    waveFormatEx;
             MMRESULT        result;
             WAVEHDR         waveHdr;
 
-            std::cout << "\nSample " << i << ": length   = " << instruments_[i]->getSample(0)->getLength();
-            std::cout << "\nSample " << i << ": rep ofs  = " << instruments_[i]->getSample(0)->getRepeatOffset();
-            std::cout << "\nSample " << i << ": rep len  = " << instruments_[i]->getSample(0)->getRepeatLength();
-            std::cout << "\nSample " << i << ": volume   = " << instruments_[i]->getSample(0)->getVolume();
-            std::cout << "\nSample " << i << ": finetune = " << instruments_[i]->getSample(0)->getFinetune();
+            std::cout << "\nSample " << iSample << ": length   = " << instruments_[iSample - 1]->getSample(0)->getLength();
+            std::cout << "\nSample " << iSample << ": rep ofs  = " << instruments_[iSample - 1]->getSample(0)->getRepeatOffset();
+            std::cout << "\nSample " << iSample << ": rep len  = " << instruments_[iSample - 1]->getSample(0)->getRepeatLength();
+            std::cout << "\nSample " << iSample << ": volume   = " << instruments_[iSample - 1]->getSample(0)->getVolume();
+            std::cout << "\nSample " << iSample << ": finetune = " << instruments_[iSample - 1]->getSample(0)->getFinetune();
 
             // not very elegant but hey, is debug code lol
             if (!instruments_[i]->getSample(0)->getData()) break; 
@@ -479,30 +524,34 @@ int Module::loadModFile() {
                 } 
                 _getch();
                 waveOutUnprepareHeader(hWaveOut, &waveHdr, sizeof(WAVEHDR));
-/*
-                while(waveOutUnprepareHeader(hWaveOut, &waveHdr, 
-                                  sizeof(WAVEHDR)) == WAVERR_STILLPLAYING) 
-                {
-                    Sleep(50);
-                }                
-*/
+
+                //while(waveOutUnprepareHeader(hWaveOut, &waveHdr, 
+                //                  sizeof(WAVEHDR)) == WAVERR_STILLPLAYING) { Sleep(50); }                
+
                 waveOutReset(hWaveOut);
                 waveOutClose(hWaveOut);
             }
 		}
+    */
 #endif
     }
     // read the patterns now
-    bufp = buf + patternDataOffset;
+    //bufp = buf + patternDataOffset;
+    modFile.absSeek( patternDataOffset );
+    if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
     // convert 8 chn startrekker patterns to regular ones
-    if (flt8Err) {
+    if ( flt8Err ) // to redo in a safer way
+    {
         unsigned    flt[8 * MOD_ROWS];   // 4 bytes / note * 8 channels * 64 rows
         unsigned    *ps, *pd, *p1, *p2;
 
-        ps = (unsigned *)bufp; 
+        //ps = (unsigned *)bufp; 
+        ps = (unsigned *)modFile.getSafePointer( sizeof( flt ) * nPatterns_ );
         pd = ps;
-        for (unsigned ptn = 0; ptn < nPatterns_; ptn++) {
-            for (int i = 0; i < 2 * 4 * MOD_ROWS; i++) {// copy data to tmp buf
+        for ( unsigned ptn = 0; ptn < nPatterns_; ptn++ ) 
+        {
+            for ( int i = 0; i < 2 * 4 * MOD_ROWS; i++ ) 
+            {// copy data to tmp buf
                 flt[i] = *ps++;                  // 2 ptn * 4 chn * 64 rows
             }
             p1 = flt;                            // idx to 1st ptn inside flt buf
@@ -514,19 +563,30 @@ int Module::loadModFile() {
         }
     }
     // Now read them and convert them into the internal format
+    modFile.absSeek( patternDataOffset );
     for (unsigned  i = 0; i < nPatterns_; i++) {
         Note        *iNote, *patternData;
-        unsigned    j1, j2, j3, j4;
+        //unsigned    j1, j2, j3, j4;
+        unsigned char j1,j2,j3,j4;
 
         patterns_[i] = new Pattern;
         patternData = new Note[nChannels_ * MOD_ROWS];
         patterns_[i]->initialise(nChannels_, MOD_ROWS, patternData);
         iNote = patternData;
         for (unsigned n = 0; n < (nChannels_ * MOD_ROWS); n++) {
+            /*
             j1 = *((unsigned char *)bufp++);
             j2 = *((unsigned char *)bufp++);
             j3 = *((unsigned char *)bufp++);
             j4 = *((unsigned char *)bufp++);
+            */
+            modFile.read( &j1,sizeof( unsigned char ) );
+            modFile.read( &j2,sizeof( unsigned char ) );
+            modFile.read( &j3,sizeof( unsigned char ) );
+            modFile.read( &j4,sizeof( unsigned char ) );
+            // if we read the samples without issue the patterns should be fine?
+            if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+
             iNote->effects[1].effect = j3 & 0xF;
             iNote->effects[1].argument = j4;
             //iNote->period = j2;
@@ -534,6 +594,7 @@ int Module::loadModFile() {
             j4 = (j1 & 0xF0) + (j3 >> 4);
             iNote->instrument = j4 & 0x1F;
             /* iNote-> */period += ((j1 & 0xF) << 8) + ((j4 >> 5) << 12);
+
             iNote->note = 0;
             if ( /* iNote-> */ period ) {
                 unsigned j;
@@ -656,7 +717,7 @@ int Module::loadModFile() {
             iNote++;
         }
     }
-    delete buf;
+    //delete buf;
     isLoaded_ = true;
 
 #ifdef debug_mod_loader
