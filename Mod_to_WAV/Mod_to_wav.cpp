@@ -2946,7 +2946,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
-        "D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
+        //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
         //"D:\\MODS\\M2W_BUGTEST\\2nd_pm-porta.s3m",
@@ -2957,7 +2957,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
-        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\believe.mod",
@@ -2972,13 +2972,13 @@ int main(int argc, char *argv[])  {
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
         */
-        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
-        "D:\\MODS\\mod_to_wav\\CHINA1.MOD",
-        "D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
+        //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
+        //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
+        //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
         //"D:\\MODS\\M2W_BUGTEST\\slow-motion-pos15-porta.mod",
-        "D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
+        //"D:\\MODS\\dosprog\\MUSIC\\S3M\\2nd_pm.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\sundance-fantomnotes.mod",
-        "D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\vibtest.mod",
         //"D:\\MODS\\M2W_BUGTEST\\menutune4.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\menutune2.s3m",
@@ -2987,7 +2987,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
-        "D:\\MODS\\dosprog\\mods\\menutune.s3m",
+        //"D:\\MODS\\dosprog\\mods\\menutune.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
@@ -3094,6 +3094,9 @@ int main(int argc, char *argv[])  {
     std::cout << std::endl;
     _getch();
     */
+
+
+
     if (argc > 1) {
         for ( int i = 1; i < argc; i++ ) filePaths.push_back( argv[i] );
     } else {

@@ -18,7 +18,7 @@
 #include "Module.h"
 #include "virtualfile.h"
 
-#define debug_mod_loader
+//#define debug_mod_loader
 
 #ifdef debug_mod_loader
 extern const char *noteStrings[2 + MAXIMUM_NOTES];
@@ -417,24 +417,24 @@ int Module::loadModFile() {
         instruments_[iSample] = new Instrument;
         instruments_[iSample]->load( instrument );
 #ifdef debug_mod_loader
-        /*
-        std::cout << "\nSample " << iSample << ": name     = " << instruments_[iSample - 1]->getName().c_str();
-        if (!instruments_[iSample]->getSample(0)) _getch();
+        
+        std::cout << "\nSample " << iSample << ": name     = " << instruments_[iSample]->getName().c_str();
+        if ( !samples_[iSample] ) _getch();
 
-        if (instruments_[iSample]->getSample(0)) {
+        if ( samples_[iSample] ) {
             HWAVEOUT        hWaveOut;
             WAVEFORMATEX    waveFormatEx;
             MMRESULT        result;
             WAVEHDR         waveHdr;
 
-            std::cout << "\nSample " << iSample << ": length   = " << instruments_[iSample - 1]->getSample(0)->getLength();
-            std::cout << "\nSample " << iSample << ": rep ofs  = " << instruments_[iSample - 1]->getSample(0)->getRepeatOffset();
-            std::cout << "\nSample " << iSample << ": rep len  = " << instruments_[iSample - 1]->getSample(0)->getRepeatLength();
-            std::cout << "\nSample " << iSample << ": volume   = " << instruments_[iSample - 1]->getSample(0)->getVolume();
-            std::cout << "\nSample " << iSample << ": finetune = " << instruments_[iSample - 1]->getSample(0)->getFinetune();
+            std::cout << "\nSample " << iSample << ": length   = " << samples_[iSample]->getLength();
+            std::cout << "\nSample " << iSample << ": rep ofs  = " << samples_[iSample]->getRepeatOffset();
+            std::cout << "\nSample " << iSample << ": rep len  = " << samples_[iSample]->getRepeatLength();
+            std::cout << "\nSample " << iSample << ": volume   = " << samples_[iSample]->getVolume();
+            std::cout << "\nSample " << iSample << ": finetune = " << samples_[iSample]->getFinetune();
 
             // not very elegant but hey, is debug code lol
-            if (!instruments_[i]->getSample(0)->getData()) break; 
+            if ( !samples_[iSample]->getData() ) break;
 
             waveFormatEx.wFormatTag     = WAVE_FORMAT_PCM;
             waveFormatEx.nChannels      = 1;
@@ -449,13 +449,13 @@ int Module::loadModFile() {
             result = waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveFormatEx, 
                                  0, 0, CALLBACK_NULL);
             if (result != MMSYSERR_NOERROR) {
-                if (!i) std::cout << "\nError opening wave mapper!\n";
+                std::cout << "\nError opening wave mapper!\n";
             } else {
                 int retry = 0;
-                if (!i) std::cout << "\nWave mapper successfully opened!\n";
-                waveHdr.dwBufferLength = instruments_[i]->getSample(0)->getLength () * 
+                std::cout << "\nWave mapper successfully opened!\n";
+                waveHdr.dwBufferLength = samples_[iSample]->getLength () *
                                          waveFormatEx.nBlockAlign;
-                waveHdr.lpData = (LPSTR)(instruments_[i]->getSample(0)->getData ());
+                waveHdr.lpData = (LPSTR)(samples_[iSample]->getData ());
                 waveHdr.dwFlags = 0;
 
                 result = waveOutPrepareHeader(hWaveOut, &waveHdr, 
@@ -531,8 +531,7 @@ int Module::loadModFile() {
                 waveOutReset(hWaveOut);
                 waveOutClose(hWaveOut);
             }
-		}
-    */
+		}    
 #endif
     }
     // read the patterns now

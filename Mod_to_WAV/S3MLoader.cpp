@@ -16,7 +16,7 @@ Thanks must go to:
 #include "Module.h"
 #include "virtualfile.h"
 
-#define debug_s3m_loader
+//#define debug_s3m_loader
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
@@ -576,22 +576,22 @@ int Module::loadS3mFile() {
 #ifdef debug_s3m_loader
 #ifdef debug_s3m_play_samples
         std::cout << "\nSample " << nInst << ": name     = " << instruments_[nInst]->getName();
-        if ( !instruments_[nInst]->getSample( 0 ) ) _getch();
+        if ( !samples_[nInst] ) _getch();
 
-        if ( instruments_[nInst]->getSample( 0 ) ) {
+        if ( samples_[nInst] ) {
             HWAVEOUT        hWaveOut;
             WAVEFORMATEX    waveFormatEx;
             MMRESULT        result;
             WAVEHDR         waveHdr;
 
-            std::cout << "\nSample " << nInst << ": length   = " << instruments_[nInst]->getSample( 0 )->getLength();
-            std::cout << "\nSample " << nInst << ": rep ofs  = " << instruments_[nInst]->getSample( 0 )->getRepeatOffset();
-            std::cout << "\nSample " << nInst << ": rep len  = " << instruments_[nInst]->getSample( 0 )->getRepeatLength();
-            std::cout << "\nSample " << nInst << ": volume   = " << instruments_[nInst]->getSample( 0 )->getVolume();
-            std::cout << "\nSample " << nInst << ": finetune = " << instruments_[nInst]->getSample( 0 )->getFinetune();
+            std::cout << "\nSample " << nInst << ": length   = " << samples_[nInst]->getLength();
+            std::cout << "\nSample " << nInst << ": rep ofs  = " << samples_[nInst]->getRepeatOffset();
+            std::cout << "\nSample " << nInst << ": rep len  = " << samples_[nInst]->getRepeatLength();
+            std::cout << "\nSample " << nInst << ": volume   = " << samples_[nInst]->getVolume();
+            std::cout << "\nSample " << nInst << ": finetune = " << samples_[nInst]->getFinetune();
 
             // not very elegant but hey, is debug code lol
-            if ( !instruments_[nInst]->getSample( 0 )->getData() ) break;
+            if ( !samples_[nInst]->getData() ) break;
 
             waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
             waveFormatEx.nChannels = 1;
@@ -610,9 +610,9 @@ int Module::loadS3mFile() {
             } else {
                 int retry = 0;
                 if ( !nInst ) std::cout << "\nWave mapper successfully opened!\n";
-                waveHdr.dwBufferLength = instruments_[nInst]->getSample( 0 )->getLength() *
+                waveHdr.dwBufferLength = samples_[nInst]->getLength() *
                     waveFormatEx.nBlockAlign;
-                waveHdr.lpData = (LPSTR)(instruments_[nInst]->getSample( 0 )->getData());
+                waveHdr.lpData = (LPSTR)(samples_[nInst]->getData());
                 waveHdr.dwFlags = 0;
 
                 result = waveOutPrepareHeader( hWaveOut,&waveHdr,

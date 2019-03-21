@@ -60,7 +60,7 @@ Todo:
 #define MAX_INSTRUMENTNAME_LENGTH           (MAX_SAMPLENAME_LENGTH + 2)
 #define MAX_PATTERNS                        256
 #define MAX_INSTRUMENTS                     256
-#define MAX_SAMPLES                         256
+#define MAX_SAMPLES                         (128 * 16) // FT2
 #define SAMPLEDATA_TYPE_UNKNOWN             0
 #define SAMPLEDATA_SIGNED_8BIT              1
 #define SAMPLEDATA_SIGNED_16BIT             2
@@ -192,8 +192,6 @@ const int sineTable[] = {
 #define VIBRATO_SQUAREWAVE                  2
 #define VIBRATO_RANDOM                      3
 #define VIBRATO_NO_RETRIG_FLAG              4
-
-
 
 /*
 const unsigned periods[MAXIMUM_NOTES] = {

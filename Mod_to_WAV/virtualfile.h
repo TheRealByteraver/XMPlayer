@@ -53,7 +53,11 @@ public:
             std::ios::binary | 
             std::ios::ate 
         );
-        if ( !file.is_open() ) ioError_ = VIRTFILE_READ_ERROR;
+        if ( !file.is_open() )
+        {
+            ioError_ = VIRTFILE_READ_ERROR;
+            return;
+        }
         fileSize_ = file.tellg();
         data_ = new char[(int)fileSize_];
         filePos_ = data_;
