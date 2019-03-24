@@ -29,10 +29,32 @@ Flags for instruments:
 
 Other idea's:
     - further reduce pointer usage (replace with const reference)
+    - check if using looplength is easier / worse than loopend internally
 
 Todo:
     - implement IT & S3M effects
     - verify panning slide egde cases for different trackers
+
+
+OpenMPT doc errors:
+
+|C-501...O21
+|........#02
+|........#01
+
+In this example, the hexadecimal sample offset is (21h × 10000h) + (2h × 100h) + 1h = 210201h.
+In decimal, it is (33 × 65536) + (2 × 256) + 1 = 2,163,201.
+
+
+Fxx  Portamento Up
+or Fine Portamento Up
+or Extra Fine Portamento Up  Global  Increases current note pitch by xx units on every tick of the row except the first. 
+
+EFx finely increases note pitch by only applying x units on the first tick of the row.
+EEx extra-finely increases note pitch by applying with 4 times the precision of EFx.
+
+---> FFx & FEx
+
 
 
 */
@@ -302,6 +324,7 @@ public:
         isRepeatSample = false;
         isSustainedSample = false;
         isPingpongSample = false;
+        isSustainedPingpongSample = false;
         isUsed = false;
         globalVolume = 64;
         volume = 64;
@@ -322,6 +345,7 @@ public:
     bool            isRepeatSample;
     bool            isPingpongSample;
     bool            isSustainedSample;
+    bool            isSustainedPingpongSample;
     bool            isUsed;           // if the sample is used in the song
     int             globalVolume;
     int             volume;

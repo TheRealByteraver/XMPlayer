@@ -37,6 +37,7 @@
 #define IT_MIDI_CONFIG_EMBEDDED             8
 
 // sample flags
+#define IT_SMP_NAME_LENGTH                  26
 #define IT_SMP_ASSOCIATED_WITH_HEADER       1
 #define IT_SMP_IS_16_BIT                    2
 #define IT_SMP_IS_STEREO                    4 // not supported by Impulse Trckr
@@ -45,6 +46,9 @@
 #define IT_SMP_SUSTAIN_LOOP_ON              32
 #define IT_SMP_PINGPONG_LOOP_ON             64
 #define IT_SMP_PINGPONG_SUSTAIN_LOOP_ON     128
+#define IT_SMP_USE_DEFAULT_PANNING          128
+#define IT_SMP_MAX_GLOBAL_VOLUME            64
+#define IT_SMP_MAX_VOLUME                   64
 #define IT_SIGNED_SAMPLE_DATA               1
 
 // pattern flags
@@ -120,7 +124,7 @@ struct ItOldInstHeader {
     unsigned short  trackerVersion;
     unsigned char   nSamples;       // nr of samples in instrument
     unsigned char   reserved2;
-    char            name[26];
+    char            name[IT_SMP_NAME_LENGTH];
     unsigned char   reserved3[6];
     unsigned char   sampleForNote[240];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
@@ -384,6 +388,9 @@ int Module::loadItFile()
 #endif
 
             /*
+
+
+            
             
             char            tag[4];         // "IMPI"
             char            fileName[12];
@@ -515,6 +522,271 @@ int Module::loadItFile()
 #endif
         }
     }
+    // start reading samples:
+    for ( unsigned iSample = 0; iSample < itFileHeader.nSamples; iSample++ )
+    {
+        ItSampleHeader itSampleHeader;
+        itFile.absSeek( smpHdrPtrs[iSample] );
+        if ( itFile.read( &itSampleHeader,sizeof( itSampleHeader ) ) ) return 0;
+#ifdef debug_it_loader
+        std::cout << std::endl << std::endl 
+            << "Sample header nr " << iSample + 1 << ":"
+            << std::endl << "Tag                 : " << itSampleHeader.tag[0]
+            << itSampleHeader.tag[1] << itSampleHeader.tag[2] << itSampleHeader.tag[3]
+            << std::endl << "Dos filename        : " << itSampleHeader.fileName
+            << std::endl << "Global volume       : " << (unsigned)itSampleHeader.globalVolume << std::hex
+            << std::endl << "Flag                : " << (unsigned)itSampleHeader.flag << std::dec
+            << std::endl << "Volume              : " << (unsigned)itSampleHeader.volume
+            << std::endl << "Name                : " << itSampleHeader.name    
+            << std::endl << "Convert (1 = signed): " << (unsigned)itSampleHeader.convert        // bit0 set: signed smp data (off = unsigned)
+            << std::endl << "Default Panning     : " << (unsigned)itSampleHeader.defaultPanning // 0..64, bit 7 set == use default panning
+            << std::endl << "Length              : " << itSampleHeader.length
+            << std::endl << "Loop start          : " << itSampleHeader.loopStart
+            << std::endl << "Loop end            : " << itSampleHeader.loopEnd << std::hex
+            << std::endl << "C5 speed            : " << itSampleHeader.C5Speed << std::dec
+            << std::endl << "Sustain loop start  : " << itSampleHeader.sustainLoopStart
+            << std::endl << "Sustain loop end    : " << itSampleHeader.sustainLoopEnd << std::hex
+            << std::endl << "Sample data pointer : " << itSampleHeader.samplePointer << std::dec
+            << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoSpeed   // 0..64
+            << std::endl << "Vibrato depth       : " << (unsigned)itSampleHeader.vibratoDepth   // 0..64
+            << std::endl << "Vibrato wave form   : " << (unsigned)itSampleHeader.vibratoWaveForm// 0 = sine,1 = ramp down,2 = square,3 = random
+            << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoRate;   // 0..64
+#endif
+/*
+#define IT_SMP_ASSOCIATED_WITH_HEADER       1
+#define IT_SMP_IS_16_BIT                    2
+#define IT_SMP_IS_STEREO                    4 // not supported by Impulse Trckr
+#define IT_SMP_IS_COMPRESSED                8
+#define IT_SMP_LOOP_ON                      16
+#define IT_SMP_SUSTAIN_LOOP_ON              32
+#define IT_SMP_PINGPONG_LOOP_ON             64
+#define IT_SMP_PINGPONG_SUSTAIN_LOOP_ON     128
+#define IT_SIGNED_SAMPLE_DATA               1
+*/
+        if ( itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER )
+        {
+            if ( (itSampleHeader.flag & IT_SMP_IS_STEREO) || 
+                (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) )
+            {
+#ifdef debug_it_loader
+                std::cout << std::endl << std::endl
+                    << "Sample header nr " << iSample + 1 << ": "
+                    << "Stereo or compressed samples are not supported yet!";
+#endif
+                return 0;
+            }
+            SampleHeader sample;
+            samples_[iSample + 1] = new Sample;
+            bool is16bitData = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
+            for ( int i = 0; i < IT_SMP_NAME_LENGTH; i++ )
+                sample.name += itSampleHeader.name[i];
+            sample.length = itSampleHeader.length;
+            sample.repeatOffset = itSampleHeader.loopStart;
+            if ( sample.repeatOffset > sample.length ) sample.repeatOffset = 0;
+            sample.repeatLength = itSampleHeader.loopEnd - itSampleHeader.loopStart;
+            if ( sample.repeatOffset + sample.repeatLength >= sample.length )
+                sample.repeatLength = sample.length - sample.repeatOffset - 1;
+            sample.sustainRepeatStart = itSampleHeader.sustainLoopStart;
+
+            if ( sample.sustainRepeatStart > sample.length ) // ?
+                sample.sustainRepeatStart = 0;
+            sample.sustainRepeatEnd = itSampleHeader.sustainLoopEnd;
+            if ( sample.sustainRepeatEnd > sample.length ) // ?
+                sample.sustainRepeatEnd = sample.length - 1;
+
+            sample.isRepeatSample = 
+                (itSampleHeader.flag & IT_SMP_LOOP_ON) != 0;
+            sample.isPingpongSample = 
+                (itSampleHeader.flag & IT_SMP_PINGPONG_LOOP_ON) != 0;
+            sample.isSustainedSample = 
+                (itSampleHeader.flag & IT_SMP_SUSTAIN_LOOP_ON) != 0;
+            sample.isSustainedPingpongSample = 
+                (itSampleHeader.flag & IT_SMP_PINGPONG_SUSTAIN_LOOP_ON) != 0;
+            sample.globalVolume = itSampleHeader.globalVolume;
+            if ( sample.globalVolume > IT_SMP_MAX_GLOBAL_VOLUME )
+                sample.globalVolume = IT_SMP_MAX_GLOBAL_VOLUME;
+            sample.volume = itSampleHeader.volume;
+            if ( sample.volume > IT_SMP_MAX_VOLUME )
+                sample.volume = IT_SMP_MAX_VOLUME;
+
+
+            sample.relativeNote = 0; // TODO!!!
+            sample.finetune = 0;     // TODO!!!
+
+            // itSampleHeader.defaultPanning & IT_SMP_USE_DEFAULT_PANNING // TODO!!
+            unsigned panning = itSampleHeader.defaultPanning & 0x7F;
+            if ( panning > 64 ) panning = 64;
+            panning <<= 2;
+            if ( panning > 255 ) panning = 255;
+            sample.panning = panning;
+
+            sample.vibratoDepth = itSampleHeader.vibratoDepth;
+            sample.vibratoRate = itSampleHeader.vibratoRate;
+            sample.vibratoSpeed = itSampleHeader.vibratoSpeed;
+            sample.vibratoWaveForm = itSampleHeader.vibratoWaveForm & 0x3;
+            
+            unsigned dataLength = sample.length;
+            if ( is16bitData )
+            {
+                sample.dataType = SAMPLEDATA_SIGNED_16BIT;
+                dataLength <<= 1;
+            } else { 
+                sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+            }
+            itFile.absSeek( itSampleHeader.samplePointer );
+            sample.data = (SHORT *)itFile.getSafePointer( dataLength );
+            // temp DEBUG:
+            if ( sample.data == nullptr )
+            {
+                return 0;
+            }           
+            // convert unsigned to signed sample data:
+            if ( (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0 )
+            {
+                if ( is16bitData )
+                {
+                    SHORT *data = sample.data;
+                    for ( int i = 0; i < sample.length; i++ ) data[i] ^= 0x8000;
+                } else { 
+                    char *data = (char *)sample.data;
+                    for ( int i = 0; i < sample.length; i++ ) data[i] ^= 0x80;
+                }
+            }
+            samples_[iSample + 1]->load( sample );
+#ifdef debug_it_loader
+#ifdef debug_it_play_samples
+            iSample++;
+            std::cout << "\nSample " << iSample << ": name     = " << samples_[iSample]->getName().c_str();
+            if ( !samples_[iSample] ) _getch();
+            if ( samples_[iSample] ) 
+            {
+                HWAVEOUT        hWaveOut;
+                WAVEFORMATEX    waveFormatEx;
+                MMRESULT        result;
+                WAVEHDR         waveHdr;
+
+                std::cout << "\nSample " << iSample << ": length   = " << samples_[iSample]->getLength();
+                std::cout << "\nSample " << iSample << ": rep ofs  = " << samples_[iSample]->getRepeatOffset();
+                std::cout << "\nSample " << iSample << ": rep len  = " << samples_[iSample]->getRepeatLength();
+                std::cout << "\nSample " << iSample << ": volume   = " << samples_[iSample]->getVolume();
+                std::cout << "\nSample " << iSample << ": finetune = " << samples_[iSample]->getFinetune();
+
+                // not very elegant but hey, is debug code lol
+                if ( !samples_[iSample]->getData() ) break;
+
+                waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
+                waveFormatEx.nChannels = 1;
+                waveFormatEx.nSamplesPerSec = 8363; // frequency
+                waveFormatEx.wBitsPerSample = 16;
+                waveFormatEx.nBlockAlign = waveFormatEx.nChannels *
+                    (waveFormatEx.wBitsPerSample >> 3);
+                waveFormatEx.nAvgBytesPerSec = waveFormatEx.nSamplesPerSec *
+                    waveFormatEx.nBlockAlign;
+                waveFormatEx.cbSize = 0;
+
+                result = waveOutOpen( &hWaveOut,WAVE_MAPPER,&waveFormatEx,
+                    0,0,CALLBACK_NULL );
+                if ( result != MMSYSERR_NOERROR ) {
+                    std::cout << "\nError opening wave mapper!\n";
+                } else {
+                    int retry = 0;
+                    std::cout << "\nWave mapper successfully opened!\n";
+                    waveHdr.dwBufferLength = samples_[iSample]->getLength() *
+                        waveFormatEx.nBlockAlign;
+                    waveHdr.lpData = (LPSTR)(samples_[iSample]->getData());
+                    waveHdr.dwFlags = 0;
+
+                    result = waveOutPrepareHeader( hWaveOut,&waveHdr,
+                        sizeof( WAVEHDR ) );
+                    while ( (result != MMSYSERR_NOERROR) && (retry < 10) ) {
+                        retry++;
+                        std::cout << "\nError preparing wave mapper header!";
+                        switch ( result ) {
+                            case MMSYSERR_INVALHANDLE:
+                            {
+                                std::cout << "\nSpecified device handle is invalid.";
+                                break;
+                            }
+                            case MMSYSERR_NODRIVER:
+                            {
+                                std::cout << "\nNo device driver is present.";
+                                break;
+                            }
+                            case MMSYSERR_NOMEM:
+                            {
+                                std::cout << "\nUnable to allocate or lock memory.";
+                                break;
+                            }
+                            default:
+                            {
+                                std::cout << "\nOther unknown error " << result;
+                            }
+                        }
+                        Sleep( 1 );
+                        result = waveOutPrepareHeader( hWaveOut,&waveHdr,
+                            sizeof( WAVEHDR ) );
+                    }
+                    result = waveOutWrite( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
+                    retry = 0;
+                    while ( (result != MMSYSERR_NOERROR) && (retry < 10) ) {
+                        retry++;
+                        std::cout << "\nError writing to wave mapper!";
+                        switch ( result ) {
+                            case MMSYSERR_INVALHANDLE:
+                            {
+                                std::cout << "\nSpecified device handle is invalid.";
+                                break;
+                            }
+                            case MMSYSERR_NODRIVER:
+                            {
+                                std::cout << "\nNo device driver is present.";
+                                break;
+                            }
+                            case MMSYSERR_NOMEM:
+                            {
+                                std::cout << "\nUnable to allocate or lock memory.";
+                                break;
+                            }
+                            case WAVERR_UNPREPARED:
+                            {
+                                std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
+                                break;
+                            }
+                            default:
+                            {
+                                std::cout << "\nOther unknown error " << result;
+                            }
+                        }
+                        result = waveOutWrite( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
+                        Sleep( 10 );
+                    }
+                    _getch();
+                    waveOutUnprepareHeader( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
+
+                    //while(waveOutUnprepareHeader(hWaveOut, &waveHdr, 
+                    //                  sizeof(WAVEHDR)) == WAVERR_STILLPLAYING) { Sleep(50); }                
+
+                    waveOutReset( hWaveOut );
+                    waveOutClose( hWaveOut );
+                }
+            }
+            iSample--;
+#endif
+#endif
+        }
+    }
+
+    // load patterns:
+
+
+
+
+
+
+
+
+
+
     isLoaded_ = false;
     return 0;
 }

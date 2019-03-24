@@ -19,7 +19,7 @@
 
 //using namespace std;
 
-#define debug_xm_loader
+//#define debug_xm_loader
 #define debug_xm_show_patterns
 #define debug_xm_play_samples
 

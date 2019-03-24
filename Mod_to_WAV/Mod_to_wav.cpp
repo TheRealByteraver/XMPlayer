@@ -2928,7 +2928,7 @@ void startReplay( Mixer &mixer ) {
 
 /*
 1 pixel = 1 tick, ft2 envelope window width == 6 sec
-vibrato is active even if enveloppe is not
+vibrato is active even if envelope is not
 vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 */
 
@@ -2957,7 +2957,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
-        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\believe.mod",
@@ -2966,12 +2966,12 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\global trash 3 v2-songrepeat-error.mod",
         //"D:\\MODS\\M2W_BUGTEST\\CHINA1.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia.it",   // impulse tracker unknown
-        /*
+        
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
         "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
-        */
+        
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
