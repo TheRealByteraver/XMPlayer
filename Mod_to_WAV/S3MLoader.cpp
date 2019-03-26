@@ -66,7 +66,7 @@ Thanks must go to:
 #define S3M_PTN_NOTE_INST_FLAG              32
 #define S3M_PTN_VOLUME_COLUMN_FLAG          64
 #define S3M_PTN_EFFECT_PARAM_FLAG           128
-#define S3M_KEY_OFF                         254
+#define S3M_KEY_NOTE_CUT                    254
 #define S3M_MAX_NOTE                        (9 * 12)
 #define S3M_INSTRUMENT_TYPE_SAMPLE          1
 #define S3M_INSTRUMENT_TYPE_ADLIB_MELODY    2
@@ -765,7 +765,7 @@ int Module::loadS3mFile() {
                         S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
                         if ( newNote )
                         {
-                            if ( note == S3M_KEY_OFF ) unpackedNote.note = KEY_OFF;
+                            if ( note == S3M_KEY_NOTE_CUT ) unpackedNote.note = KEY_OFF;
                             else if ( note != 0xFF )
                             {
                                 unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
@@ -881,7 +881,7 @@ int Module::loadS3mFile() {
                 }
                 case 3: // C
                 {
-                    iNote->effects[1].effect = PATTERN_BREAK; // recalc argument?
+                    iNote->effects[1].effect = PATTERN_BREAK; 
                     break;
                 }
                 case 4: // D: all kinds of (fine) volume slide

@@ -9,9 +9,12 @@
 #include "virtualfile.h"
 
 #define debug_it_loader
-#define debug_it_show_patterns
-#define debug_it_play_samples
+//#define debug_it_show_patterns
+//#define debug_it_play_samples
 
+#ifdef debug_it_loader
+extern const char *noteStrings[2 + MAXIMUM_NOTES];
+#endif
 
 #ifdef debug_it_loader
 #include <bitset>
@@ -21,8 +24,11 @@
 #define IT_MAX_CHANNELS                     64
 #define IT_MAX_PATTERNS                     200
 #define IT_MAX_SONG_LENGTH                  MAX_PATTERNS
+#define IT_MIN_PATTERN_ROWS                 32
+#define IT_MAX_PATTERN_ROWS                 200
 #define IT_MAX_SAMPLES                      99
 #define IT_MAX_INSTRUMENTS                  100 // ?
+#define IT_MAX_NOTE                         119 // 9 octaves: (C-0 -> B-9)
 
 #define IT_STEREO_FLAG                      1
 #define IT_VOL0_OPT_FLAG                    2
@@ -55,6 +61,7 @@
 #define IT_END_OF_SONG_MARKER               255
 #define IT_MARKER_PATTERN                   254 
 #define IT_PATTERN_CHANNEL_MASK_AVAILABLE   128
+#define IT_PATTERN_END_OF_ROW_MARKER        0
 #define IT_PATTERN_NOTE_PRESENT             1
 #define IT_PATTERN_INSTRUMENT_PRESENT       2
 #define IT_PATTERN_VOLUME_COLUMN_PRESENT    4
@@ -63,6 +70,23 @@
 #define IT_PATTERN_LAST_INST_IN_CHANNEL     32
 #define IT_PATTERN_LAST_VOLC_IN_CHANNEL     64
 #define IT_PATTERN_LAST_COMMAND_IN_CHANNEL  128
+#define IT_NOTE_CUT                         254
+#define IT_KEY_OFF                          255
+
+// constants for decoding the volume column
+#define IT_VOLUME_COLUMN_UNDEFINED              213
+#define IT_VOLUME_COLUMN_VIBRATO                202
+#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        192
+#define IT_VOLUME_COLUMN_SET_PANNING            128            
+#define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
+#define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
+#define IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      94
+#define IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        84
+#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN 74
+#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   64
+#define IT_VOLUME_COLUMN_SET_VOLUME             0
+
+
                                                
 #pragma pack (1) 
 
@@ -204,10 +228,14 @@ struct ItPatternHeader {
     unsigned short  dataSize;       // excluding this header
     unsigned short  nRows;          // 32..200
     unsigned        reserved;
-    unsigned char   data[65536 - 8];
+    //unsigned char   data[65536 - 8];
 };
 
 #pragma pack (8) 
+
+const int itVolcPortaTable[] = { 
+    0x0,0x1,0x4,0x8,0x10,0x20,0x40,0x60,0x80,0xFF
+};
 
 int Module::loadItFile() 
 {
@@ -646,10 +674,10 @@ int Module::loadItFile()
                 if ( is16bitData )
                 {
                     SHORT *data = sample.data;
-                    for ( int i = 0; i < sample.length; i++ ) data[i] ^= 0x8000;
+                    for ( unsigned i = 0; i < sample.length; i++ ) data[i] ^= 0x8000;
                 } else { 
                     char *data = (char *)sample.data;
-                    for ( int i = 0; i < sample.length; i++ ) data[i] ^= 0x80;
+                    for ( unsigned i = 0; i < sample.length; i++ ) data[i] ^= 0x80;
                 }
             }
             samples_[iSample + 1]->load( sample );
@@ -777,6 +805,332 @@ int Module::loadItFile()
     }
 
     // load patterns:
+    nChannels_ = 32; // = IT_MAX_CHANNELS; // TODO TO FIX!
+    unsigned char masks[IT_MAX_CHANNELS];
+    Note prevRow[IT_MAX_CHANNELS];
+    unsigned char prevVolc[IT_MAX_CHANNELS];
+    memset( &masks,0,sizeof( masks ) );
+    memset( &prevRow,0,sizeof( prevRow ) );
+    memset( &prevVolc,255,sizeof( prevVolc ) );
+    for ( int iPtn = 0; iPtn < itFileHeader.nPatterns; iPtn++ )
+    {
+        Note            *iNote,*patternData;
+        ItPatternHeader itPatternHeader;
+        patterns_[iPtn] = new Pattern;
+
+        itFile.absSeek( ptnHdrPtrs[iPtn] );
+        if ( itFile.read( &itPatternHeader,sizeof( ItPatternHeader ) ) ) return 0;
+        if ( itPatternHeader.nRows > IT_MAX_PATTERN_ROWS ||
+            itPatternHeader.nRows < IT_MIN_PATTERN_ROWS )
+        {
+#ifdef debug_it_loader
+            std::cout << std::endl
+                << "Pattern " << iPtn << " has more than "
+                << IT_MAX_PATTERN_ROWS << " rows: " << itPatternHeader.nRows
+                << "! Exiting." << std::endl;
+#endif
+            return 0;
+        }
+
+        patternData = new Note[nChannels_ * itPatternHeader.nRows];
+        patterns_[iPtn]->initialise( nChannels_,itPatternHeader.nRows,patternData );
+        iNote = patternData;
+
+        // start decoding:
+        unsigned char *source = (unsigned char *)itFile.getSafePointer( itPatternHeader.dataSize );
+        if ( source == nullptr )
+        {
+            return 0; // DEBUG
+        }
+
+        unsigned rowNr = 0;
+        for ( ;rowNr < itPatternHeader.nRows; )
+        {
+            unsigned char pack;
+            if ( itFile.read( &pack,sizeof( unsigned char ) ) ) return 0;
+            if ( pack == IT_PATTERN_END_OF_ROW_MARKER )
+            {
+                rowNr++;
+                continue;
+            } 
+            unsigned channelNr = (pack - 1) & 63; 
+            unsigned char& mask = masks[channelNr];
+            Note note;
+            unsigned char volc;
+            if ( pack & IT_PATTERN_CHANNEL_MASK_AVAILABLE )
+                if ( itFile.read( &mask,sizeof( unsigned char ) ) ) return 0;
+            
+            if ( mask & IT_PATTERN_NOTE_PRESENT )
+            {
+                unsigned char n;
+                if ( itFile.read( &n,sizeof( unsigned char ) ) ) return 0;
+                if ( n == IT_KEY_OFF ) n = KEY_OFF;
+                else if ( n == IT_NOTE_CUT ) n = KEY_NOTE_CUT;
+                else if ( n > IT_MAX_NOTE ) n = KEY_NOTE_FADE;
+                else n++;
+                note.note = n;
+                prevRow[channelNr].note = n;
+            } else note.note = 0;
+            
+            if ( mask & IT_PATTERN_INSTRUMENT_PRESENT )
+            {
+                unsigned char inst;
+                if ( itFile.read( &inst,sizeof( unsigned char ) ) ) return 0;
+                note.instrument = inst;
+                prevRow[channelNr].instrument = inst;
+            } else note.instrument = 0;
+
+            if ( mask & IT_PATTERN_VOLUME_COLUMN_PRESENT )
+            {
+                if ( itFile.read( &volc,sizeof( unsigned char ) ) ) return 0;
+                prevVolc[channelNr] = volc;
+            } else volc = 255;
+
+            if ( mask & IT_PATTERN_COMMAND_PRESENT )
+            {
+                unsigned char fx;
+                unsigned char fxArg;
+                if ( itFile.read( &fx,sizeof( unsigned char ) ) ) return 0;
+                if ( itFile.read( &fxArg,sizeof( unsigned char ) ) ) return 0;
+                note.effects[1].effect = fx;
+                note.effects[1].argument = fxArg;
+                prevRow[channelNr].effects[1].effect = fx;
+                prevRow[channelNr].effects[1].argument = fxArg;
+            } else {
+                note.effects[1].effect = NO_EFFECT;
+                note.effects[1].argument = 0;
+            }
+
+            if ( mask & IT_PATTERN_LAST_NOTE_IN_CHANNEL )
+                note.note = prevRow[channelNr].note;
+
+            if ( mask & IT_PATTERN_LAST_INST_IN_CHANNEL )
+                note.instrument = prevRow[channelNr].instrument;
+
+            if ( mask & IT_PATTERN_LAST_VOLC_IN_CHANNEL )
+                volc = prevVolc[channelNr];
+
+            if ( mask & IT_PATTERN_LAST_COMMAND_IN_CHANNEL )
+            {
+                note.effects[1].effect = prevRow[channelNr].effects[1].effect;
+                note.effects[1].argument = prevRow[channelNr].effects[1].argument;
+            }  
+            // decode volume column
+            if ( volc < IT_VOLUME_COLUMN_UNDEFINED ) 
+            {
+                unsigned& fx = note.effects[0].effect;
+                unsigned& fxArg = note.effects[0].argument;
+                if ( volc > IT_VOLUME_COLUMN_VIBRATO )
+                {
+                    fx = VIBRATO;
+                    fxArg = volc - IT_VOLUME_COLUMN_VIBRATO;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_TONE_PORTAMENTO )
+                {
+                    fx = TONE_PORTAMENTO;
+                    unsigned idx = volc - IT_VOLUME_COLUMN_TONE_PORTAMENTO;
+                    fxArg = itVolcPortaTable[idx];
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_SET_PANNING )
+                {
+                    fx = SET_FINE_PANNING;
+                    unsigned panning = volc - IT_VOLUME_COLUMN_SET_PANNING;
+                    panning <<= 2;
+                    if ( panning > 255 ) panning = 255;
+                    fxArg = panning;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_UP )
+                {
+                    fx = PORTAMENTO_UP;
+                    fxArg = (volc - IT_VOLUME_COLUMN_PORTAMENTO_UP) << 2;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_DOWN )
+                {
+                    fx = PORTAMENTO_DOWN;
+                    fxArg = (volc - IT_VOLUME_COLUMN_PORTAMENTO_DOWN) << 2;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN )
+                {
+                    fx = VOLUME_SLIDE;
+                    fxArg = volc - IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_VOLUME_SLIDE_UP )
+                {
+                    fx = VOLUME_SLIDE;
+                    fxArg = (volc - IT_VOLUME_COLUMN_VOLUME_SLIDE_UP) << 4;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN )
+                {
+                    fx = EXTENDED_EFFECTS;
+                    fxArg = volc - IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN;
+                    fxArg |= FINE_VOLUME_SLIDE_DOWN << 4;
+                } 
+                else if ( volc > IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP )
+                {
+                    fx = EXTENDED_EFFECTS;
+                    fxArg = volc - IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP;
+                    fxArg |= FINE_VOLUME_SLIDE_UP << 4;
+                } 
+                else // IT_VOLUME_COLUMN_SET_VOLUME
+                {
+                    fx = SET_VOLUME;
+                    fxArg = volc;
+                }
+            }
+            // remap effects:
+
+
+
+
+
+
+
+
+            switch ( note.effects[1].effect ) {
+                case 1:  // A: set Speed
+                {
+                    note.effects[1].effect = SET_TEMPO;
+                    if ( !note.effects[1].argument )
+                    {
+                        note.effects[1].effect = NO_EFFECT;
+                        note.effects[1].argument = NO_EFFECT;
+                    }
+                    break;
+                }
+                case 2: // B
+                {
+                    note.effects[1].effect = POSITION_JUMP;
+                    break;
+                }
+                case 3: // C
+                {
+                    note.effects[1].effect = PATTERN_BREAK;
+                    break;
+                }
+                case 4: // D: all kinds of (fine) volume slide
+                {
+                    note.effects[1].effect = VOLUME_SLIDE; // default
+                    break;
+                }
+                case 5: // E: all kinds of (extra) (fine) portamento down
+                {
+                    note.effects[1].effect = PORTAMENTO_DOWN;
+                    break;
+                }
+                case 6: // F: all kinds of (extra) (fine) portamento up
+                {
+                    note.effects[1].effect = PORTAMENTO_UP;
+                    break;
+                }
+                case 7: // G
+                {
+                    note.effects[1].effect = TONE_PORTAMENTO;
+                    break;
+                }
+                case 8: // H
+                {
+                    note.effects[1].effect = VIBRATO;
+                    break;
+                }
+                case 9: // I
+                {
+                    note.effects[1].effect = TREMOR;
+                    break;
+                }
+                case 10: // J
+                {
+                    note.effects[1].effect = ARPEGGIO;
+                    break;
+                }
+                case 11: // K
+                {
+                    note.effects[1].effect = VIBRATO_AND_VOLUME_SLIDE;
+                    break;
+                }
+                case 12: // L
+                {
+                    note.effects[1].effect = TONE_PORTAMENTO_AND_VOLUME_SLIDE;
+                    break;
+                }
+                // skip effects 'M' and 'N' here which are not used
+                case 15: // O
+                {
+                    note.effects[1].effect = SET_SAMPLE_OFFSET;
+                    break;
+                }
+                // skip effect 'P'
+                case 17: // Q
+                {
+                    note.effects[1].effect = MULTI_NOTE_RETRIG; // retrig + volslide
+                    break;
+                }
+                case 18: // R
+                {
+                    note.effects[1].effect = TREMOLO;
+                    break;
+                }
+                case 19: // extended effects 'S'
+                {
+                    note.effects[1].effect = EXTENDED_EFFECTS;
+                    break;
+                }
+                case 20: // T
+                {
+                    note.effects[1].effect = SET_BPM;
+                    if ( note.effects[1].argument < 0x20 )
+                    {
+                        note.effects[1].effect = NO_EFFECT;
+                        note.effects[1].argument = NO_EFFECT;
+                    }
+                    break;
+                }
+                case 21: // U 
+                {
+                    note.effects[1].effect = FINE_VIBRATO;
+                    break;
+                }
+                case 22: // V
+                {
+                    note.effects[1].effect = SET_GLOBAL_VOLUME;
+                    break;
+                }
+                case 23: // W
+                {
+                    note.effects[1].effect = GLOBAL_VOLUME_SLIDE;
+                    break;
+                }
+                case 24: // X
+                {
+                    /*
+                    XA4 = surround:
+                    Enables surround playback on this channel. When using
+                    stereo playback, the right channel of a sample is
+                    played with inversed phase (Pro Logic Surround). When
+                    using quad playback, the rear channels are used for
+                    playing this channel. Surround mode can be disabled by
+                    executing a different panning command on the same
+                    channel.
+                    */
+                    // surround is not supported yet:
+                    if ( note.effects[1].argument == 0xA4 ) break;
+                    note.effects[1].effect = SET_FINE_PANNING;
+                    note.effects[1].argument <<= 1;
+                    if ( note.effects[1].argument > 0xFF )
+                        note.effects[1].argument = 0xFF;
+                    break;
+                }
+                case 25: // Y
+                {
+                    note.effects[1].effect = PANBRELLO;
+                    break;
+                }
+                default: // unknown effect command
+                {
+                    note.effects[1].effect = NO_EFFECT;
+                    note.effects[1].argument = NO_EFFECT;
+                    break;
+                }
+            }
 
 
 
@@ -787,6 +1141,113 @@ int Module::loadItFile()
 
 
 
-    isLoaded_ = false;
+
+
+
+
+
+
+
+
+            if ( channelNr < nChannels_ )
+            {
+                patternData[rowNr * nChannels_ + channelNr] = note;
+            }
+
+        }
+#ifdef debug_it_loader
+#ifdef debug_it_show_patterns
+#define IT_DEBUG_SHOW_MAX_CHN 13
+        _getch();
+        std::cout << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
+        for ( unsigned rowNr = 0; rowNr < patterns_[iPtn]->getnRows(); rowNr++ )
+        {
+            std::cout << std::endl;
+            for ( int channelNr = 0; channelNr < IT_DEBUG_SHOW_MAX_CHN; channelNr++ )
+            {
+#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
+#define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
+#define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
+#define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE | FOREGROUND_INTENSITY)
+#define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
+#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
+#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
+                // **************************************************
+                // colors in console requires weird shit in windows
+                HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
+                HANDLE hStdout = GetStdHandle( STD_OUTPUT_HANDLE );
+                CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
+                GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
+                // **************************************************
+                Note noteData = patterns_[iPtn]->getNote( rowNr * nChannels_ + channelNr );
+                unsigned note = noteData.note;
+                unsigned instrument = noteData.instrument;
+
+                // display note
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                std::cout << "|";
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTCYAN );
+
+                if ( note <= MAXIMUM_NOTES ) std::cout << noteStrings[note];
+                else if ( note == KEY_OFF ) std::cout << "===";
+                else if ( note == KEY_NOTE_CUT ) std::cout << "^^^";
+                else std::cout << "--\\"; // KEY_NOTE_FADE
+                /*
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                std::cout << std::setw( 5 ) << noteToPeriod( note,channel.pSample->getFinetune() );
+
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTBLUE );
+                std::cout << "," << std::setw( 5 ) << channel.period;
+
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTMAGENTA );
+                std::cout << "," << std::setw( 5 ) << channel.portaDestPeriod;
+                */
+                // display instrument
+                SetConsoleTextAttribute( hStdout,FOREGROUND_YELLOW );
+                if ( instrument )
+                    std::cout << std::dec << std::setw( 2 ) << instrument;
+                else std::cout << "  ";
+                /*
+                // display volume column
+                SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
+                if ( iNote->effects[0].effect )
+                std::cout << std::hex << std::uppercase
+                << std::setw( 1 ) << iNote->effects[0].effect
+                << std::setw( 2 ) << iNote->effects[0].argument;
+                else std::cout << "   ";
+                */
+                /*
+                // display volume:
+                SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
+                std::cout << std::hex << std::uppercase
+                    << std::setw( 2 ) << channel.volume;
+                */
+
+                /*
+                // effect
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+                for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
+                    if ( noteData.effects[fxloop].effect )
+                        std::cout
+                        << std::hex << std::uppercase
+                        << std::setw( 2 ) << noteData.effects[fxloop].effect;
+                    else std::cout << "--";
+                    SetConsoleTextAttribute( hStdout,FOREGROUND_BROWN );
+                    std::cout
+                        << std::setw( 2 ) << (noteData.effects[fxloop].argument)
+                        << std::dec;
+                }
+                */
+                SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
+            }
+        }
+#endif
+#endif        
+    }
+
+    isLoaded_ = true;
     return 0;
 }

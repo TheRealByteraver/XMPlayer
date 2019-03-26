@@ -27,7 +27,7 @@ And here are the possible extended effects:
 ---------------------------------
 #   Effect name
 ---------------------------------
-E0  Set Filter                          not feasible
+E0  Set Filter                          "not feasible"
 E1  FineSlide Up                        implemented
 E2  FineSlide Down                      implemented
 E3  Glissando Control
@@ -94,7 +94,7 @@ Fixed / cleared up:
 
 */
 
-//#define debug_mixer
+#define debug_mixer
 
 
 const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
@@ -113,7 +113,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 };
 
 
-#define BUFFER_LENGTH_IN_MINUTES   16
+#define BUFFER_LENGTH_IN_MINUTES   1
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -1994,7 +1994,7 @@ int Mixer::updateNotes () {
         #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
         #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
         #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
-        if ( iChannel < 8 )
+        if ( iChannel < 6 )
         {            
             // **************************************************
             // colors in console requires weird shit in windows
@@ -2968,6 +2968,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia.it",   // impulse tracker unknown
         
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
+        "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
         "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",

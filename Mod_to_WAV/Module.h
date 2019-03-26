@@ -167,7 +167,9 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define ARPEGGIO                            0x25
 #define FINE_VIBRATO                        0x26// S3M fine vibrato
 #define SET_VIBRATO_SPEED                   0x27// XM Volc command
-#define KEY_OFF                             (12 * 11 + 1) // 12 octaves
+#define KEY_OFF                             255 //(12 * 11 + 1) // 12 octaves
+#define KEY_NOTE_CUT                        254
+#define KEY_NOTE_FADE                       253
 
 
 /*

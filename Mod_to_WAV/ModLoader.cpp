@@ -546,6 +546,10 @@ int Module::loadModFile() {
 
         //ps = (unsigned *)bufp; 
         ps = (unsigned *)modFile.getSafePointer( sizeof( flt ) * nPatterns_ );
+        if ( ps == nullptr )
+        {
+            return 0; // DEBUG
+        }
         pd = ps;
         for ( unsigned ptn = 0; ptn < nPatterns_; ptn++ ) 
         {
