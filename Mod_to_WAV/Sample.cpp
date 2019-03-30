@@ -6,7 +6,8 @@
 
 using namespace std;
 
-bool Sample::load(const SampleHeader &sampleHeader) {
+bool Sample::load(const SampleHeader &sampleHeader) 
+{
     name_ = sampleHeader.name;
     if (sampleHeader.data) { 
         length_           = sampleHeader.length;

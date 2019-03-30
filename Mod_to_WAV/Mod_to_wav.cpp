@@ -67,12 +67,13 @@ EF  Invert Loop
 #include "time.h"
 
 #include "Module.h"
+#include "VirtualFile.h" // debug
 
 //extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 /*
 bugs:
-    - starsmuz.s3m pans full left
+    - .S3M initial panning is wrong
 
 
 Fixed / cleared up:
@@ -94,7 +95,7 @@ Fixed / cleared up:
 
 */
 
-#define debug_mixer
+//#define debug_mixer
 
 
 const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
@@ -113,7 +114,7 @@ const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
 };
 
 
-#define BUFFER_LENGTH_IN_MINUTES   1
+#define BUFFER_LENGTH_IN_MINUTES   10
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -235,6 +236,7 @@ public: // debug
     bool            isInitialised;
     bool            st300FastVolSlides_;
     bool            st3StyleEffectMemory_;
+    bool            itStyleEffects_;
     bool            ft2StyleEffects_;
     bool            pt35StyleEffects_;
     Module          *module;
@@ -312,32 +314,6 @@ void Mixer::resetSong()
     for ( unsigned i = 0; i < nChannels; i++ ) {
         channels[i].init();
         channels[i].panning = module->getDefaultPanPosition( i );
-        /*
-        switch ( module->getPanningStyle() ) {
-            case PANNING_STYLE_MOD:
-            {
-                switch ( i % 4 ) {
-                    case 1:
-                    case 2: { channels[i]->panning = PANNING_FULL_RIGHT; break; }
-                    case 0:
-                    case 3: { channels[i]->panning = PANNING_FULL_LEFT;  break; }
-                }
-                break;
-            }
-            case PANNING_STYLE_S3M:
-            {
-                if ( i & 1 )  channels[i]->panning = PANNING_FULL_RIGHT;
-                else        channels[i]->panning = PANNING_FULL_LEFT;
-                break;
-            }
-            case PANNING_STYLE_XM:
-            default:
-            {
-                channels[i]->panning = PANNING_CENTER;
-                break;
-            }
-        }
-        */
     }
     globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
     globalVolume_ = 64;
@@ -394,30 +370,51 @@ Mixer::Mixer () {
 }
 
 int Mixer::initialise(Module *m) {
-    if (!m)              return 0;
-    if (!m->isLoaded ()) return 0;
+    if ( !m )              return 0;
+    if ( !m->isLoaded () ) return 0;
     module = m;
     nChannels = module->getnChannels ();
     switch ( module->getTrackerType() )
     {
         case TRACKER_PROTRACKER:
         {
+            st300FastVolSlides_ = false;
+            st3StyleEffectMemory_ = false;
+            ft2StyleEffects_ = false;
+            itStyleEffects_ = false;
             break;
         }
         case TRACKER_ST300:
         {
             st300FastVolSlides_ = true;
             st3StyleEffectMemory_ = true;
+            ft2StyleEffects_ = false;
+            itStyleEffects_ = false;
             break;
         }
         case TRACKER_ST321:
         {
+            // S3M loader resets tracker version to ST3.0 if fastvolslides is on
+            st300FastVolSlides_ = false; 
             st3StyleEffectMemory_ = true;
+            ft2StyleEffects_ = false;
+            itStyleEffects_ = false;
             break;
         }
         case TRACKER_FT2:
         {
+            st300FastVolSlides_ = false;
+            st3StyleEffectMemory_ = false;
             ft2StyleEffects_ = true;
+            itStyleEffects_ = false;
+            break;
+        }
+        case TRACKER_IT:
+        {
+            st300FastVolSlides_ = false;
+            st3StyleEffectMemory_ = false;
+            ft2StyleEffects_ = false;
+            itStyleEffects_ = true;
             break;
         }
     }
@@ -432,8 +429,8 @@ int Mixer::initialise(Module *m) {
     return 0;
 }
 
-int Mixer::doMixBuffer (SHORT *buffer) {
-    memset(mixBuffer, 0, BUFFER_SIZE * sizeof(MixBufferType));
+int Mixer::doMixBuffer ( SHORT *buffer ) {
+    memset( mixBuffer, 0, BUFFER_SIZE * sizeof(MixBufferType) );
     mixIndex = 0;  
     unsigned x = callBpm - mixCount;
     unsigned y = BUFFER_SIZE / 2;   // stereo
@@ -845,7 +842,8 @@ int Mixer::stopReplay () {
 
 
 unsigned Mixer::noteToPeriod(unsigned note, int finetune) {
-    if (module->useLinearFrequencies()) {
+    if ( module->useLinearFrequencies() ) 
+    {
         return (7680 - ((note - 1) << 6) - (finetune >> 1));  // grmbl... note - 1
     } else {
 /*
@@ -940,13 +938,15 @@ NTSC freq * 4 = 7894
 
 
 
-unsigned Mixer::periodToFrequency(unsigned period) {
+unsigned Mixer::periodToFrequency( unsigned period ) 
+{
     return module->useLinearFrequencies() ?
         (unsigned)(8363 * pow(2, ((4608.0 - (double)period) / 768.0)))
     :   (period ? ((8363 * 1712) / period ) : 0);
 }
 
-int Mixer::setMixerVolume( unsigned fromChannel ) {
+int Mixer::setMixerVolume( unsigned fromChannel ) 
+{
     unsigned        gp = globalPanning_;
     bool            invchn = (gp >= PANNING_CENTER);
     unsigned        soften = (invchn ? (PANNING_FULL_RIGHT - gp) : gp);
@@ -1202,6 +1202,11 @@ int Mixer::updateNotes () {
 
     patternLoopFlag_ = false;
 
+
+
+    //std::cout << " t = " << tempo << ", bpm = " << bpm << "; " << std::endl;
+
+
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
         Channel&    channel = channels[iChannel];
         unsigned    note,instrument,sample;
@@ -1219,11 +1224,14 @@ int Mixer::updateNotes () {
         instrument = iNote->instrument;
 
         if ( note ) {            
-            if (note == KEY_OFF) {
+            if ( note == KEY_OFF ) {
                 isNewNote = false;
                 keyedOff = true;
+            } else if ( note == KEY_NOTE_CUT ) {
+                isNewNote = false;
+                stopChannelPrimary( iChannel ); // TEMP
             } else {
-                if ( note > MAXIMUM_NOTES ) std::cout << "!"; // DEBUG
+                if ( note > MAXIMUM_NOTES ) std::cout << "!" << (unsigned)note << "!"; // DEBUG
                 channel.lastNote = note;
                 isNewNote = true;
                 replay = true;
@@ -1305,7 +1313,7 @@ int Mixer::updateNotes () {
                 if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
                         ( channel.lastNote - 1 );
-                    // std::cout << std::setw( 4 ) << sample; // DEBUG
+                    //std::cout << std::setw( 4 ) << sample; // DEBUG
                     channel.pSample = 
                         //channel.pInstrument->getSample( sample ); 
                         module->getSample( sample );
@@ -1325,6 +1333,25 @@ int Mixer::updateNotes () {
         // check if a portamento effect occured:
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ )
         {
+            
+            // disable fx for now:
+            /*
+            if ( fxloop == 0 )
+            {
+                iNote->effects[fxloop].effect = 0;
+                iNote->effects[fxloop].argument = 0;
+            }
+            
+            if ( fxloop == 1 )
+            {
+                iNote->effects[fxloop].effect = 0;
+                iNote->effects[fxloop].argument = 0;
+            }
+            */
+
+
+
+
             unsigned& effect = iNote->effects[fxloop].effect;
             unsigned& argument = iNote->effects[fxloop].argument;
             if ( (effect == TONE_PORTAMENTO) ||
@@ -1411,7 +1438,8 @@ int Mixer::updateNotes () {
                 case ARPEGGIO : // to be reviewed
                 {        
                     unsigned arpeggio = argument;
-                    if ( st3StyleEffectMemory_ && (arpeggio == 0) )
+                    if ( (st3StyleEffectMemory_ || itStyleEffects_)
+                        && (arpeggio == 0) )
                         arpeggio = channel.lastArpeggio; 
                     
                     if ( arpeggio ) {
@@ -1480,7 +1508,7 @@ int Mixer::updateNotes () {
                 case PORTAMENTO_UP :
                 {
                     if ( argument ) channel.lastPortamentoUp = argument;
-                    if ( st3StyleEffectMemory_ )
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ )
                     {
                         unsigned lastPorta = channel.lastPortamentoUp;
                         //argument = channel.lastNonZeroFXArg;
@@ -1511,7 +1539,7 @@ int Mixer::updateNotes () {
                 case PORTAMENTO_DOWN :
                 {
                     if ( argument ) channel.lastPortamentoDown = argument;
-                    if ( st3StyleEffectMemory_ )
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ )
                     {
                         unsigned lastPorta = channel.lastPortamentoDown;
                         unsigned xfx = lastPorta >> 4;
@@ -1713,29 +1741,35 @@ int Mixer::updateNotes () {
                 }
                 case PATTERN_BREAK :
                 {
-                    unsigned startRow = (argument >> 4) * 10 + (argument & 0xF);
                     /*
                         ST3 & FT2 can't jump past row 64. Impulse Tracker can,
                         values higher than the nr of rows of the next pattern
                         are converted to zero.
-                        ST3 ignores illegal pattern breaks, IT jumps to the 
+                        ST3 ignores illegal pattern breaks, IT jumps to the
                         next pattern though.
                     */
+                    if ( itStyleEffects_ )
+                    {
+                        patternBreak = true;
+                        patternStartRow = argument;
+                        break;
+                    }
+                    unsigned startRow = (argument >> 4) * 10 + (argument & 0xF);
                     if ( startRow < 64 )
                     {
                         patternBreak = true;
                         patternStartRow = startRow;
-                    } // else if impulse tracker then ...
+                    } 
                     break;
                 }
                 case EXTENDED_EFFECTS : 
                 {
                     unsigned extFXArg = argument;
-                    if ( st3StyleEffectMemory_ ) 
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) // itStyleEffects_ ?
                         extFXArg = channel.lastExtendedEffect;
                     unsigned xfx    = extFXArg >> 4;
                     unsigned xfxArg = extFXArg & 0xF;
-                    if ( st3StyleEffectMemory_ ) // remap st3 style effects
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) // remap st3 style effects
                     {
                         switch ( xfx )
                         {
@@ -1772,6 +1806,7 @@ int Mixer::updateNotes () {
                                 xfxArg = NO_EFFECT;
                                 break;
                             }
+                            //case 0x7: NNA controls
                             case S3M_SOUND_CONTROL:          // todo
                             {
                                 xfx = NO_EFFECT;
@@ -1895,7 +1930,7 @@ int Mixer::updateNotes () {
                                 pattern delay commands are found on the same
                                 row.
                             */
-                            if ( st3StyleEffectMemory_ ) { 
+                            if ( st3StyleEffectMemory_ || itStyleEffects_ ) {
                                 if ( !patternDelay_ ) patternDelay_ = xfxArg;
                             } else patternDelay_ = xfxArg;
                             break;
@@ -2038,22 +2073,25 @@ int Mixer::updateNotes () {
             else std::cout << "   ";
             */
             // display volume:
+            /*
             SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
             std::cout << std::hex << std::uppercase
                 << std::setw( 2 ) << channel.volume;
-
+            */
             // effect
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
-            for ( unsigned fxloop = 1; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
+            for ( unsigned fxloop = 0; fxloop < 1 /*MAX_EFFECT_COLUMNS*/; fxloop++ ) {
                 if( iNote->effects[fxloop].effect )
                     std::cout
                         << std::hex << std::uppercase
                         << std::setw( 2 ) << iNote->effects[fxloop].effect;
                 else std::cout << "--";
                 SetConsoleTextAttribute( hStdout,FOREGROUND_BROWN );
-                std::cout
-                    << std::setw( 2 ) << (iNote->effects[fxloop].argument ) 
-                    << std::dec;
+                if ( iNote->effects[fxloop].argument )
+                    std::cout
+                        << std::setw( 2 ) << (iNote->effects[fxloop].argument ) 
+                        << std::dec;
+                else std::cout << "--";
             }
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
         } 
@@ -2124,7 +2162,8 @@ loop, making the infinite loop impossible.
             FT2 starts the pattern on the same row that the pattern loop 
             started in the pattern before it
         */
-        if ( ft2StyleEffects_ ) {
+        if ( ft2StyleEffects_ ) 
+        {
             patternRow = patternLoopStartRow_;
             patternLoopStartRow_ = 0;
         }
@@ -2137,7 +2176,9 @@ loop, making the infinite loop impossible.
             (module->getPatternTable( iPatternTable ) == MARKER_PATTERN)
             ; iPatternTable++ 
             );
-        if (iPatternTable >= module->getSongLength()) { 
+        if ( (iPatternTable >= module->getSongLength()) ||
+            (module->getPatternTable( iPatternTable ) == END_OF_SONG_MARKER) )
+        { 
             iPatternTable = module->getSongRestartPosition(); // repeat song
             // skip marker patterns:
             for ( ;
@@ -2146,7 +2187,9 @@ loop, making the infinite loop impossible.
                 ; iPatternTable++
             );
         }
+
         pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+        if( patternRow >= pattern->getnRows() ) patternRow = 0;
         iNote = pattern->getRow( patternRow );
 #ifdef debug_mixer
         std::cout << std::endl
@@ -2205,7 +2248,7 @@ int Mixer::updateEffects () {
                     {
                         // these are fine slides:
                         if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
-                        // if ( impulse tracker ) break; // impulse tracker ignores illegal vol slides!
+                        if ( itStyleEffects_ ) break; // impulse tracker ignores illegal vol slides!
                     }
                     unsigned& v = channel.volume;
                     //if ( st3StyleEffectMemory_ )
@@ -2643,7 +2686,7 @@ int Mixer::updateImmediateEffects () {
                         D1F = fine volume slide up   by 1
                         DFF = fine volume slide up   by F (!)
                     */
-                    if ( st3StyleEffectMemory_ )
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ )
                     {
                         unsigned& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
@@ -2968,11 +3011,18 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia.it",   // impulse tracker unknown
         
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
-        "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
+        //"D:\\MODS\\M2W_BUGTEST\\china1.it",
+        //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
+        //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
+        //"D:\\MODS\\M2W_BUGTEST\\women.it",
+        //"D:\\MODS\\dosprog\\backward.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
-        
+
+        "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
+
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
@@ -2990,10 +3040,9 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         //"D:\\MODS\\dosprog\\mods\\menutune.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
-        "D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
+        //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\dosprog\\mods\\women.s3m",
-        //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
@@ -3096,6 +3145,112 @@ int main(int argc, char *argv[])  {
     _getch();
     */
 
+    /*
+    {
+        unsigned test = 0xF1E2D3C4;
+        std::cout << std::hex << std::endl << "test = " << test << std::endl
+            << "MSB (F1) = " << ((test >> 24) & 0xFF) << std::endl
+            << "MSB (E2) = " << ((test >> 16) & 0xFF) << std::endl
+            << "MSB (D3) = " << ((test >> 8) & 0xFF) << std::endl
+            << "MSB (C4) = " << ((test >> 0) & 0xFF) << std::endl;
+
+        char *testp = (char *)(&test);
+        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
+            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
+            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
+            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
+            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl;
+    }
+    {
+        unsigned short test = 0xD3C4;
+        std::cout << std::hex << std::endl << "test = " << test << std::endl
+            << "MSB (D3) = " << ((test >> 8) & 0xFF) << std::endl
+            << "MSB (C4) = " << ((test >> 0) & 0xFF) << std::endl;
+
+        char *testp = (char *)(&test);
+        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
+            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
+            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl;
+    }
+    {
+        unsigned long long test = 0xF1E2D3C4B5A69788;
+        std::cout << std::hex << std::endl << "test = " << test << std::endl
+            << "MSB (F1) = " << ((test >> 56) & 0xFF) << std::endl
+            << "MSB (E2) = " << ((test >> 48) & 0xFF) << std::endl
+            << "MSB (D3) = " << ((test >> 40) & 0xFF) << std::endl
+            << "MSB (C4) = " << ((test >> 32) & 0xFF) << std::endl
+            << "MSB (B5) = " << ((test >> 24) & 0xFF) << std::endl
+            << "MSB (A6) = " << ((test >> 16) & 0xFF) << std::endl
+            << "MSB (97) = " << ((test >> 8) & 0xFF) << std::endl
+            << "MSB (88) = " << ((test >> 0) & 0xFF) << std::endl;
+
+        char *testp = (char *)(&test);
+        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
+            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
+            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
+            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
+            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl
+            << "testp[4] = " << (unsigned)((unsigned char)(testp[4])) << std::endl
+            << "testp[5] = " << (unsigned)((unsigned char)(testp[5])) << std::endl
+            << "testp[6] = " << (unsigned)((unsigned char)(testp[6])) << std::endl
+            << "testp[7] = " << (unsigned)((unsigned char)(testp[7])) << std::endl;
+    }
+
+    {
+        struct TEST { 
+            unsigned short a;
+            unsigned short b;
+        } test;
+
+        test.a = 0xF1E2;
+        test.b = 0xD3C4;
+
+        char *testp = (char *)(&test);
+        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
+            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
+            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
+            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
+            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl;
+    }
+    */
+
+    /*
+    VirtualFile vf( std::string( "D:\\MODS\\M2W_BUGTEST\\Creagaia.it" ) );
+    const int num = 8;
+    char buf[num];
+    memset( buf,0,num );
+    vf.read( buf,num );
+    for ( int i = 0; i < num; i++ )
+    {
+        std::cout << std::setw( 4 ) << buf[i];
+    }
+    std::cout << std::endl << std::hex;
+    for ( int i = 0; i < num; i++ )
+    {
+        std::cout << std::setw( 4 ) << (unsigned)((unsigned char)(buf[i]));
+    }
+    std::cout << std::endl;
+
+
+    unsigned dst;
+    vf.absSeek( 0 );
+    vf.resetBitRead();
+
+    //vf.bitRead( dst,16 );
+    //std::cout << std::setw( 4 ) << dst;
+    
+    for ( int i = 0; i < num; i++ )
+    {
+        vf.bitRead( dst,4 );
+        std::cout << std::setw( 3 ) << dst;
+        vf.bitRead( dst,4 );
+        std::cout << dst;
+    }
+    
+    std::cout << std::endl;
+
+    _getch();
+    */
 
 
     if (argc > 1) {

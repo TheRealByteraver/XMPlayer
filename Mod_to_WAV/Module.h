@@ -75,7 +75,8 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define PANNING_STYLE_XM                    2   // ALL CENTER
 #define PANNING_STYLE_S3M                   3   // LRLR etc
 #define PANNING_STYLE_IT                    4
-#define MARKER_PATTERN                      0x10000 // S3M/IT compatibility
+#define MARKER_PATTERN                      254 // S3M/IT compatibility
+#define END_OF_SONG_MARKER                  255 // S3M/IT end of song marker
 
 #define MAX_VOLUME                          64
 #define MAX_SAMPLENAME_LENGTH               22
@@ -167,7 +168,7 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define ARPEGGIO                            0x25
 #define FINE_VIBRATO                        0x26// S3M fine vibrato
 #define SET_VIBRATO_SPEED                   0x27// XM Volc command
-#define KEY_OFF                             255 //(12 * 11 + 1) // 12 octaves
+#define KEY_OFF                             255 //(12 * 11 + 1) // 11 octaves
 #define KEY_NOTE_CUT                        254
 #define KEY_NOTE_FADE                       253
 
@@ -518,7 +519,13 @@ public:
     void            load(const InstrumentHeader &instrumentHeader);
     std::string     getName() { return name_; }
     unsigned        getnSamples ()                  { return nSamples_;           }
-    unsigned        getSampleForNote(unsigned n)    { return sampleForNote_[n];   }
+    unsigned        getSampleForNote(unsigned n)    
+    { 
+        //std::cout << "n = " << n << ";";
+        assert ( n < MAXIMUM_NOTES );  // has no effect
+        if ( n >= MAXIMUM_NOTES ) return 0;
+        return sampleForNote_[n];   
+    }
     EnvelopePoint   getVolumeEnvelope (unsigned p)  { return volumeEnvelope_[p];  }
     unsigned        getnVolumePoints ()             { return nVolumePoints_;      }
     unsigned        getVolumeSustain ()             { return volumeSustain_;      }
@@ -568,17 +575,17 @@ public:
         loadFile( fileName ); 
     }
     ~Module();
-    std::string     getFileName()               { return fileName_;             }
+    std::string     getFileName ()               { return fileName_;             }
     void            setFileName( std::string &fileName ) { fileName_ = fileName; }
     int             loadFile ();
     int             loadFile( std::string &fileName )
                     { setFileName( fileName ); return loadFile(); }
     bool            isLoaded ()                 { return isLoaded_;             }
     bool            useLinearFrequencies ()     { return useLinearFrequencies_; }
-    bool            isCustomRepeat()            { return isCustomRepeat_;       }
-    unsigned        getTrackerType()            { return trackerType_;          }
-    unsigned        getMinPeriod()              { return minPeriod_;            }
-    unsigned        getMaxPeriod()              { return maxPeriod_;            }
+    bool            isCustomRepeat ()           { return isCustomRepeat_;       }
+    unsigned        getTrackerType ()           { return trackerType_;          }
+    unsigned        getMinPeriod ()             { return minPeriod_;            }
+    unsigned        getMaxPeriod ()             { return maxPeriod_;            }
     unsigned        getPanningStyle()           { return panningStyle_;         }
     unsigned        getnChannels ()             { return nChannels_;            }
     unsigned        getnInstruments ()          { return nInstruments_;         }
@@ -588,7 +595,7 @@ public:
     unsigned        getDefaultBpm ()            { return defaultBpm_;           }
     unsigned        getSongLength ()            { return songLength_;           }
     unsigned        getSongRestartPosition ()   { return songRestartPosition_;  }
-    std::string     getSongTitle()              { return songTitle_;            }
+    std::string     getSongTitle ()             { return songTitle_;            }
 
     unsigned        getDefaultPanPosition( unsigned i ) 
     { 
@@ -602,7 +609,7 @@ public:
     }
     Sample          *getSample( unsigned sample )
     {
-        assert( sample <= MAX_SAMPLES );
+        assert( sample <= 64 /*MAX_SAMPLES*/ );
         return samples_[sample] ? samples_[sample] : &emptySample_;
     }
     Instrument      *getInstrument( unsigned instrument )  
@@ -647,7 +654,7 @@ private:
     int             loadModFile ();
     int             loadS3mFile ();
     int             loadXmFile ();
-    int             loadItFile();
+    int             loadItFile ();
 };
 
 #endif // MODULE_H

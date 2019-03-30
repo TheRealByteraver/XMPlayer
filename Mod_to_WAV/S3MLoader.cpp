@@ -143,28 +143,11 @@ const char *notetable[] = {
 #endif
 
 int Module::loadS3mFile() {
-    /*
-    char                    *buf;
-    std::ifstream::pos_type  fileSize = 0;
-    std::ifstream            s3mFile( 
-        fileName_,std::ios::in | std::ios::binary | std::ios::ate );
-    */
-
     // initialize s3m specific variables:
     minPeriod_ = 56;    // periods[9 * 12 - 1]
     maxPeriod_ = 27392; // periods[0]
     // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
-
-    /*
-    if ( !s3mFile.is_open() ) return 0; // exit on I/O error
-    fileSize = s3mFile.tellg();
-    buf = new char[(int)fileSize];
-    s3mFile.seekg( 0,std::ios::beg );
-    s3mFile.read( buf,fileSize );
-    s3mFile.close();
-    S3mFileHeader& s3mFileHeader = *((S3mFileHeader *)buf);
-    */
 
     VirtualFile s3mFile( fileName_ );
     if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
@@ -274,36 +257,14 @@ int Module::loadS3mFile() {
     nPatterns_ = 0;
     songLength_ = 0;
 
-
-    //int bufOffset = sizeof( S3mFileHeader );
-    //unsigned char *OrderList = (unsigned char *)(buf + bufOffset);
-
-
-
-
-    /*
     for ( int i = 0; i < s3mFileHeader.songLength; i++ )
     {
-        unsigned order = OrderList[i];
-        if ( order < S3M_MARKER_PATTERN ) { 
-            patternTable_[songLength_] = order;
-            songLength_++;
-            if (order > nPatterns_) nPatterns_ = order;
-
-#ifdef debug_s3m_loader
-            std::cout << order << " ";
-#endif
-        }
-    }
-    */
-    for ( int i = 0; i < s3mFileHeader.songLength; i++ )
-    {
-        //unsigned order = OrderList[i];       
         unsigned char readOrder;
         if ( s3mFile.read( &readOrder,sizeof( unsigned char ) ) ) return 0;
         unsigned order = readOrder;
-
-        if ( order >= S3M_MARKER_PATTERN ) order = MARKER_PATTERN;
+        //END_OF_SONG_MARKER
+        if ( order == S3M_END_OF_SONG_MARKER ) order = END_OF_SONG_MARKER;
+        else if ( order >= S3M_MARKER_PATTERN ) order = MARKER_PATTERN;
         else if ( order > nPatterns_ ) nPatterns_ = order;
         patternTable_[songLength_] = order;
         songLength_++;        
@@ -318,24 +279,6 @@ int Module::loadS3mFile() {
         << "SongLength (corr.): " << songLength_ << std::endl
         << "Number of Patterns: " << nPatterns_ << std::endl;
 #endif
-    /*
-    bufOffset += s3mFileHeader.songLength;
-    const unsigned short *instrParaPtrs = (unsigned short *)(buf + bufOffset);
-    bufOffset += s3mFileHeader.nInstruments * 2; // sizeof( unsigned short ) == 2
-
-    const unsigned short *ptnParaPtrs = (unsigned short *)(buf + bufOffset);
-    bufOffset += s3mFileHeader.nPatterns    * 2; // sizeof( unsigned short ) == 2
-
-    const unsigned char *defPanPositions = (unsigned char *)(buf + bufOffset); // 32 bytes
-    if ( (bufOffset + 32) > fileSize ) { 
-#ifdef debug_s3m_loader
-        std::cout << std::endl
-            << "File is too small, exiting.";
-#endif
-        delete[] buf;
-        return 0;
-    }
-    */
     unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
     unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
     unsigned char   defPanPositions[S3M_MAX_CHANNELS];
@@ -378,6 +321,9 @@ int Module::loadS3mFile() {
     }
     // end "to be reviewed" marker -------------------------
 
+
+
+
 #ifdef debug_s3m_loader
     std::cout << std::endl << "Instrument pointers: ";
     for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
@@ -415,12 +361,9 @@ int Module::loadS3mFile() {
         s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
     for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ )
     {
-        //bufOffset = 16 * instrParaPtrs[nInst - 1];
-        //S3mInstHeader& s3mInstHeader = *((S3mInstHeader *)(buf + bufOffset));
         S3mInstHeader   s3mInstHeader;
         s3mFile.absSeek( 16 * instrParaPtrs[nInst - 1] );
         if ( s3mFile.read( &s3mInstHeader,sizeof( S3mInstHeader ) ) ) return 0;
-
 
         smpDataPtrs[nInst - 1] = 
             16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
@@ -464,8 +407,6 @@ int Module::loadS3mFile() {
             std::cout << std::endl
                 << "Unable to read adlib samples!"/*", exiting!"*/;
 #endif
-            //delete[] buf;
-            //return 0;
         }
         InstrumentHeader    instrument;
         SampleHeader        sample;
@@ -492,27 +433,6 @@ int Module::loadS3mFile() {
             (smpDataPtrs[nInst - 1] != 0)) {
             nSamples_++;
 
-
-            /*
-            sample.data = (SHORT *)(buf + smpDataPtrs[nInst - 1]);
-            if ( (char *)((char *)sample.data + sample.length) > (buf + (unsigned)fileSize) )
-            {
-#ifdef debug_s3m_loader
-                std::cout << std::endl
-                    << "Missing sample data while reading file, exiting!" << std::endl
-                    << "sample.data:   " << std::dec << (unsigned)sample.data << std::endl
-                    << "sample.length: " << sample.length << std::endl
-                    << "data + length: " << (unsigned)(sample.data + sample.length) << std::endl
-                    << "filesize:      " << fileSize << std::endl
-                    << "overshoot:     "
-                    << (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
-                    << std::endl;
-#endif
-                //delete[] buf;
-                return 0;
-            }
-            */
-
             s3mFile.absSeek( smpDataPtrs[nInst - 1] );
             sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
             // temp DEBUG:
@@ -532,8 +452,6 @@ int Module::loadS3mFile() {
 #endif
                 return 0;
             }
-
-            //instrument.samples[0] = new Sample;
 
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             // convert sample data from unsigned to signed:
@@ -565,7 +483,6 @@ int Module::loadS3mFile() {
 #endif
             if ( sample.length )
             {
-                //instrument.samples[0]->load( sample );
                 samples_[nInst] = new Sample;
                 sample.dataType = SAMPLEDATA_SIGNED_8BIT;
                 samples_[nInst]->load( sample );
@@ -697,14 +614,11 @@ int Module::loadS3mFile() {
     }
     // Now load the patterns:
     S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
-    for ( unsigned iPtn = 0; iPtn < /*s3mFileHeader.nPatterns*/nPatterns_; iPtn++ )
+    for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ )
     {
         memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
         if ( ptnParaPtrs[iPtn] ) // empty patterns are not stored
         {
-
-            //char *s3mPtn = buf + (unsigned)16 * (unsigned)(ptnParaPtrs[iPtn]);
-
             s3mFile.absSeek( (unsigned)16 * (unsigned)ptnParaPtrs[iPtn] );
             unsigned ptnMaxSize = s3mFile.dataLeft();
             char *s3mPtn = (char *)s3mFile.getSafePointer( ptnMaxSize );
@@ -716,7 +630,6 @@ int Module::loadS3mFile() {
 
 
             unsigned packedSize = *((unsigned short *)s3mPtn);
-            //if ( (s3mPtn + packedSize) > ( buf + (unsigned)fileSize ) )
             if( packedSize > ptnMaxSize )
             {
 
@@ -726,10 +639,8 @@ int Module::loadS3mFile() {
                     << std::endl;
 #endif
                 delete[] unPackedPtn;
-                //delete[] buf;
                 return 0;
             }
-
 
 
             unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
@@ -885,95 +796,17 @@ int Module::loadS3mFile() {
                     break;
                 }
                 case 4: // D: all kinds of (fine) volume slide
-                /*
-                    So, apparently:
-                    D01 = volume slide down by 1
-                    D10 = volume slide up   by 1
-                    DF1 = fine volume slide down by 1
-                    D1F = fine volume slide up   by 1
-                    DFF = fine volume slide up   by F
-                    DF0 = volume slide up   by F
-                    D0F = volume slide down by F
-                */
                 {   
-                    iNote->effects[1].effect = VOLUME_SLIDE; // default
-                    /*
-                    int slide1 = iNote->effects[1].argument >> 4;
-                    int slide2 = iNote->effects[1].argument & 0xF;
-                    if ( (slide2 == 0xF) && slide1 ) // fine volume up if arg non-zero
-                    {
-                        iNote->effects[1].effect = EXTENDED_EFFECTS;
-                        iNote->effects[1].argument = (FINE_VOLUME_SLIDE_UP << 4)
-                            + slide1;
-                    } else if ( (slide1 == 0xF) && slide2 ) { // fine volume down if arg non-zero
-                        iNote->effects[1].effect = EXTENDED_EFFECTS;
-                        iNote->effects[1].argument = (FINE_VOLUME_SLIDE_DOWN << 4)
-                            + slide2;
-                    } 
-                    */
+                    iNote->effects[1].effect = VOLUME_SLIDE; 
                     break;
                 }
                 case 5: // E: all kinds of (extra) (fine) portamento down
                 {
-                    /*
-                    int xfx = iNote->effects[1].argument >> 4;
-                    int xfxArg = iNote->effects[1].argument & 0xF;
-                    switch ( xfx )
-                    {
-                        case 0xE: // extra fine slide
-                        {
-                            iNote->effects[1].effect = EXTRA_FINE_PORTAMENTO;
-                            iNote->effects[1].argument = (EXTRA_FINE_PORTAMENTO_DOWN << 4)
-                                + xfxArg;
-                            break;
-                        }
-                        case 0xF: // fine slide
-                        {
-                            iNote->effects[1].effect = EXTENDED_EFFECTS;
-                            iNote->effects[1].argument = (FINE_PORTAMENTO_DOWN << 4)
-                                + xfxArg;
-                            
-                            break;
-                        }
-                        default: // normal slide
-                        {
-                            iNote->effects[1].effect = PORTAMENTO_DOWN;
-                            break;
-                        }
-                    }
-                    */
                     iNote->effects[1].effect = PORTAMENTO_DOWN;
                     break;
                 }
                 case 6: // F: all kinds of (extra) (fine) portamento up
                 {
-                    /*
-                    int xfx = iNote->effects[1].argument >> 4;
-                    int xfxArg = iNote->effects[1].argument & 0xF;
-                    switch ( xfx )
-                    {
-                        case 0xE: // extra fine slide
-                        {
-                            iNote->effects[1].effect = EXTRA_FINE_PORTAMENTO;
-                            iNote->effects[1].argument = (EXTRA_FINE_PORTAMENTO_UP << 4)
-                                + xfxArg;
-                            break;
-                        }
-                        case 0xF: // fine slide
-                        {
-                            iNote->effects[1].effect = EXTENDED_EFFECTS;
-                            iNote->effects[1].argument = (FINE_PORTAMENTO_UP << 4)
-                                + xfxArg;
-
-                            break;
-                        }
-                        default: // normal slide
-                        {
-                            iNote->effects[1].effect = PORTAMENTO_UP;
-                            break;
-                        }
-                    }
-                    */
                     iNote->effects[1].effect = PORTAMENTO_UP;
                     break;
                 }
@@ -1175,7 +1008,6 @@ int Module::loadS3mFile() {
         }
     }
     delete[] unPackedPtn;
-    //delete[] buf;
     isLoaded_ = true;
     return 0;
 }

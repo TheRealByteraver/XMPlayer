@@ -43,7 +43,7 @@ Module::Module()
         emptyPattern_.initialise( PLAYER_MAX_CHANNELS,64,patternData );
         for ( int i = 0; i < MAX_PATTERNS; i++ )
         {
-            patterns_[i] = nullptr; //&emptyPattern_;
+            patterns_[i] = nullptr; 
             patternTable_[i] = 0;
         }
     }
@@ -60,19 +60,19 @@ Module::Module()
         memset( sampleHeader.data,0,sampleLength * sizeof( SHORT ) );
         emptySample_.load( sampleHeader );
         for ( int i = 0; i < MAX_SAMPLES; i++ )
-            samples_[i] = nullptr; //&emptySample_;
+            samples_[i] = nullptr;
     }
     // create an empty instrument
     {
         InstrumentHeader instrumentHeader;
         instrumentHeader.name = "empty instrument";
-        instrumentHeader.nSamples = 1;
+        //instrumentHeader.nSamples = 1;
         // getSample( 0 ) will return empty sample
         for ( int i = 0; i < MAXIMUM_NOTES; i++ )
             instrumentHeader.sampleForNote[i] = 0; 
         emptyInstrument_.load( instrumentHeader );
         for ( int i = 0; i < MAX_INSTRUMENTS; i++ )
-            instruments_[i] = nullptr; //&emptyInstrument_;
+            instruments_[i] = nullptr;
     }
 }
 
