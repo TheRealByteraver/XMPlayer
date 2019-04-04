@@ -64,6 +64,7 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define MODULE_H
 
 #include "assert.h"
+#include "virtualfile.h"
 
 // More general constants: 
 #define PAL_CALC                            7093789.2   // these values are
@@ -654,6 +655,9 @@ private:
     int             loadModFile ();
     int             loadS3mFile ();
     int             loadXmFile ();
+    int             loadItInstrument( VirtualFile& itFile,int instrumentNr,unsigned createdWTV );
+    int             loadItSample( VirtualFile& itFile,int sampleNr,bool convertToInstrument );
+    int             loadItPattern( VirtualFile & itFile,int patternNr );
     int             loadItFile ();
 };
 

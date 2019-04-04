@@ -664,7 +664,7 @@ int Module::loadS3mFile() {
                         note = *ptnPtr++;
                         inst = *ptnPtr++;
                     }
-                    // we add 0x10 to the volume column so we now an effect is there
+                    // we add 0x10 to the volume column so we know an effect is there
                     if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
                     if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
                     {
@@ -676,7 +676,7 @@ int Module::loadS3mFile() {
                         S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
                         if ( newNote )
                         {
-                            if ( note == S3M_KEY_NOTE_CUT ) unpackedNote.note = KEY_OFF;
+                            if ( note == S3M_KEY_NOTE_CUT ) unpackedNote.note = KEY_NOTE_CUT;
                             else if ( note != 0xFF )
                             {
                                 unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;

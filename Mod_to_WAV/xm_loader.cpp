@@ -2,10 +2,6 @@
     XM files with ADPCM compressed sample data are not supported yet.
     Stripped XM files should load normally.
 
-    crystals.wow is detected as a valid .xm file
-
-
-
 */
 #include <conio.h>
 #include <windows.h>
@@ -16,12 +12,10 @@
 
 #include "module.h"
 #include "virtualfile.h"
-
-//using namespace std;
-
-//#define debug_xm_loader
+                       
+#define debug_xm_loader
 #define debug_xm_show_patterns
-#define debug_xm_play_samples
+//#define debug_xm_play_samples
 
 #ifdef debug_xm_loader
 #include <bitset>
@@ -84,14 +78,16 @@ struct XmHeader {                   // the xmHeader of the xm file... global inf
 };                                  // size = 336 max
 
 struct XmPatternHeader {            // typedef of the pattern xmHeader
-  unsigned          headerSize;
+  unsigned short    headerSize;
+  unsigned short    reserved;       // !!!
   unsigned char     pack;
   unsigned short    nRows;
   unsigned short    patternSize;
 };                                  // size = 9
 
 struct XmInstrumentHeader1 {
-  unsigned          headerSize;     // size of the 2 headers
+  unsigned short    headerSize;     // size of the 2 headers
+  unsigned short    reserved;       // !!!
   char              name[22];
   unsigned char     type;           // should be 0, but is sometimes 128,129,253
   unsigned short    nSamples;
@@ -104,7 +100,8 @@ public:
 };
  
 struct XmInstrumentHeader2 {
-  unsigned          sampleHeaderSize;
+  unsigned short    sampleHeaderSize;
+  unsigned short    reserved;       // !!!
   unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
   XmEnvelopePoint   volumeEnvelope[12]; 
   XmEnvelopePoint   panningEnvelope[12];
@@ -498,7 +495,10 @@ int Module::loadXmFile()
                         << std::setw( 2 ) << xmPatternHeader.nRows << "|";
                 } else if ( chn < 16 )
                 {
-                     std::cout << noteStrings[iNote->note] << "|";
+                    if( iNote->note < XM_MAXIMUM_NOTES + 2 )
+                        std::cout << noteStrings[iNote->note] << "|";
+                    else if (iNote->note == 255 )
+                        std::cout << "OFF|";
                 } //else  std::cout << std::endl;
                  std::cout << std::dec;
                 /*
@@ -574,7 +574,27 @@ int Module::loadXmFile()
             instrumentName[XM_MAX_INSTRUMENT_NAME_LENGTH] = '\0';
 
             instrument.nSamples = xmInstrumentHeader1.nSamples;
-            if ( instrument.nSamples > XM_MAX_SAMPLES_PER_INST ) return 0;
+            if ( instrument.nSamples > XM_MAX_SAMPLES_PER_INST )
+            {
+#ifdef debug_xm_loader
+                std::cout << std::endl << "More than "
+                    << XM_MAX_SAMPLES_PER_INST
+                    << " (" << instrument.nSamples << ")"
+                    << " samples for this instrument, exiting!";
+
+                std::cout << std::endl
+                    << "\n\nInstrument xmHeader " << iInstrument << " size = "
+                    << xmInstrumentHeader1.headerSize
+                    << "\nInstrument name          = " << instrument.name.c_str()
+                    << "\nInstrument type (0)      = " << (int)(xmInstrumentHeader1.type)
+                    << "\nNr of samples            = " << instrument.nSamples;
+                if ( instrument.nSamples )
+                    std::cout
+                    << "\nSample Header Size       = "
+                    << xmInstrumentHeader2.sampleHeaderSize;
+#endif
+                return 0;
+            }
 
             xmFile.relSeek( (int)xmInstrumentHeader1.headerSize -
                 (int)(sizeof( XmInstrumentHeader1 ) + sizeof( XmInstrumentHeader2 )) );
@@ -745,6 +765,7 @@ int Module::loadXmFile()
                     xmFile.relSeek( samples[iSample].length );
                     if ( samples[iSample].data == nullptr )  // temp DEBUG:
                     {
+                        std::cout << std::endl << "Can't get safe sample pointer, exiting!";
                         return 0;
                     }
 

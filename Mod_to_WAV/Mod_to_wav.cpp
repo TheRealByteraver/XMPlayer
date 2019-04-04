@@ -3010,14 +3010,15 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\CHINA1.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia.it",   // impulse tracker unknown
         
+        //"D:\\MODS\\M2W_BUGTEST\\qd-anoth-noload.xm",
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
-        //"D:\\MODS\\M2W_BUGTEST\\women.it",
+        "D:\\MODS\\M2W_BUGTEST\\women.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
+        //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
+        //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
 
