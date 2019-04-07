@@ -86,9 +86,9 @@ Module::~Module() {
 
 int Module::loadFile() {
     int result;
-    if ( !isLoaded() ) result = loadS3mFile();
-    if ( !isLoaded() ) result = loadXmFile();
+//    if ( !isLoaded() ) result = loadS3mFile();
+//    if ( !isLoaded() ) result = loadXmFile();
     if ( !isLoaded() ) result = loadItFile();
-    if ( !isLoaded() ) result = loadModFile();
+    //if ( !isLoaded() ) result = loadModFile();
     return result;
 }

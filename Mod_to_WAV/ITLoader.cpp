@@ -21,7 +21,7 @@ Thanks must go to:
 #include "Module.h"
 #include "virtualfile.h"
 
-#define debug_it_loader
+//#define debug_it_loader
 //#define debug_it_show_instruments
 //#define debug_it_show_patterns
 #define debug_it_play_samples
@@ -255,39 +255,89 @@ const int itVolcPortaTable[] = {
 /*
     Sample decompression routines taken from itsex.c
 */
-/*
-static int readblock( FILE *f )
+
+static unsigned char    *sourcebuffer = nullptr;
+//static unsigned char    sourcebuffer[0x800000];
+static unsigned char    *ibuf = nullptr;	/* actual reading position */
+static unsigned         bitlen;
+static unsigned char    bitnum;
+static bool             isCWT215 = false;
+
+static int readblock( VirtualFile& file )
 {	
     // gets block of compressed data from file 
     unsigned short size;
 
-    size = read16l( f );
+    //size = read16l( f );
+    file.read( &size,sizeof( unsigned short ) );
 
-    if ( !size )
-        return 0;
-    if ( !(sourcebuffer = malloc( size )) )
-        return 0;
+    std::cout << "\nReading " << size << " bytes\n";
+    
+    if ( !size ) return 0;
 
+    //if ( !(sourcebuffer = malloc( size )) ) return 0;
+    sourcebuffer = new unsigned char[size];
+
+    /*
     if ( fread( sourcebuffer,size,1,f ) != 1 ) {
         free( sourcebuffer );
         sourcebuffer = NULL;	// Just looks better to have it present 
         return 0;
     }
+    */
+    if ( file.read( sourcebuffer,size ) )
+    {
+        delete sourcebuffer;
+        sourcebuffer = nullptr;
+        return 0;
+    }
+
     ibuf = sourcebuffer;
     bitnum = 8;
     bitlen = size;
     return 1;
 }
 
-static int freeblock( void )
+static int freeblock()
 {				
     // frees that block again 
+    /*
     if ( sourcebuffer )
         free( sourcebuffer );
     sourcebuffer = NULL;
+    */
+    delete sourcebuffer;
+    sourcebuffer = nullptr;
     return 1;
 }
 
+static inline unsigned readbits( unsigned char n )
+{
+    unsigned retval = 0;
+    int offset = 0;
+    while ( n ) {
+        int m = n;
+
+        if ( !bitlen ) 
+        {
+            //fprintf( stderr,"readbits: ran out of buffer\n" );
+            return 0;
+        }
+
+        if ( m > bitnum )
+            m = bitnum;
+        retval |= (*ibuf & ((1L << m) - 1)) << offset;
+        *ibuf >>= m;
+        n -= m;
+        offset += m;
+        if ( !(bitnum -= m) ) {
+            bitlen--;
+            ibuf++;
+            bitnum = 8;
+        }
+    }
+    return retval;
+}
 
 // ----------------------------------------------------------------------
 //  decompression routines
@@ -298,16 +348,15 @@ static int freeblock( void )
 //                                     compression flag
 //                            returns: status                     )    
 
-int itsex_decompress8( FILE *module,void *dst,int len,char it215 )
+int itsex_decompress8( VirtualFile& module,void *dst,int len,bool it215 )
 {
-    char *destbuf;		// the destination buffer which will be returned 
-
-    unsigned short blklen;		// length of compressed data block in samples 
-    unsigned short blkpos;		// position in block 
-    unsigned char  width;		// actual "bit width" 
-    unsigned short value;		// value read from file to be processed 
-    char           d1,d2;		// integrator buffers (d2 for it2.15) 
-    char         *destpos;
+    char            *destbuf;   // the destination buffer which will be returned 
+    unsigned short  blklen;     // length of compressed data block in samples 
+    unsigned short  blkpos;		// position in block 
+    unsigned char   width;		// actual "bit width" 
+    unsigned short  value;		// value read from file to be processed 
+    char            d1,d2;		// integrator buffers (d2 for it2.15) 
+    char            *destpos;
 
     destbuf = (char *)dst;
     if ( !destbuf )
@@ -318,6 +367,7 @@ int itsex_decompress8( FILE *module,void *dst,int len,char it215 )
 
                         // now unpack data till the dest buffer is full 
     while ( len ) {
+        std::cout << "\ndestpos = " << (unsigned)destpos << "\n";
         // read a new block of compressed data and reset variables 
 
         if ( !readblock( module ) )
@@ -334,26 +384,26 @@ int itsex_decompress8( FILE *module,void *dst,int len,char it215 )
 
             value = readbits( width );	// read bits 
 
-            if ( width < 7 ) {	// method 1 (1-6 bits) 
+            if ( width < 7 ) {	                        // method 1 (1-6 bits) 
                 if ( value == (1 << (width - 1)) ) {	// check for "100..." 
-                    value = readbits( 3 ) + 1;	// yes -> read new width; 
+                    value = readbits( 3 ) + 1;	        // yes -> read new width; 
                     width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	// ... next value 
+                    continue;	                        // ... next value 
                 }
-            } else if ( width < 9 ) {	// method 2 (7-8 bits) 
+            } else if ( width < 9 ) {	                // method 2 (7-8 bits) 
                 unsigned char border = (0xFF >> (9 - width)) - 4;	// lower border for width chg 
 
                 if ( value > border && value <= (border + 8) ) {
-                    value -= border;	// convert width to 1-8 
+                    value -= border;	                // convert width to 1-8 
                     width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	// ... next value 
+                    continue;	                        // ... next value 
                 }
-            } else if ( width == 9 ) {	// method 3 (9 bits) 
-                if ( value & 0x100 ) {	// bit 8 set? 
-                    width = (value + 1) & 0xff;	// new width... 
-                    continue;	// ... and next value 
+            } else if ( width == 9 ) {	                // method 3 (9 bits) 
+                if ( value & 0x100 ) {	                // bit 8 set? 
+                    width = (value + 1) & 0xff;	        // new width... 
+                    continue;	                        // ... and next value 
                 }
-            } else {	// illegal width, abort 
+            } else {	                                // illegal width, abort 
                 freeblock();
                 return 0;
             }
@@ -390,17 +440,17 @@ int itsex_decompress8( FILE *module,void *dst,int len,char it215 )
 //                                     compression flag
 //                            returns: status                     )
 
-int itsex_decompress16( FILE *module,void *dst,int len,char it215 )
+int itsex_decompress16( VirtualFile& module,void *dst,int len,bool it215 )
 {
-    SHORT           *destbuf;	// the destination buffer which will be returned 
+    short           *destbuf;	// the destination buffer which will be returned 
     unsigned        blklen;		// length of compressed data block in samples 
     unsigned        blkpos;		// position in block 
     unsigned char   width;		// actual "bit width" 
-    unsigned        value;		// value read from file to be processed 
+    unsigned short  value;		// value read from file to be processed 
     int             d1,d2;		// integrator buffers (d2 for it2.15) 
-    SHORT           *destpos;
+    short           *destpos;
 
-    destbuf = (SHORT *)dst;
+    destbuf = (short *)dst;
     if ( !destbuf )
         return 0;
 
@@ -422,7 +472,7 @@ int itsex_decompress16( FILE *module,void *dst,int len,char it215 )
 
                         // now uncompress the data block 
         while ( blkpos < blklen ) {
-            SHORT v;
+            short v;
 
             value = readbits( width );	// read bits 
 
@@ -453,7 +503,7 @@ int itsex_decompress16( FILE *module,void *dst,int len,char it215 )
             // now expand value to signed word 
             // sword v; // sample value 
             if ( width < 16 ) {
-                byte shift = 16 - width;
+                unsigned char shift = 16 - width;
                 v = (value << shift);
                 v >>= shift;
             } else
@@ -474,7 +524,7 @@ int itsex_decompress16( FILE *module,void *dst,int len,char it215 )
     return 1;
 }
 
-*/
+
 
 // file pointer must be at the correct offset
 // returns non-zero on error
@@ -809,23 +859,21 @@ int Module::loadItSample(
         }
 
         itFile.absSeek( itSampleHeader.samplePointer );
-        sample.data = (SHORT *)itFile.getSafePointer( dataLength );
 
-        if ( sample.data == nullptr )
-        {
-            return -1;   // temp DEBUG: smp is compressed so may be smaller!!
-        }
-
-        /*
-        // start decompression of samples here
         unsigned char *buffer = new unsigned char[dataLength];
-        if ( !isCompressed ) sample.data = smpData;
-        else {
 
-
-
+        if ( !isCompressed )
+        {
+            if ( itFile.read( buffer,dataLength ) ) return 0;
+        } else {
+            // decompress sample here
+            isCWT215 = false;
+            if ( is16bitData ) 
+                itsex_decompress16( itFile,buffer,sample.length,isCWT215 );
+            else itsex_decompress8( itFile,buffer,sample.length,isCWT215 );
         }
-        */
+
+        sample.data = (SHORT *)buffer;
 
         // convert unsigned to signed sample data:
         if ( (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0 )
@@ -840,9 +888,8 @@ int Module::loadItSample(
             }
         }
 
-
         samples_[sampleNr]->load( sample );
-        //delete buffer;
+        delete buffer;
 
         // if the file is in sample mode, convert it to instrument mode
         // and create an instrument for each sample:
@@ -1429,6 +1476,7 @@ int Module::loadItFile()
     //minPeriod_ = 56;    // periods[9 * 12 - 1]
     //maxPeriod_ = 27392; // periods[0]
     panningStyle_ = PANNING_STYLE_IT;
+    isCWT215 = itFileHeader.createdWTV >= 0x215; // to check!
 
     // read pattern order list
     songLength_ = itFileHeader.songLength;
@@ -1455,47 +1503,12 @@ int Module::loadItFile()
     unsigned instHdrPtrs[IT_MAX_INSTRUMENTS];
     unsigned smpHdrPtrs[IT_MAX_SAMPLES];
     unsigned ptnHdrPtrs[IT_MAX_PATTERNS];
-    /*
     for ( unsigned i = 0; i < itFileHeader.nInstruments; i++ )
-    {
-        unsigned instPtr;
-        itFile.read( &instPtr,sizeof( unsigned ) );
-        instHdrPtrs[i] = instPtr;
-    }
+        itFile.read( &(instHdrPtrs[i]),sizeof( unsigned ) );
     for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
-    {
-        unsigned smpPtr;
-        itFile.read( &smpPtr,sizeof( unsigned ) );
-        smpHdrPtrs[i] = smpPtr;
-    }
+        itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
     for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
-    {
-        unsigned ptnPtr;
-        itFile.read( &ptnPtr,sizeof( unsigned ) );
-        ptnHdrPtrs[i] = ptnPtr;
-    }
-    */
-    for ( unsigned i = 0; i < itFileHeader.nInstruments; i++ )
-    {
-        unsigned instPtr;
-        itFile.read( &instPtr,sizeof( unsigned ) );
-        instHdrPtrs[i] = instPtr;
-    }
-    for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
-    {
-        unsigned smpPtr;
-        itFile.read( &smpPtr,sizeof( unsigned ) );
-        smpHdrPtrs[i] = smpPtr;
-    }
-    for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
-    {
-        unsigned ptnPtr;
-        itFile.read( &ptnPtr,sizeof( unsigned ) );
-        ptnHdrPtrs[i] = ptnPtr;
-    }
-
-
-
+        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );        
 
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
 #ifdef debug_it_loader

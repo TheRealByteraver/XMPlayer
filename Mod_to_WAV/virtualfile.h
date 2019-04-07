@@ -106,6 +106,11 @@ public:
         file.close();
         ioError_ = VIRTFILE_NO_ERROR;
     }
+    VirtualFile( const VirtualFile& virtualFile )
+    {
+        // copying this object is not allowed
+        exit( -1 );
+    }
     ~VirtualFile()
     {
         delete data_;

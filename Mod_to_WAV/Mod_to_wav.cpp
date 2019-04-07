@@ -3015,7 +3015,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
-        "D:\\MODS\\M2W_BUGTEST\\women.it",
+        //"D:\\MODS\\M2W_BUGTEST\\women.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
@@ -3043,7 +3043,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        "D:\\MODS\\dosprog\\mods\\women.s3m",
+        //"D:\\MODS\\dosprog\\mods\\women.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",

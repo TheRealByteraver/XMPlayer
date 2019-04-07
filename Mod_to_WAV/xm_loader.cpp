@@ -13,7 +13,7 @@
 #include "module.h"
 #include "virtualfile.h"
                        
-#define debug_xm_loader
+//#define debug_xm_loader
 #define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
