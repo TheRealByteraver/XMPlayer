@@ -594,7 +594,7 @@ int Module::loadModFile()
                 // ***** end of addition                
 
                 if (j >= (MAXIMUM_NOTES)) iNote->note = 0;
-                else                      iNote->note = j + 1 - 24; // two octaves down
+                else                      iNote->note = j + 1 - 36; // three octaves down
             }
 
             // do some error checking & effect remapping:

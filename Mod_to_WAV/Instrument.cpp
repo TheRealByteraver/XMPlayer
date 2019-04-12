@@ -7,9 +7,9 @@ Instrument::~Instrument () {
     //for (int i = 0; i < MAX_SAMPLES; i++) delete samples_[i];
 }
 
-void Instrument::load(const InstrumentHeader &instrumentHeader) {
+void Instrument::load( const InstrumentHeader &instrumentHeader ) {
     name_ = instrumentHeader.name;
-    for (int i = 0; i < MAXIMUM_NOTES; i++) {
+    for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
         sampleForNote_[i] = instrumentHeader.sampleForNote[i];
     }
     for (int i = 0; i < 12; i++) {

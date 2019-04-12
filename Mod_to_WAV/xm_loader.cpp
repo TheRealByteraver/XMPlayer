@@ -13,7 +13,7 @@
 #include "module.h"
 #include "virtualfile.h"
                        
-//#define debug_xm_loader
+#define debug_xm_loader
 #define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
@@ -60,37 +60,38 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #pragma pack (1)
 
 struct XmHeader {                   // the xmHeader of the xm file... global info.
-  char              fileTag[17];    // = "Extended Module"
-  char              songTitle[20];  // Name of the XM
-  unsigned char     id;             // 0x1A
-  char              trackerName[20];// = "FastTracker v2.00"
-  unsigned short    version;        // 0x01 0x04
-  unsigned          headerSize;     // size of xmHeader from here: min. 20 + 1 bytes
-  unsigned short    songLength;
-  unsigned short    songRestartPosition;
-  unsigned short    nChannels;
-  unsigned short    nPatterns;
-  unsigned short    nInstruments;
-  unsigned short    flags;          // 0 = Amiga frequency table 1 = Linear frequency table
-  unsigned short    defaultTempo;   
-  unsigned short    defaultBpm;     
-  unsigned char     patternTable[XM_MAX_SONG_LENGTH];
+    char              fileTag[17];    // = "Extended Module"
+    char              songTitle[XM_MAX_SONG_NAME_LENGTH];  // Name of the XM
+    unsigned char     id;             // 0x1A
+    char              trackerName[XM_TRACKER_NAME_LENGTH];// = "FastTracker v2.00"
+    unsigned short    version;        // 0x01 0x04
+    unsigned short    headerSize;     // size of xmHeader from here: min. 20 + 1 bytes
+    unsigned short    reserved; 
+    unsigned short    songLength;
+    unsigned short    songRestartPosition;
+    unsigned short    nChannels;
+    unsigned short    nPatterns;
+    unsigned short    nInstruments;
+    unsigned short    flags;          // 0 = Amiga frequency table 1 = Linear frequency table
+    unsigned short    defaultTempo;   
+    unsigned short    defaultBpm;     
+    unsigned char     patternTable[XM_MAX_SONG_LENGTH];
 };                                  // size = 336 max
 
 struct XmPatternHeader {            // typedef of the pattern xmHeader
-  unsigned short    headerSize;
-  unsigned short    reserved;       // !!!
-  unsigned char     pack;
-  unsigned short    nRows;
-  unsigned short    patternSize;
+    unsigned short    headerSize;
+    unsigned short    reserved;     // !!!
+    unsigned char     pack;
+    unsigned short    nRows;
+    unsigned short    patternSize;
 };                                  // size = 9
 
 struct XmInstrumentHeader1 {
-  unsigned short    headerSize;     // size of the 2 headers
-  unsigned short    reserved;       // !!!
-  char              name[22];
-  unsigned char     type;           // should be 0, but is sometimes 128,129,253
-  unsigned short    nSamples;
+    unsigned short    headerSize;     // size of the 2 headers
+    unsigned short    reserved;       // !!!
+    char              name[22];
+    unsigned char     type;           // should be 0, but is sometimes 128,129,253
+    unsigned short    nSamples;
 };                                  // 29
 
 struct XmEnvelopePoint {
@@ -100,26 +101,26 @@ public:
 };
  
 struct XmInstrumentHeader2 {
-  unsigned short    sampleHeaderSize;
-  unsigned short    reserved;       // !!!
-  unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
-  XmEnvelopePoint   volumeEnvelope[12]; 
-  XmEnvelopePoint   panningEnvelope[12];
-  unsigned char     nVolumePoints;
-  unsigned char     nPanningPoints;
-  unsigned char     volumeSustain;
-  unsigned char     volumeLoopStart;
-  unsigned char     volumeLoopEnd;
-  unsigned char     panningSustain;
-  unsigned char     panningLoopStart;
-  unsigned char     panningLoopEnd;
-  unsigned char     volumeType;
-  unsigned char     panningType;
-  unsigned char     vibratoType;
-  unsigned char     vibratoSweep;
-  unsigned char     vibratoDepth;
-  unsigned char     vibratoRate;
-  unsigned short    volumeFadeOut;
+    unsigned short    sampleHeaderSize;
+    unsigned short    reserved;       // !!!
+    unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
+    XmEnvelopePoint   volumeEnvelope[12]; 
+    XmEnvelopePoint   panningEnvelope[12];
+    unsigned char     nVolumePoints;
+    unsigned char     nPanningPoints;
+    unsigned char     volumeSustain;
+    unsigned char     volumeLoopStart;
+    unsigned char     volumeLoopEnd;
+    unsigned char     panningSustain;
+    unsigned char     panningLoopStart;
+    unsigned char     panningLoopEnd;
+    unsigned char     volumeType;
+    unsigned char     panningType;
+    unsigned char     vibratoType;
+    unsigned char     vibratoSweep;
+    unsigned char     vibratoDepth;
+    unsigned char     vibratoRate;
+    unsigned short    volumeFadeOut;
 //  unsigned char     reserved[22];   // skipping f*cking 22 BYTEs!
 };                                  // 234     29 + 234 = 263
 
@@ -246,6 +247,7 @@ int Module::loadXmFile()
     }
 
     // start reading the patterns
+    xmFile.absSeek( XM_HEADER_SIZE_PART_ONE + xmHeader.headerSize ); 
 
     for (unsigned iPattern = 0; iPattern < nPatterns_; iPattern++) {
         Note           *iNote, *patternData;

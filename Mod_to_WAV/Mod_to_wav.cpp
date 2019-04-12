@@ -840,77 +840,11 @@ int Mixer::stopReplay () {
     return 0;
 }
 
-
-unsigned Mixer::noteToPeriod(unsigned note, int finetune) {
-    if ( module->useLinearFrequencies() ) 
-    {
-        return (7680 - ((note - 1) << 6) - (finetune >> 1));  // grmbl... note - 1
-    } else {
-/*
-FUNCTION TBeRoXMModule.GetPeriod(Note,FineTune:INTEGER):INTEGER;
-VAR 
-  RealNote,RealOctave,FineTuneValue,PeriodIndex,PeriodA,PeriodB:INTEGER;
-BEGIN
-  IF Note<1 THEN Note:=1;
-  IF Note>132 THEN Note:=132;
-  IF LinearSlides THEN 
-    BEGIN
-      RESULT:=(10*12*16*4)-(Note*16*4)-SAR(FineTune,1);
-      IF RESULT<1 THEN RESULT:=1;
-    END 
-  ELSE 
-    BEGIN
-      RealNote:=(Note MOD 12)*(8);
-      RealOctave:=Note DIV 12;
-      FineTuneValue:=SAR(FineTune,4);
-      PeriodIndex:=RealNote+FineTuneValue+8;
-      IF        PeriodIndex<0    THEN PeriodIndex:=0;
-      ELSE IF   PeriodIndex>=104 THEN PeriodIndex:=103;
-      PeriodA:=XMPeriodTable[PeriodIndex];
-      IF FineTune<0 THEN 
-        BEGIN
-          DEC(FineTuneValue);
-          FineTune:=-FineTune;
-        END 
-      ELSE INC(FineTuneValue);
-      PeriodIndex:=RealNote+FineTuneValue+8;
-      IF      PeriodIndex<0    THEN PeriodIndex:=0;
-      ELSE IF PeriodIndex>=104 THEN PeriodIndex:=103;
-      PeriodB:=XMPeriodTable[PeriodIndex];
-      FineTuneValue:=FineTune AND $0F;
-      PeriodA:=PeriodA*(16-FineTuneValue);
-      PeriodB:=PeriodB*FineTuneValue;
-      RESULT:=SAR((PeriodA+PeriodB)*2,RealOctave);
-//  RESULT:=TRUNC(POW(2,(133-(Note+(FineTune/128)))/12)*13.375);
- END;
-END;
-*/
-
-/*
-        unsigned    n = (((note - 1) % 12) << 3) + ((finetune >> 4) + 8);  // 8 + ...note - 1 ?????        
-        //int         frac = finetune & 0xF;
-        //frac |= ((finetune < 0) ? 0xFFFFFFF0 : 0);       
-        unsigned    period1 = amigaPeriodTable[n    ];
-        unsigned    period2 = amigaPeriodTable[n + 1];
-        int         frac = (int)(((double)(finetune)) / 16.0
-                                - (double)((int)(finetune / 16))) * 16 + 8;
-        //int         frac = finetune - ((finetune >> 4) << 4) + 8;
-        return (period1 * (16 - frac) + period2 * frac) >> (note / 12);
-*/
-        //finally. thank god for Benjamin Rousseaux!!!
-        return (unsigned)(
-            pow(2.0, 
-                ( 133.0 - ((double)note + ((double)finetune / 128.0))) / 12.0
-            ) * 13.375
-        );
-    }
-}
-
 /*
 
 AMIGA calculations:
 
-period = 13.375 * 2 ^ [ ( 133 - note - finetune / 128 ) / 12 ]
+period = (1712 / 128) * 2 ^ [ ( 132 - (note - 1) - finetune / 128 ) / 12 ]
 
 frequency = (8363 * 1712) / period
 
@@ -936,13 +870,27 @@ NTSC freq * 4 = 7894
 */
 
 
-
+unsigned Mixer::noteToPeriod( unsigned note, int finetune ) 
+{
+    if ( module->useLinearFrequencies() ) 
+    {
+        return (7680 - ((note - 1) << 6) - (finetune >> 1));  
+    } else {
+        return (unsigned)(
+            pow(2.0, 
+                ( (11.0 * 12.0) - ((double)(note - 1) + ((double)finetune / 128.0))) / 12.0
+            ) 
+            * (1712.0 / 128.0)
+        );
+    }
+}
 
 unsigned Mixer::periodToFrequency( unsigned period ) 
 {
     return module->useLinearFrequencies() ?
-        (unsigned)(8363 * pow(2, ((4608.0 - (double)period) / 768.0)))
-    :   (period ? ((8363 * 1712) / period ) : 0);
+        (unsigned)(8363 * pow( 2, ((4608.0 - (double)period) / 768.0) ))
+    :   
+        (period ? ((8363 * 1712) / period ) : 0);
 }
 
 int Mixer::setMixerVolume( unsigned fromChannel ) 
@@ -1012,20 +960,20 @@ int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
     return 0;
 }
 // range: 0..255 (extreme stereo... extreme reversed stereo)
-int Mixer::setGlobalPanning(unsigned panning) { 
+int Mixer::setGlobalPanning( unsigned panning ) { 
     globalPanning_ = panning;
     //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
     return 0;
 }
 /*
-int Mixer::setGlobalVolume (unsigned volume) {  // range: 0..64  // useless fn?
+int Mixer::setGlobalVolume ( unsigned volume ) {  // range: 0..64  // useless fn?
     globalVolume_ = volume;
     //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
     return 0;
 }
 */
 
-int Mixer::setGlobalBalance(int balance) { // range: -100...0...+100
+int Mixer::setGlobalBalance( int balance ) { // range: -100...0...+100
     balance_ = balance;
     //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
     return 0;
@@ -2812,23 +2760,6 @@ int Mixer::updateBpm () {
         if ( !patternDelay_ ) updateNotes();
         else                  patternDelay_--;
         updateImmediateEffects();
-
-
-        /*
-        if ( patternDelay_ ) { 
-            patternDelay_--; 
-        } else {
-            updateNotes();
-        }
-        tick = 0;
-        updateImmediateEffects();
-        */
-
-        /*
-        tick = 0; 
-        updateNotes (); 
-        updateImmediateEffects ();
-        */
     }
     setVolumes ();
     return 0;
@@ -3015,13 +2946,14 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
-        //"D:\\MODS\\M2W_BUGTEST\\women.it",
+        "D:\\MODS\\M2W_BUGTEST\\women.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
-        "D:\\MODS\\M2W_BUGTEST\\Crea.it",       // impulse tracker v2.0+
+        "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
+        "D:\\MODS\\M2W_BUGTEST\\Crea.it",         // impulse tracker v2.0+
+        //"D:\\MODS\\M2W_BUGTEST\\WOMEN.xm",
+        "D:\\MODS\\M2W_BUGTEST\\module1.mptm",
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
-
         "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
 
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
@@ -3043,7 +2975,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        //"D:\\MODS\\dosprog\\mods\\women.s3m",
+        "D:\\MODS\\dosprog\\mods\\women.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
@@ -3054,7 +2986,7 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
         //"D:\\MODS\\dosprog\\mods\\againstr.mod",
         //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
-        "D:\\MODS\\dosprog\\mods\\un-land2.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-land2.s3m",
         "D:\\MODS\\dosprog\\mods\\un-land.s3m",
         "D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
         "D:\\MODS\\dosprog\\mods\\un-worm.s3m",

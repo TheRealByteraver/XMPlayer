@@ -171,6 +171,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Module.h" />
+    <ClInclude Include="StyleGuide.h" />
     <ClInclude Include="thanks.h" />
     <ClInclude Include="virtualfile.h" />
   </ItemGroup>

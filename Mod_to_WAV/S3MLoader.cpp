@@ -679,7 +679,7 @@ int Module::loadS3mFile() {
                             if ( note == S3M_KEY_NOTE_CUT ) unpackedNote.note = KEY_NOTE_CUT;
                             else if ( note != 0xFF )
                             {
-                                unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1;
+                                unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1 + 12;
                                 if ( unpackedNote.note > S3M_MAX_NOTE )
                                     unpackedNote.note = 0;
                             } else note = 0; // added: 0 or 255 means no note

@@ -29,7 +29,11 @@ Flags for instruments:
 
 Other idea's:
     - further reduce pointer usage (replace with const reference)
+    - don't use new and delete: 
+      https://isocpp.org/wiki/faq/freestore-mgmt#double-delete-disaster
     - check if using looplength is easier / worse than loopend internally
+    (in the context of samples)
+    - compress patterns internally (.IT pattern compression?)
 
 Todo:
     - implement IT & S3M effects
@@ -55,16 +59,45 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 
 ---> FFx & FEx
 
-
-
 */
 
 
 #ifndef MODULE_H
 #define MODULE_H
 
+#include <bitset> // for debugging
+
 #include "assert.h"
 #include "virtualfile.h"
+
+// color constants for functions that show debug info
+#define FOREGROUND_BLACK        0
+#define FOREGROUND_CYAN         (FOREGROUND_BLUE    | FOREGROUND_GREEN)              
+#define FOREGROUND_MAGENTA      (FOREGROUND_BLUE    | FOREGROUND_RED)                
+#define FOREGROUND_BROWN        (FOREGROUND_GREEN   | FOREGROUND_RED)               
+#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE    | FOREGROUND_GREEN | FOREGROUND_RED)
+#define FOREGROUND_DARKGRAY     (FOREGROUND_BLACK       | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE        | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTGREEN   (FOREGROUND_GREEN       | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTCYAN    (FOREGROUND_CYAN        | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTRED     (FOREGROUND_RED         | FOREGROUND_INTENSITY)
+#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_MAGENTA     | FOREGROUND_INTENSITY)
+#define FOREGROUND_YELLOW       (FOREGROUND_BROWN       | FOREGROUND_INTENSITY)
+#define FOREGROUND_WHITE        (FOREGROUND_LIGHTGRAY   | FOREGROUND_INTENSITY)
+
+#define BACKGROUND_BLACK        0
+#define BACKGROUND_CYAN         (BACKGROUND_BLUE    | BACKGROUND_GREEN)              
+#define BACKGROUND_MAGENTA      (BACKGROUND_BLUE    | BACKGROUND_RED)                
+#define BACKGROUND_BROWN        (BACKGROUND_GREEN   | BACKGROUND_RED)               
+#define BACKGROUND_LIGHTGRAY    (BACKGROUND_BLUE    | BACKGROUND_GREEN | BACKGROUND_RED)
+#define BACKGROUND_DARKGRAY     (BACKGROUND_BLACK       | BACKGROUND_INTENSITY)
+#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE        | BACKGROUND_INTENSITY)
+#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN       | BACKGROUND_INTENSITY)
+#define BACKGROUND_LIGHTCYAN    (BACKGROUND_CYAN        | BACKGROUND_INTENSITY)
+#define BACKGROUND_LIGHTRED     (BACKGROUND_RED         | BACKGROUND_INTENSITY)
+#define BACKGROUND_LIGHTMAGENTA (BACKGROUND_MAGENTA     | BACKGROUND_INTENSITY)
+#define BACKGROUND_YELLOW       (BACKGROUND_BROWN       | BACKGROUND_INTENSITY)
+#define BACKGROUND_WHITE        (BACKGROUND_LIGHTGRAY   | BACKGROUND_INTENSITY)
 
 // More general constants: 
 #define PAL_CALC                            7093789.2   // these values are
@@ -233,6 +266,7 @@ const unsigned periods[MAXIMUM_NOTES] = {
 
 
 const unsigned periods[] = {
+    54784,51712,48768,46080,43392,40960,38656,36480,34432,32512,30720,28992,
     27392,25856,24384,23040,21696,20480,19328,18240,17216,16256,15360,14496,
     13696,12928,12192,11520,10848,10240,9664 ,9120 ,8608 ,8128 ,7680 ,7248 ,
     6848 ,6464 ,6096 ,5760 ,5424 ,5120 ,4832 ,4560 ,4304 ,4064 ,3840 ,3624 ,
@@ -427,42 +461,43 @@ public:
     unsigned        y;
 };
 
-struct RelativeNoteAndSampleMap {
+struct NoteSampleMap {
     unsigned        note;
     unsigned        sampleNr;
 };
 
 class InstrumentHeader {
 public:
-    InstrumentHeader()  { 
-                            name.clear();
-                            nSamples = 0;
-                            for( int i = 0; i < MAXIMUM_NOTES; i++ )
-                                sampleForNote[i] = 0;
-                            for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
-                            {
-                                volumeEnvelope[i].x = 0;
-                                volumeEnvelope[i].y = 0;
-                                panningEnvelope[i].x = 0;
-                                panningEnvelope[i].y = 0;
-                            }
-                            nVolumePoints = 0;
-                            volumeSustain = 0;
-                            volumeLoopStart = 0;
-                            volumeLoopEnd = 0;
-                            volumeType = 0;
-                            volumeFadeOut = 0;
+    InstrumentHeader()  
+    { 
+        name.clear();
+        nSamples = 0;
+        for( int i = 0; i < MAXIMUM_NOTES; i++ )
+            sampleForNote[i] = 0;
+        for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
+        {
+            volumeEnvelope[i].x = 0;
+            volumeEnvelope[i].y = 0;
+            panningEnvelope[i].x = 0;
+            panningEnvelope[i].y = 0;
+        }
+        nVolumePoints = 0;
+        volumeSustain = 0;
+        volumeLoopStart = 0;
+        volumeLoopEnd = 0;
+        volumeType = 0;
+        volumeFadeOut = 0;
                             
-                            nPanningPoints = 0;
-                            panningSustain = 0;
-                            panningLoopStart = 0;
-                            panningLoopEnd = 0;
-                            panningType = 0;
-                            vibratoType = 0;
-                            vibratoSweep = 0;
-                            vibratoDepth = 0;
-                            vibratoRate = 0;
-                        }
+        nPanningPoints = 0;
+        panningSustain = 0;
+        panningLoopStart = 0;
+        panningLoopEnd = 0;
+        panningType = 0;
+        vibratoType = 0;
+        vibratoSweep = 0;
+        vibratoDepth = 0;
+        vibratoRate = 0;
+    }
     std::string     name;
     unsigned        nSamples;
     unsigned        sampleForNote[MAXIMUM_NOTES];
@@ -487,47 +522,46 @@ public:
 
 class Instrument {
 public:
-                    Instrument ()
-                    { 
-                        name_.clear();
-                        nSamples_ = 1;
-                        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
-                            sampleForNote_[i] = 0;
-                        for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
-                        {
-                            volumeEnvelope_[i].x = 0;
-                            volumeEnvelope_[i].y = 0;
-                            panningEnvelope_[i].x = 0;
-                            panningEnvelope_[i].y = 0;
-                        }
-                        nVolumePoints_ = 0;
-                        volumeSustain_ = 0;
-                        volumeLoopStart_ = 0;
-                        volumeLoopEnd_ = 0;
-                        volumeType_ = 0;
-                        volumeFadeOut_ = 0;
-                        nPanningPoints_ = 0;
-                        panningSustain_ = 0;
-                        panningLoopStart_ = 0;
-                        panningLoopEnd_ = 0;
-                        panningType_ = 0;
-                        vibratoType_ = 0;
-                        vibratoSweep_ = 0;
-                        vibratoDepth_ = 0;
-                        vibratoRate_ = 0;
-                    }
+    Instrument ()
+    { 
+        name_.clear();
+        nSamples_ = 1;
+        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
+            sampleForNote_[i] = 0;
+        for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
+        {
+            volumeEnvelope_[i].x = 0;
+            volumeEnvelope_[i].y = 0;
+            panningEnvelope_[i].x = 0;
+            panningEnvelope_[i].y = 0;
+        }
+        nVolumePoints_ = 0;
+        volumeSustain_ = 0;
+        volumeLoopStart_ = 0;
+        volumeLoopEnd_ = 0;
+        volumeType_ = 0;
+        volumeFadeOut_ = 0;
+        nPanningPoints_ = 0;
+        panningSustain_ = 0;
+        panningLoopStart_ = 0;
+        panningLoopEnd_ = 0;
+        panningType_ = 0;
+        vibratoType_ = 0;
+        vibratoSweep_ = 0;
+        vibratoDepth_ = 0;
+        vibratoRate_ = 0;
+    }
                     ~Instrument ();
-    void            load(const InstrumentHeader &instrumentHeader);
+    void            load( const InstrumentHeader &instrumentHeader );
     std::string     getName() { return name_; }
     unsigned        getnSamples ()                  { return nSamples_;           }
-    unsigned        getSampleForNote(unsigned n)    
+    unsigned        getSampleForNote( unsigned n )
     { 
-        //std::cout << "n = " << n << ";";
         assert ( n < MAXIMUM_NOTES );  // has no effect
         if ( n >= MAXIMUM_NOTES ) return 0;
         return sampleForNote_[n];   
     }
-    EnvelopePoint   getVolumeEnvelope (unsigned p)  { return volumeEnvelope_[p];  }
+    EnvelopePoint   getVolumeEnvelope ( unsigned p ){ return volumeEnvelope_[p];  }
     unsigned        getnVolumePoints ()             { return nVolumePoints_;      }
     unsigned        getVolumeSustain ()             { return volumeSustain_;      }
     unsigned        getVolumeLoopStart ()           { return volumeLoopStart_;    }
@@ -549,6 +583,7 @@ private:
     std::string     name_;
     unsigned        nSamples_;
     unsigned        sampleForNote_[MAXIMUM_NOTES];
+    //NoteSampleMap   sampleForNote_[MAXIMUM_NOTES];
     EnvelopePoint   volumeEnvelope_[12];
     unsigned        nVolumePoints_;
     unsigned        volumeSustain_;
@@ -655,8 +690,9 @@ private:
     int             loadModFile ();
     int             loadS3mFile ();
     int             loadXmFile ();
+
     int             loadItInstrument( VirtualFile& itFile,int instrumentNr,unsigned createdWTV );
-    int             loadItSample( VirtualFile& itFile,int sampleNr,bool convertToInstrument );
+    int             loadItSample( VirtualFile& itFile,int sampleNr,bool convertToInstrument,bool isIt215Compression );
     int             loadItPattern( VirtualFile & itFile,int patternNr );
     int             loadItFile ();
 };

@@ -3,7 +3,7 @@ Thanks must go to:
 - Jeffrey Lim (Pulse) for creating the awesome Impulse Tracker
 - Johannes - Jojo - Schultz (Saga Musix) for helping me out with all kinds of
   questions related to the .IT format.
-- Nicolas Gramlich for the .IT sample decompression routine itsex.c which I 
+- Nicolas Gramlich for the .IT sample decompression routines itsex.c which I 
   used in my .IT loader. Thanks for explaining how the algorithm works! Source:
   https://github.com/nicolasgramlich/AndEngineMODPlayerExtension/blob/master/jni/loaders/itsex.c
 
@@ -22,75 +22,76 @@ Thanks must go to:
 #include "virtualfile.h"
 
 //#define debug_it_loader
-//#define debug_it_show_instruments
-//#define debug_it_show_patterns
+#define debug_it_show_instruments
+#define debug_it_show_patterns
 #define debug_it_play_samples
 
-#ifdef debug_it_loader
-extern const char *noteStrings[2 + MAXIMUM_NOTES];
-#endif
-
-#ifdef debug_it_loader
 #include <bitset>
 #include <iomanip>
-#endif
 
-#define IT_MAX_CHANNELS                     64
-#define IT_MAX_PATTERNS                     200
-#define IT_MAX_SONG_LENGTH                  MAX_PATTERNS
-#define IT_MIN_PATTERN_ROWS                 32
-#define IT_MAX_PATTERN_ROWS                 200
-#define IT_MAX_SAMPLES                      99
-#define IT_MAX_INSTRUMENTS                  100 // ?
-#define IT_MAX_NOTE                         119 // 9 octaves: (C-0 -> B-9)
+extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
-#define IT_STEREO_FLAG                      1
-#define IT_VOL0_OPT_FLAG                    2
-#define IT_INSTRUMENT_MODE                  4
-#define IT_LINEAR_FREQUENCIES_FLAG          8
-#define IT_OLD_EFFECTS_MODE                 16
-#define IT_GEF_LINKED_EFFECT_MEMORY         32
-#define IT_USE_MIDI_PITCH_CONTROLLER        64
-#define IT_REQUEST_MIDI_CONFIG              128
+#define IT_MAX_CHANNELS                         64
+#define IT_MAX_PATTERNS                         200
+#define IT_MAX_SONG_LENGTH                      MAX_PATTERNS
+#define IT_MIN_PATTERN_ROWS                     32
+#define IT_MAX_PATTERN_ROWS                     200
+#define IT_MAX_SAMPLES                          99
+#define IT_MAX_INSTRUMENTS                      100 // ?
+#define IT_MAX_NOTE                             119 // 9 octaves: (C-0 -> B-9)
 
-#define IT_SONG_MESSAGE_FLAG                1
-#define IT_MIDI_CONFIG_EMBEDDED             8
+#define IT_STEREO_FLAG                          1
+#define IT_VOL0_OPT_FLAG                        2
+#define IT_INSTRUMENT_MODE                      4
+#define IT_LINEAR_FREQUENCIES_FLAG              8
+#define IT_OLD_EFFECTS_MODE                     16
+#define IT_GEF_LINKED_EFFECT_MEMORY             32
+#define IT_USE_MIDI_PITCH_CONTROLLER            64
+#define IT_REQUEST_MIDI_CONFIG                  128
+
+#define IT_SONG_MESSAGE_FLAG                    1
+#define IT_MIDI_CONFIG_EMBEDDED                 8
+
+#define IT_DOS_FILENAME_LENGTH                  12
+#define IT_SONG_NAME_LENGTH                     26
+#define IT_INST_NAME_LENGTH                     26
 
 // sample flags
-#define IT_SMP_NAME_LENGTH                  26
-#define IT_SMP_ASSOCIATED_WITH_HEADER       1
-#define IT_SMP_IS_16_BIT                    2
-#define IT_SMP_IS_STEREO                    4 // not supported by Impulse Trckr
-#define IT_SMP_IS_COMPRESSED                8
-#define IT_SMP_LOOP_ON                      16
-#define IT_SMP_SUSTAIN_LOOP_ON              32
-#define IT_SMP_PINGPONG_LOOP_ON             64
-#define IT_SMP_PINGPONG_SUSTAIN_LOOP_ON     128
-#define IT_SMP_USE_DEFAULT_PANNING          128
-#define IT_SMP_MAX_GLOBAL_VOLUME            64
-#define IT_SMP_MAX_VOLUME                   64
-#define IT_SIGNED_SAMPLE_DATA               1
+#define IT_SMP_NAME_LENGTH                      26
+#define IT_SMP_ASSOCIATED_WITH_HEADER           1
+#define IT_SMP_IS_16_BIT                        2
+#define IT_SMP_IS_STEREO                        4 // not supported by Impulse Trckr
+#define IT_SMP_IS_COMPRESSED                    8
+#define IT_SMP_LOOP_ON                          16
+#define IT_SMP_SUSTAIN_LOOP_ON                  32
+#define IT_SMP_PINGPONG_LOOP_ON                 64
+#define IT_SMP_PINGPONG_SUSTAIN_LOOP_ON         128
+#define IT_SMP_USE_DEFAULT_PANNING              128
+#define IT_SMP_MAX_GLOBAL_VOLUME                64
+#define IT_SMP_MAX_VOLUME                       64
+#define IT_SIGNED_SAMPLE_DATA                   1
 
 // pattern flags
-#define IT_END_OF_SONG_MARKER               255
-#define IT_MARKER_PATTERN                   254 
-#define IT_PATTERN_CHANNEL_MASK_AVAILABLE   128
-#define IT_PATTERN_END_OF_ROW_MARKER        0
-#define IT_PATTERN_NOTE_PRESENT             1
-#define IT_PATTERN_INSTRUMENT_PRESENT       2
-#define IT_PATTERN_VOLUME_COLUMN_PRESENT    4
-#define IT_PATTERN_COMMAND_PRESENT          8
-#define IT_PATTERN_LAST_NOTE_IN_CHANNEL     16
-#define IT_PATTERN_LAST_INST_IN_CHANNEL     32
-#define IT_PATTERN_LAST_VOLC_IN_CHANNEL     64
-#define IT_PATTERN_LAST_COMMAND_IN_CHANNEL  128
-#define IT_NOTE_CUT                         254
-#define IT_KEY_OFF                          255
+#define IT_END_OF_SONG_MARKER                   255
+#define IT_MARKER_PATTERN                       254 
+#define IT_PATTERN_CHANNEL_MASK_AVAILABLE       128
+#define IT_PATTERN_END_OF_ROW_MARKER            0
+#define IT_PATTERN_NOTE_PRESENT                 1
+#define IT_PATTERN_INSTRUMENT_PRESENT           2
+#define IT_PATTERN_VOLUME_COLUMN_PRESENT        4
+#define IT_PATTERN_COMMAND_PRESENT              8
+#define IT_PATTERN_LAST_NOTE_IN_CHANNEL         16
+#define IT_PATTERN_LAST_INST_IN_CHANNEL         32
+#define IT_PATTERN_LAST_VOLC_IN_CHANNEL         64
+#define IT_PATTERN_LAST_COMMAND_IN_CHANNEL      128
+#define IT_NOTE_CUT                             254
+#define IT_KEY_OFF                              255
 
+/*
 // constants for decoding the volume column
 #define IT_VOLUME_COLUMN_UNDEFINED              213
-#define IT_VOLUME_COLUMN_VIBRATO                202
-#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        192
+#define IT_VOLUME_COLUMN_VIBRATO                203
+#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        193
 #define IT_VOLUME_COLUMN_SET_PANNING            128            
 #define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
 #define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
@@ -99,14 +100,14 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN 74
 #define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   64
 #define IT_VOLUME_COLUMN_SET_VOLUME             0
-
+*/
 
                                                
 #pragma pack (1) 
 
 struct ItFileHeader {
     char            tag[4];         // "IMPM"
-    char            songName[26];
+    char            songName[IT_SONG_NAME_LENGTH];
     unsigned short  phiLight;       // pattern row hilight info (ignore)
     unsigned short  songLength;
     unsigned short  nInstruments;
@@ -148,7 +149,7 @@ struct ItFileHeader {
 */
 struct ItOldInstHeader {
     char            tag[4];         // "IMPI"
-    char            fileName[12];
+    char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
     unsigned char   flag;
     unsigned char   volumeLoopStart;// these are node numbers
@@ -162,7 +163,7 @@ struct ItOldInstHeader {
     unsigned short  trackerVersion;
     unsigned char   nSamples;       // nr of samples in instrument
     unsigned char   reserved2;
-    char            name[IT_SMP_NAME_LENGTH];
+    char            name[IT_INST_NAME_LENGTH];
     unsigned char   reserved3[6];
     unsigned char   sampleForNote[240];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
@@ -188,7 +189,7 @@ struct ItNewEnvelope {
 
 struct ItNewInstHeader {
     char            tag[4];         // "IMPI"
-    char            fileName[12];
+    char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
     unsigned char   NNA;            // 0 = Cut,1 = continue, 2 = note off,3 = note fade
     unsigned char   dupCheckType;   // 0 = off,1 = note,2 = Sample,3 = Instr.
@@ -203,7 +204,7 @@ struct ItNewInstHeader {
     unsigned short  trackerVersion;
     unsigned char   nSamples;
     unsigned char   reserved;
-    char            name[26];
+    char            name[IT_INST_NAME_LENGTH];
     unsigned char   initialFilterCutOff;
     unsigned char   initialFilterResonance;
     unsigned char   midiChannel;
@@ -217,12 +218,12 @@ struct ItNewInstHeader {
 
 struct ItSampleHeader {
     char            tag[4];         // "IMPS"
-    char            fileName[12];
+    char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
     unsigned char   globalVolume;   // 0..64
     unsigned char   flag;
     unsigned char   volume;         // 
-    char            name[26];
+    char            name[IT_SMP_NAME_LENGTH];
     unsigned char   convert;        // bit0 set: signed smp data (off = unsigned)
     unsigned char   defaultPanning; // 0..64, bit 7 set == use default panning
     unsigned        length;
@@ -247,289 +248,427 @@ struct ItPatternHeader {
 
 #pragma pack (8) 
 
-// table to convert volume column portamento to normal portamento
-const int itVolcPortaTable[] = { 
-    0x0,0x1,0x4,0x8,0x10,0x20,0x40,0x60,0x80,0xFF
+class ItDebugShow {
+public:
+    static void fileHeader( ItFileHeader& itFileHeader );
+    static void oldInstHeader( ItOldInstHeader& itOldInstHeader );
+    static void newInstHeader( ItNewInstHeader& itNewInstHeader );
+    static void sampleHeader( ItSampleHeader& itSampleHeader );
+    static void pattern( Pattern& Pattern );
 };
 
-/*
-    Sample decompression routines taken from itsex.c
-*/
+// ****************************************************************************
+// ****************************************************************************
+// **                                                                        **
+// **          Sample decompression routines taken from itsex.c              **
+// **                                                                        **
+// ****************************************************************************
+// ****************************************************************************
 
-static unsigned char    *sourcebuffer = nullptr;
-//static unsigned char    sourcebuffer[0x800000];
-static unsigned char    *ibuf = nullptr;	/* actual reading position */
-static unsigned         bitlen;
-static unsigned char    bitnum;
-static bool             isCWT215 = false;
-
-static int readblock( VirtualFile& file )
-{	
-    // gets block of compressed data from file 
-    unsigned short size;
-
-    //size = read16l( f );
-    file.read( &size,sizeof( unsigned short ) );
-
-    std::cout << "\nReading " << size << " bytes\n";
-    
-    if ( !size ) return 0;
-
-    //if ( !(sourcebuffer = malloc( size )) ) return 0;
-    sourcebuffer = new unsigned char[size];
-
-    /*
-    if ( fread( sourcebuffer,size,1,f ) != 1 ) {
-        free( sourcebuffer );
-        sourcebuffer = NULL;	// Just looks better to have it present 
-        return 0;
-    }
-    */
-    if ( file.read( sourcebuffer,size ) )
+class ItSex {
+public:
+    ItSex()
     {
+        sourcebuffer = nullptr;
+        ibuf = nullptr;	            /* actual reading position */
+        isIt215Compression_ = false;
+    }
+    void setIT215CompressionFlag( bool isIt215Compression )
+    {
+        isIt215Compression_ = isIt215Compression;
+    }
+    // ----------------------------------------------------------------------
+    //  decompression routines
+    // ----------------------------------------------------------------------
+    //
+    // decompresses 8-bit sample (params : file, outbuffer, lenght of
+    //                                     uncompressed sample, IT2.15
+    //                                     compression flag
+    //                            returns: status                     )    
+    int  itsex_decompress8( VirtualFile& module,void *dst,int len/*,bool it215*/ )
+    {
+        char            *destbuf;   // the destination buffer which will be returned 
+        unsigned short  blklen;     // length of compressed data block in samples 
+        unsigned short  blkpos;		// position in block 
+        unsigned char   width;		// actual "bit width" 
+        unsigned short  value;		// value read from file to be processed 
+        char            d1,d2;		// integrator buffers (d2 for it2.15) 
+        char            *destpos;
+
+        destbuf = (char *)dst;
+        if ( !destbuf )
+            return 0;
+
+        memset( destbuf,0,len );
+        destpos = destbuf;	// position in output buffer 
+
+                            // now unpack data till the dest buffer is full 
+        while ( len ) {
+            // read a new block of compressed data and reset variables 
+            if ( !readblock( module ) )
+                return 0;
+            blklen = (len < 0x8000) ? len : 0x8000;
+            blkpos = 0;
+
+            width = 9;	    // start with width of 9 bits 
+            d1 = d2 = 0;	// reset integrator buffers 
+                            // now uncompress the data block 
+            while ( blkpos < blklen ) {
+                char    v;
+
+                value = readbits( width );	// read bits 
+
+                if ( width < 7 ) {	                        // method 1 (1-6 bits) 
+                    if ( value == (1 << (width - 1)) ) {	// check for "100..." 
+                        value = readbits( 3 ) + 1;	        // yes -> read new width; 
+                        width = (value < width) ? value : value + 1;	// and expand it 
+                        continue;	                        // ... next value 
+                    }
+                } else if ( width < 9 ) {	                // method 2 (7-8 bits) 
+                    unsigned char border = (0xFF >> (9 - width)) - 4;	// lower border for width chg 
+
+                    if ( value > border && value <= (border + 8) ) {
+                        value -= border;	                // convert width to 1-8 
+                        width = (value < width) ? value : value + 1;	// and expand it 
+                        continue;	                        // ... next value 
+                    }
+                } else if ( width == 9 ) {	                // method 3 (9 bits) 
+                    if ( value & 0x100 ) {	                // bit 8 set? 
+                        width = (value + 1) & 0xff;	        // new width... 
+                        continue;	                        // ... and next value 
+                    }
+                } else {	                                // illegal width, abort 
+                    freeblock();
+                    return 0;
+                }
+
+                // now expand value to signed byte 
+                if ( width < 8 ) {
+                    unsigned char shift = 8 - width;
+                    v = (value << shift);
+                    v >>= shift;
+                } else
+                    v = (char)value;
+
+                // integrate upon the sample values 
+                d1 += v;
+                d2 += d1;
+
+                // ... and store it into the buffer 
+                *(destpos++) = isIt215Compression_ ? d2 : d1;
+                blkpos++;
+
+            }
+            // now subtract block length from total length and go on 
+            freeblock();
+            len -= blklen;
+        }
+        return 1;
+    }
+
+    // decompresses 16-bit sample (params : file, outbuffer, lenght of
+    //                                     uncompressed sample, IT2.15
+    //                                     compression flag
+    //                            returns: status                     )
+    int  itsex_decompress16( VirtualFile& module,void *dst,int len/*,bool it215*/ )
+    {
+        short           *destbuf;	// the destination buffer which will be returned 
+        unsigned        blklen;		// length of compressed data block in samples 
+        unsigned        blkpos;		// position in block 
+        unsigned char   width;		// actual "bit width" 
+        unsigned        value;		// value read from file to be processed 
+        int             d1,d2;		// integrator buffers (d2 for it2.15) 
+        short           *destpos;
+
+        destbuf = (short *)dst;
+        if ( !destbuf )
+            return 0;
+
+        memset( destbuf,0,len << 1 );
+        destpos = destbuf;	// position in output buffer 
+
+                            // now unpack data till the dest buffer is full 
+        while ( len )
+        {
+            // read a new block of compressed data and reset variables 
+
+            if ( !readblock( module ) )
+                return 0;
+            blklen = (len < 0x4000) ? len : 0x4000;	// 0x4000 samples => 0x8000 bytes again 
+            blkpos = 0;
+
+            width = 17;	    // start with width of 17 bits 
+            d1 = d2 = 0;	// reset integrator buffers 
+
+                            // now uncompress the data block 
+            while ( blkpos < blklen ) {
+                short v;
+
+                value = readbits( width );	                             // read bits 
+
+                if ( width < 7 ) {	                                     // method 1 (1-6 bits) 
+                    if ( value == (1 << (width - 1)) ) {	             // check for "100..." 
+                        value = readbits( 4 ) + 1;	                     // yes -> read new width; 
+                        width = (value < width) ? value : value + 1;	 // and expand it 
+                        continue;	                                     // ... next value 
+                    }
+                } else if ( width < 17 ) {	                             // method 2 (7-16 bits) 
+                    unsigned short border = (0xFFFF >> (17 - width)) - 8;// lower border for width chg 
+
+                    if ( value > ( unsigned )border && value <= (unsigned)(border + 16) ) {
+                        value -= border;	                             // convert width to 1-8 
+                        width = (value < width) ? value : value + 1;	 // and expand it 
+                        continue;	                                     // ... next value 
+                    }
+                } else if ( width == 17 ) {	                             // method 3 (17 bits) 
+                    if ( value & 0x10000 ) {	                         // bit 16 set? 
+                        width = (value + 1) & 0xff;	                     // new width... 
+                        continue;	                                     // ... and next value 
+                    }
+                } else {	                                             // illegal width, abort 
+                    freeblock();
+                    return 0;
+                }
+
+                // now expand value to signed word 
+                if ( width < 16 ) {
+                    unsigned char shift = 16 - width;
+                    v = (value << shift);
+                    v >>= shift;
+                } else
+                    v = (int)value;
+
+                // integrate upon the sample values 
+                d1 += v;
+                d2 += d1;
+
+                // ... and store it into the buffer 
+                *(destpos++) = isIt215Compression_ ? d2 : d1;
+                blkpos++;
+            }
+            // now subtract block length from total length and go on 
+            freeblock();
+            len -= blklen;
+        }
+        return 1;
+    }
+
+private:
+    int readblock( VirtualFile& file )
+    {
+        // gets block of compressed data from file 
+        unsigned short size;
+
+        file.read( &size,sizeof( unsigned short ) );
+
+        if ( !size ) return 0;
+
+        sourcebuffer = new unsigned char[size];
+
+        if ( file.read( sourcebuffer,size ) )
+        {
+            delete sourcebuffer;
+            sourcebuffer = nullptr;
+            return 0;
+        }
+
+        ibuf = sourcebuffer;
+        bitnum = 8;
+        bitlen = size;
+        return 1;
+    }
+    int freeblock()
+    {
+        // frees that block again 
         delete sourcebuffer;
         sourcebuffer = nullptr;
-        return 0;
+        return 1;
     }
-
-    ibuf = sourcebuffer;
-    bitnum = 8;
-    bitlen = size;
-    return 1;
-}
-
-static int freeblock()
-{				
-    // frees that block again 
-    /*
-    if ( sourcebuffer )
-        free( sourcebuffer );
-    sourcebuffer = NULL;
-    */
-    delete sourcebuffer;
-    sourcebuffer = nullptr;
-    return 1;
-}
-
-static inline unsigned readbits( unsigned char n )
-{
-    unsigned retval = 0;
-    int offset = 0;
-    while ( n ) {
-        int m = n;
-
-        if ( !bitlen ) 
-        {
-            //fprintf( stderr,"readbits: ran out of buffer\n" );
-            return 0;
-        }
-
-        if ( m > bitnum )
-            m = bitnum;
-        retval |= (*ibuf & ((1L << m) - 1)) << offset;
-        *ibuf >>= m;
-        n -= m;
-        offset += m;
-        if ( !(bitnum -= m) ) {
-            bitlen--;
-            ibuf++;
-            bitnum = 8;
-        }
-    }
-    return retval;
-}
-
-// ----------------------------------------------------------------------
-//  decompression routines
-// ----------------------------------------------------------------------
-//
-// decompresses 8-bit sample (params : file, outbuffer, lenght of
-//                                     uncompressed sample, IT2.15
-//                                     compression flag
-//                            returns: status                     )    
-
-int itsex_decompress8( VirtualFile& module,void *dst,int len,bool it215 )
-{
-    char            *destbuf;   // the destination buffer which will be returned 
-    unsigned short  blklen;     // length of compressed data block in samples 
-    unsigned short  blkpos;		// position in block 
-    unsigned char   width;		// actual "bit width" 
-    unsigned short  value;		// value read from file to be processed 
-    char            d1,d2;		// integrator buffers (d2 for it2.15) 
-    char            *destpos;
-
-    destbuf = (char *)dst;
-    if ( !destbuf )
-        return 0;
-
-    memset( destbuf,0,len );
-    destpos = destbuf;	// position in output buffer 
-
-                        // now unpack data till the dest buffer is full 
-    while ( len ) {
-        std::cout << "\ndestpos = " << (unsigned)destpos << "\n";
-        // read a new block of compressed data and reset variables 
-
-        if ( !readblock( module ) )
-            return 0;
-        blklen = (len < 0x8000) ? len : 0x8000;
-        blkpos = 0;
-
-        width = 9;	// start with width of 9 bits 
-        d1 = d2 = 0;	// reset integrator buffers 
-
-                        // now uncompress the data block 
-        while ( blkpos < blklen ) {
-            char    v;
-
-            value = readbits( width );	// read bits 
-
-            if ( width < 7 ) {	                        // method 1 (1-6 bits) 
-                if ( value == (1 << (width - 1)) ) {	// check for "100..." 
-                    value = readbits( 3 ) + 1;	        // yes -> read new width; 
-                    width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	                        // ... next value 
-                }
-            } else if ( width < 9 ) {	                // method 2 (7-8 bits) 
-                unsigned char border = (0xFF >> (9 - width)) - 4;	// lower border for width chg 
-
-                if ( value > border && value <= (border + 8) ) {
-                    value -= border;	                // convert width to 1-8 
-                    width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	                        // ... next value 
-                }
-            } else if ( width == 9 ) {	                // method 3 (9 bits) 
-                if ( value & 0x100 ) {	                // bit 8 set? 
-                    width = (value + 1) & 0xff;	        // new width... 
-                    continue;	                        // ... and next value 
-                }
-            } else {	                                // illegal width, abort 
-                freeblock();
-                return 0;
-            }
-
-            // now expand value to signed byte 
-            //      sbyte v;  // sample value 
-            if ( width < 8 ) {
-                unsigned char shift = 8 - width;
-                v = (value << shift);
-                v >>= shift;
-            } else
-                v = (char)value;
-
-            // integrate upon the sample values 
-            d1 += v;
-            d2 += d1;
-
-            // ... and store it into the buffer 
-            *(destpos++) = it215 ? d2 : d1;
-            blkpos++;
-
-        }
-
-        // now subtract block lenght from total length and go on 
-        freeblock();
-        len -= blklen;
-    }
-
-    return 1;
-}
-
-// decompresses 16-bit sample (params : file, outbuffer, lenght of
-//                                     uncompressed sample, IT2.15
-//                                     compression flag
-//                            returns: status                     )
-
-int itsex_decompress16( VirtualFile& module,void *dst,int len,bool it215 )
-{
-    short           *destbuf;	// the destination buffer which will be returned 
-    unsigned        blklen;		// length of compressed data block in samples 
-    unsigned        blkpos;		// position in block 
-    unsigned char   width;		// actual "bit width" 
-    unsigned short  value;		// value read from file to be processed 
-    int             d1,d2;		// integrator buffers (d2 for it2.15) 
-    short           *destpos;
-
-    destbuf = (short *)dst;
-    if ( !destbuf )
-        return 0;
-
-    memset( destbuf,0,len << 1 );
-    destpos = destbuf;	// position in output buffer 
-
-                        // now unpack data till the dest buffer is full 
-    while ( len ) 
+    inline unsigned readbits( unsigned char n )
     {
-        // read a new block of compressed data and reset variables 
+        unsigned retval = 0;
+        int offset = 0;
+        while ( n ) {
+            int m = n;
 
-        if ( !readblock( module ) )
-            return 0;
-        blklen = (len < 0x4000) ? len : 0x4000;	// 0x4000 samples => 0x8000 bytes again 
-        blkpos = 0;
-
-        width = 17;	// start with width of 17 bits 
-        d1 = d2 = 0;	// reset integrator buffers 
-
-                        // now uncompress the data block 
-        while ( blkpos < blklen ) {
-            short v;
-
-            value = readbits( width );	// read bits 
-
-            if ( width < 7 ) {	// method 1 (1-6 bits) 
-                if ( value == (1 << (width - 1)) ) {	// check for "100..." 
-                    value = readbits( 4 ) + 1;	// yes -> read new width; 
-                    width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	// ... next value 
-                }
-            } else if ( width < 17 ) {	// method 2 (7-16 bits) 
-                unsigned short border = (0xFFFF >> (17 - width)) - 8;	// lower border for width chg 
-
-                if ( value > border && value <= (border + 16) ) {
-                    value -= border;	// convert width to 1-8 
-                    width = (value < width) ? value : value + 1;	// and expand it 
-                    continue;	// ... next value 
-                }
-            } else if ( width == 17 ) {	// method 3 (17 bits) 
-                if ( value & 0x10000 ) {	// bit 16 set? 
-                    width = (value + 1) & 0xff;	// new width... 
-                    continue;	// ... and next value 
-                }
-            } else {	// illegal width, abort 
-                freeblock();
+            if ( !bitlen )
+            {
                 return 0;
             }
 
-            // now expand value to signed word 
-            // sword v; // sample value 
-            if ( width < 16 ) {
-                unsigned char shift = 16 - width;
-                v = (value << shift);
-                v >>= shift;
-            } else
-                v = (int)value;
-
-            // integrate upon the sample values 
-            d1 += v;
-            d2 += d1;
-
-            // ... and store it into the buffer 
-            *(destpos++) = it215 ? d2 : d1;
-            blkpos++;
+            if ( m > bitnum )
+                m = bitnum;
+            retval |= (*ibuf & ((1L << m) - 1)) << offset;
+            *ibuf >>= m;
+            n -= m;
+            offset += m;
+            if ( !(bitnum -= m) ) {
+                bitlen--;
+                ibuf++;
+                bitnum = 8;
+            }
         }
-        // now subtract block lenght from total length and go on 
-        freeblock();
-        len -= blklen;
+        return retval;
     }
-    return 1;
+
+    unsigned char    *sourcebuffer; 
+    unsigned char    *ibuf; 
+    unsigned         bitlen;
+    unsigned char    bitnum;
+    bool             isIt215Compression_; 
+};
+// ****************************************************************************
+// ****************************************************************************
+// **                                                                        **
+// **          End of .IT sample decompression routines                      **
+// **                                                                        **
+// ****************************************************************************
+// ****************************************************************************
+
+
+int Module::loadItFile() 
+{
+    isLoaded_ = false;
+    VirtualFile itFile( fileName_ );
+    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+    ItFileHeader itFileHeader;
+    itFile.read( &itFileHeader,sizeof( itFileHeader ) );
+    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+
+    // some very basic checking
+    if ( //(fileSize < S3M_MIN_FILESIZE) ||
+        (! ((itFileHeader.tag[0] == 'I') &&
+            (itFileHeader.tag[1] == 'M') &&
+            (itFileHeader.tag[2] == 'P') &&
+            (itFileHeader.tag[3] == 'M'))
+            )
+        //|| (itFileHeader.id != 0x1A)
+        //|| (itFileHeader.sampleDataType < 1)
+        //|| (itFileHeader.sampleDataType > 2)
+        ) {
+#ifdef debug_it_loader
+        std::cout << std::endl
+            << "IMPM tag not found or file is too small, exiting.";
+#endif
+        return 0;
+    }
+    songTitle_ = "";
+    trackerTag_ = "";
+    for ( int i = 0; i < 26; i++ ) songTitle_ += itFileHeader.songName[i];
+    for( int i = 0; i < 4; i++ ) trackerTag_ += itFileHeader.tag[i];
+    trackerType_ = TRACKER_IT;
+    useLinearFrequencies_ = (itFileHeader.flags & IT_LINEAR_FREQUENCIES_FLAG) != 0;
+    isCustomRepeat_ = false;
+    //minPeriod_ = 56;    // periods[9 * 12 - 1]
+    //maxPeriod_ = 27392; // periods[0]
+    panningStyle_ = PANNING_STYLE_IT;
+
+    //isIt215Compression = itFileHeader.createdWTV >= 0x215; // to check!
+    //ItSex::setIT215CompressionFlag( itFileHeader.compatibleWTV >= 0x215 );
+    bool isIt215Compression = itFileHeader.compatibleWTV >= 0x215; // to check!
+
+    // read pattern order list
+    songLength_ = itFileHeader.songLength;
+    songRestartPosition_ = 0;
+    if ( itFileHeader.songLength > MAX_PATTERNS )
+    {
+        songLength_ = MAX_PATTERNS;
+#ifdef debug_it_loader
+        std::cout << std::endl 
+            << "Reducing song length from " << itFileHeader.songLength 
+            << " to " << MAX_PATTERNS << "!" << std::endl;
+#endif
+    }
+    for ( unsigned i = 0; i < songLength_; i++ )
+    {
+        unsigned char patternNr;
+        itFile.read( &patternNr,sizeof( unsigned char ) );
+        patternTable_[i] = patternNr;
+    }
+    itFile.absSeek( sizeof( ItFileHeader ) + itFileHeader.songLength );
+    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+
+    // read the file offset pointers to the instrument, sample and pattern data
+    unsigned instHdrPtrs[IT_MAX_INSTRUMENTS];
+    unsigned smpHdrPtrs[IT_MAX_SAMPLES];
+    unsigned ptnHdrPtrs[IT_MAX_PATTERNS];
+    for ( unsigned i = 0; i < itFileHeader.nInstruments; i++ )
+        itFile.read( &(instHdrPtrs[i]),sizeof( unsigned ) );
+    for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
+        itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
+    for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
+        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );        
+
+    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+#ifdef debug_it_loader
+    ItDebugShow::fileHeader( itFileHeader );
+    std::cout << std::endl << std::endl << "Order list: " << std::endl;
+    for ( int i = 0; i < itFileHeader.songLength; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)patternTable_[i];
+    std::cout << std::endl << std::endl << std::hex << "Instrument header pointers: " << std::endl;
+    for ( int i = 0; i < itFileHeader.nInstruments; i++ )
+        std::cout << std::setw( 8 ) << instHdrPtrs[i];
+    std::cout << std::endl << std::endl << "Sample header pointers: " << std::endl;
+    for ( int i = 0; i < itFileHeader.nSamples; i++ )
+        std::cout << std::setw( 8 ) << smpHdrPtrs[i];
+    std::cout << std::endl << std::endl << "Pattern header pointers: " << std::endl;
+    for ( int i = 0; i < itFileHeader.nPatterns; i++ )
+        std::cout << std::setw( 8 ) << ptnHdrPtrs[i];
+#endif
+    defaultTempo_ = itFileHeader.initialSpeed;
+    defaultBpm_ = itFileHeader.initialBpm;
+
+    // load instruments
+    nInstruments_ = itFileHeader.nInstruments;
+    if ( itFileHeader.flags & IT_INSTRUMENT_MODE )
+    {
+        for ( 
+            int instrumentNr = 1; 
+            instrumentNr <= itFileHeader.nInstruments; 
+            instrumentNr++ )
+        {
+            itFile.absSeek( instHdrPtrs[instrumentNr - 1] );
+            if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+            int result = loadItInstrument( itFile,instrumentNr,itFileHeader.createdWTV );
+            if ( result ) return 0;
+        }
+    }
+
+    // load samples
+    nSamples_ = itFileHeader.nSamples;
+    bool convertToInstrument = !(itFileHeader.flags & IT_INSTRUMENT_MODE);
+    if ( convertToInstrument ) nInstruments_ = nSamples_;
+    for ( unsigned sampleNr = 1; sampleNr <= nSamples_; sampleNr++ )
+    {
+        itFile.absSeek( smpHdrPtrs[sampleNr - 1] );
+        int result = loadItSample( 
+            itFile,
+            sampleNr,
+            convertToInstrument,
+            isIt215Compression 
+        );
+        if ( result ) return 0;
+    }
+
+    // load patterns
+    for ( int patternNr = 0; patternNr < itFileHeader.nPatterns; patternNr++ )
+    {
+        unsigned offset = ptnHdrPtrs[patternNr];
+        if ( offset )
+        {
+            itFile.absSeek( offset );
+            int result = loadItPattern( itFile,patternNr );
+            if ( result ) return 0;
+        }
+    }
+    isLoaded_ = true;
+    return 0;
 }
-
-
 
 // file pointer must be at the correct offset
 // returns non-zero on error
 // instrument numbers are 1-based
-int Module::loadItInstrument( 
+int Module::loadItInstrument(
     VirtualFile& itFile,
     int instrumentNr,
     unsigned createdWTV )
@@ -550,36 +689,8 @@ int Module::loadItInstrument(
         }
 #ifdef debug_it_loader
 #ifdef debug_it_show_instruments
-        std::cout << std::endl << "Instrument nr " << instrumentNr << " Header: "
-            << std::endl << "Instrument headertag: " << itInstHeader.tag[0]
-            << itInstHeader.tag[1] << itInstHeader.tag[2] << itInstHeader.tag[3]
-            << std::endl << "Instrument filename : " << itInstHeader.fileName << std::hex
-            << std::endl << "flag                : " << (unsigned)itInstHeader.flag << std::dec
-            << std::endl << "Volume loop start   : " << (unsigned)itInstHeader.volumeLoopStart
-            << std::endl << "Volume loop end     : " << (unsigned)itInstHeader.volumeLoopEnd
-            << std::endl << "Sustain loop start  : " << (unsigned)itInstHeader.sustainLoopStart
-            << std::endl << "Sustain loop end    : " << (unsigned)itInstHeader.sustainLoopEnd
-            << std::endl << "Fade out            : " << itInstHeader.fadeOut << std::hex
-            << std::endl << "New Note Action     : " << (unsigned)itInstHeader.NNA
-            << std::endl << "Dupl. Note Action   : " << (unsigned)itInstHeader.DNC
-            << std::endl << "Tracker version     : " << itInstHeader.trackerVersion
-            << std::endl << "Nr of samples       : " << (unsigned)itInstHeader.nSamples
-            << std::endl << "Instrument name     : " << itInstHeader.name
-            << std::endl << std::endl
-            << "Note -> Sample table: " << std::endl << std::dec;
-        for ( int i = 0; i < 240; i++ )
-            std::cout << std::setw( 4 ) << (unsigned)itInstHeader.sampleForNote[i];
-        std::cout << std::endl << std::endl
-            << "Volume envelope points: " << std::endl;
-        for ( int i = 0; i < 200; i++ )
-            std::cout << std::setw( 4 ) << (unsigned)itInstHeader.volumeEnvelope[i];
-        std::cout << std::endl << std::endl
-            << "Envelope node points (?): " << std::endl;
-        for ( int i = 0; i < 25; i++ )
-            std::cout
-            << std::setw( 2 ) << (unsigned)itInstHeader.nodes[i * 2] << ","
-            << std::setw( 2 ) << (unsigned)itInstHeader.nodes[i * 2 + 1] << " ";
-        std::cout << std::endl << std::endl;
+        std::cout << std::endl << "Instrument nr " << instrumentNr << " Header: ";
+        ItDebugShow::oldInstHeader( itInstHeader );
 #endif
 #endif
 
@@ -650,72 +761,8 @@ int Module::loadItInstrument(
         }
 #ifdef debug_it_loader
 #ifdef debug_it_show_instruments
-        std::cout << std::endl << "Instrument nr " << instrumentNr << " Header: "
-            << std::endl << "Instrument headertag: " << itInstHeader.tag[0]
-            << itInstHeader.tag[1] << itInstHeader.tag[2] << itInstHeader.tag[3]
-            << std::endl << "Instrument filename : " << itInstHeader.fileName << std::hex
-            << std::endl << "New Note Action     : " << (unsigned)itInstHeader.NNA
-            << std::endl << "Dup check type      : " << (unsigned)itInstHeader.dupCheckType
-            << std::endl << "Dup check Action    : " << (unsigned)itInstHeader.dupCheckAction << std::dec
-            << std::endl << "Fade out (0..128)   : " << (unsigned)itInstHeader.fadeOut        // 0..128
-            << std::endl << "Pitch Pan separation: " << (unsigned)itInstHeader.pitchPanSeparation // -32 .. +32
-            << std::endl << "Pitch pan center    : " << (unsigned)itInstHeader.pitchPanCenter // C-0 .. B-9 <=> 0..119
-            << std::endl << "Global volume (128) : " << (unsigned)itInstHeader.globalVolume   // 0..128
-            << std::endl << "Default panning     : " << (unsigned)itInstHeader.defaultPanning // 0..64, don't use if bit 7 is set
-            << std::endl << "Random vol variation: " << (unsigned)itInstHeader.randVolumeVariation // expressed in percent
-            << std::endl << "Random pan variation: " << (unsigned)itInstHeader.randPanningVariation << std::hex
-            << std::endl << "Tracker version     : " << itInstHeader.trackerVersion << std::dec
-            << std::endl << "Nr of samples       : " << (unsigned)itInstHeader.nSamples
-            << std::endl << "Instrument name     : " << itInstHeader.name
-            << std::endl << "Init. filter cut off: " << (unsigned)itInstHeader.initialFilterCutOff
-            << std::endl << "Init. filter reson. : " << (unsigned)itInstHeader.initialFilterResonance
-            << std::endl << "Midi channel        : " << (unsigned)itInstHeader.midiChannel
-            << std::endl << "Midi program        : " << (unsigned)itInstHeader.midiProgram
-            << std::endl << "Midi bank           : " << (unsigned)itInstHeader.midiBank
-            << std::endl << std::endl
-            << "Note -> Sample table: " << std::endl << std::dec;
-        for ( int i = 0; i < 240; i++ )
-            std::cout << std::setw( 4 ) << (unsigned)itInstHeader.sampleForNote[i];
-        std::cout << std::endl << std::endl
-            << "Volume envelope: "
-            << std::endl << "Flag                : " << (unsigned)itInstHeader.volumeEnvelope.flag
-            << std::endl << "Nr of nodes         : " << (unsigned)itInstHeader.volumeEnvelope.nNodes
-            << std::endl << "Loop start          : " << (unsigned)itInstHeader.volumeEnvelope.loopStart
-            << std::endl << "Loop end            : " << (unsigned)itInstHeader.volumeEnvelope.loopEnd
-            << std::endl << "Sustain loop start  : " << (unsigned)itInstHeader.volumeEnvelope.sustainLoopStart
-            << std::endl << "Sustain loop end    : " << (unsigned)itInstHeader.volumeEnvelope.sustainLoopEnd
-            << std::endl << "Envelope node points: " << std::endl << std::dec;
-        for ( int i = 0; i < 25; i++ )
-            std::cout
-            << std::setw( 2 ) << (unsigned)itInstHeader.volumeEnvelope.nodes[i].magnitude << ":"
-            << std::setw( 4 ) << (unsigned)itInstHeader.volumeEnvelope.nodes[i].tickIndex << " ";
-        std::cout << std::endl << std::endl
-            << "Panning envelope: "
-            << std::endl << "Flag                : " << (unsigned)itInstHeader.panningEnvelope.flag
-            << std::endl << "Nr of nodes         : " << (unsigned)itInstHeader.panningEnvelope.nNodes
-            << std::endl << "Loop start          : " << (unsigned)itInstHeader.panningEnvelope.loopStart
-            << std::endl << "Loop end            : " << (unsigned)itInstHeader.panningEnvelope.loopEnd
-            << std::endl << "Sustain loop start  : " << (unsigned)itInstHeader.panningEnvelope.sustainLoopStart
-            << std::endl << "Sustain loop end    : " << (unsigned)itInstHeader.panningEnvelope.sustainLoopEnd
-            << std::endl << "Envelope node points: " << std::endl << std::dec;
-        for ( int i = 0; i < 25; i++ )
-            std::cout
-            << std::setw( 2 ) << (unsigned)itInstHeader.panningEnvelope.nodes[i].magnitude << ":"
-            << std::setw( 4 ) << (unsigned)itInstHeader.panningEnvelope.nodes[i].tickIndex << " ";
-        std::cout << std::endl << std::endl
-            << "Pitch envelope: "
-            << std::endl << "Flag                : " << (unsigned)itInstHeader.pitchEnvelope.flag
-            << std::endl << "Nr of nodes         : " << (unsigned)itInstHeader.pitchEnvelope.nNodes
-            << std::endl << "Loop start          : " << (unsigned)itInstHeader.pitchEnvelope.loopStart
-            << std::endl << "Loop end            : " << (unsigned)itInstHeader.pitchEnvelope.loopEnd
-            << std::endl << "Sustain loop start  : " << (unsigned)itInstHeader.pitchEnvelope.sustainLoopStart
-            << std::endl << "Sustain loop end    : " << (unsigned)itInstHeader.pitchEnvelope.sustainLoopEnd
-            << std::endl << "Envelope node points: " << std::endl << std::dec;
-        for ( int i = 0; i < 25; i++ )
-            std::cout
-            << std::setw( 2 ) << (unsigned)itInstHeader.pitchEnvelope.nodes[i].magnitude << ":"
-            << std::setw( 4 ) << (unsigned)itInstHeader.pitchEnvelope.nodes[i].tickIndex << " ";
-        std::cout << std::endl << std::endl;
+        std::cout << std::endl << "Instrument nr " << instrumentNr << " Header: ";
+        ItDebugShow::newInstHeader( itInstHeader );
 #endif
 #endif
     }
@@ -725,10 +772,11 @@ int Module::loadItInstrument(
 // file pointer must be at the correct offset
 // returns non-zero on error
 // sample numbers are 1-based
-int Module::loadItSample( 
-    VirtualFile& itFile, 
+int Module::loadItSample(
+    VirtualFile& itFile,
     int sampleNr,
-    bool convertToInstrument )
+    bool convertToInstrument,
+    bool isIt215Compression )
 {
     ItSampleHeader itSampleHeader;
     if ( itFile.read( &itSampleHeader,sizeof( itSampleHeader ) ) ) return -1;
@@ -736,36 +784,8 @@ int Module::loadItSample(
     bool    isCompressed = (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) != 0;
     bool    isStereoSample = (itSampleHeader.flag & IT_SMP_IS_STEREO) != 0;
 #ifdef debug_it_loader
-    std::cout << std::endl << std::endl
-        << "Sample header nr " << sampleNr << ":"
-        << std::endl << "Tag                 : " << itSampleHeader.tag[0]
-        << itSampleHeader.tag[1] << itSampleHeader.tag[2] << itSampleHeader.tag[3]
-        << std::endl << "Dos filename        : " << itSampleHeader.fileName
-        << std::endl << "Global volume       : " << (unsigned)itSampleHeader.globalVolume
-        << std::endl << "Flags               : " << (unsigned)itSampleHeader.flag
-        << std::endl << "Associated w/ header: " << ((itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER) ? "yes" : "no")
-        << std::endl << "16 bit sample       : " << ((itSampleHeader.flag & IT_SMP_IS_16_BIT) ? "yes" : "no")
-        << std::endl << "Stereo sample       : " << ((itSampleHeader.flag & IT_SMP_IS_STEREO) ? "yes" : "no")
-        << std::endl << "Compressed sample   : " << ((itSampleHeader.flag & IT_SMP_IS_COMPRESSED) ? "yes" : "no")
-        << std::endl << "Loop                : " << ((itSampleHeader.flag & IT_SMP_LOOP_ON) ? "on" : "off")
-        << std::endl << "Sustain loop        : " << ((itSampleHeader.flag & IT_SMP_SUSTAIN_LOOP_ON) ? "on" : "off")
-        << std::endl << "Pingpong loop       : " << ((itSampleHeader.flag & IT_SMP_PINGPONG_LOOP_ON) ? "on" : "off")
-        << std::endl << "Pingpong sustain    : " << ((itSampleHeader.flag & IT_SMP_PINGPONG_SUSTAIN_LOOP_ON) ? "on" : "off")
-        << std::endl << "Volume              : " << (unsigned)itSampleHeader.volume
-        << std::endl << "Name                : " << itSampleHeader.name
-        << std::endl << "Convert (1 = signed): " << (unsigned)itSampleHeader.convert        // bit0 set: signed smp data (off = unsigned)
-        << std::endl << "Default Panning     : " << (unsigned)itSampleHeader.defaultPanning // 0..64, bit 7 set == use default panning
-        << std::endl << "Length              : " << itSampleHeader.length
-        << std::endl << "Loop start          : " << itSampleHeader.loopStart
-        << std::endl << "Loop end            : " << itSampleHeader.loopEnd << std::hex
-        << std::endl << "C5 speed            : " << itSampleHeader.c5Speed << std::dec
-        << std::endl << "Sustain loop start  : " << itSampleHeader.sustainLoopStart
-        << std::endl << "Sustain loop end    : " << itSampleHeader.sustainLoopEnd << std::hex
-        << std::endl << "Sample data pointer : " << itSampleHeader.samplePointer << std::dec
-        << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoSpeed   // 0..64
-        << std::endl << "Vibrato depth       : " << (unsigned)itSampleHeader.vibratoDepth   // 0..64
-        << std::endl << "Vibrato wave form   : " << (unsigned)itSampleHeader.vibratoWaveForm// 0 = sine,1 = ramp down,2 = square,3 = random
-        << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoRate;   // 0..64
+    std::cout << std::endl << std::endl << "Sample header nr " << sampleNr << ":";
+    ItDebugShow::sampleHeader( itSampleHeader );
 #endif
     if ( itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER )
     {
@@ -781,8 +801,12 @@ int Module::loadItSample(
         }
         SampleHeader sample;
         samples_[sampleNr] = new Sample;
-        for ( int i = 0; i < IT_SMP_NAME_LENGTH; i++ )
-            sample.name += itSampleHeader.name[i];
+
+        //for ( int i = 0; i < IT_SMP_NAME_LENGTH; i++ ) sample.name += itSampleHeader.name[i];
+        sample.name.append( itSampleHeader.name,IT_SMP_NAME_LENGTH );
+        //std::cout << "\n!!! " << sample.name << "!!!\n";
+
+
         sample.length = itSampleHeader.length;
         sample.repeatOffset = itSampleHeader.loopStart;
         if ( sample.repeatOffset > sample.length ) sample.repeatOffset = 0;
@@ -867,10 +891,13 @@ int Module::loadItSample(
             if ( itFile.read( buffer,dataLength ) ) return 0;
         } else {
             // decompress sample here
-            isCWT215 = false;
-            if ( is16bitData ) 
-                itsex_decompress16( itFile,buffer,sample.length,isCWT215 );
-            else itsex_decompress8( itFile,buffer,sample.length,isCWT215 );
+            // std::cout << std::endl << "isIt215Compression: " << isIt215Compression << std::endl;
+            ItSex itSex;
+            itSex.setIT215CompressionFlag( isIt215Compression );
+            if ( is16bitData )
+                itSex.itsex_decompress16( itFile,buffer,sample.length );
+            else 
+                itSex.itsex_decompress8( itFile,buffer,sample.length );
         }
 
         sample.data = (SHORT *)buffer;
@@ -901,8 +928,9 @@ int Module::loadItSample(
             {
                 instrumentHeader.sampleForNote[n] = sampleNr;
             }
+            instrumentHeader.name = sample.name;
+            //std::cout << "\ninstrumentheader.name: " << instrumentHeader.name << "#\n";
             instruments_[sampleNr]->load( instrumentHeader );
-            // TODO!!
         }
 #ifdef debug_it_loader
 #ifdef debug_it_play_samples
@@ -1024,34 +1052,51 @@ int Module::loadItSample(
     return 0;
 }
 
+// constants for decoding the volume column
+#define IT_VOLUME_COLUMN_UNDEFINED              213
+#define IT_VOLUME_COLUMN_VIBRATO                203
+#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        193
+#define IT_VOLUME_COLUMN_SET_PANNING            128            
+#define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
+#define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
+#define IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      94
+#define IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        84
+#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN 74
+#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   64
+#define IT_VOLUME_COLUMN_SET_VOLUME             0
 
 // Pattern decoder helper functions (effect remapping):
 void decodeVolumeColumn( Effect& target,unsigned char volc )
 {
+    // table to convert volume column portamento to normal portamento
+    const unsigned char itVolcPortaTable[] = {
+        0x0,0x1,0x4,0x8,0x10,0x20,0x40,0x60,0x80,0xFF
+    };
     target.effect = 0;
     target.argument = 0;
     if ( volc >= IT_VOLUME_COLUMN_UNDEFINED ) return; // nothing to do
-    if ( volc > IT_VOLUME_COLUMN_VIBRATO )
+
+    if ( volc >= IT_VOLUME_COLUMN_VIBRATO )
     {
         target.effect = VIBRATO;
         target.argument = volc - IT_VOLUME_COLUMN_VIBRATO;
-    } else if ( volc > IT_VOLUME_COLUMN_TONE_PORTAMENTO )
+    } else if ( volc >= IT_VOLUME_COLUMN_TONE_PORTAMENTO )
     {
         target.effect = TONE_PORTAMENTO;
         unsigned idx = volc - IT_VOLUME_COLUMN_TONE_PORTAMENTO;
         target.argument = itVolcPortaTable[idx];
-    } else if ( volc > IT_VOLUME_COLUMN_SET_PANNING )
+    } else if ( volc >= IT_VOLUME_COLUMN_SET_PANNING )
     {
         target.effect = SET_FINE_PANNING;
         unsigned panning = volc - IT_VOLUME_COLUMN_SET_PANNING;
         panning <<= 2;
         if ( panning > 255 ) panning = 255;
         target.argument = panning;
-    } else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_UP )
+    } else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_UP ) // to check: one or zero based?
     {
         target.effect = PORTAMENTO_UP;
         target.argument = (volc - IT_VOLUME_COLUMN_PORTAMENTO_UP) << 2;
-    } else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_DOWN )
+    } else if ( volc > IT_VOLUME_COLUMN_PORTAMENTO_DOWN ) // to check: one or zero based?
     {
         target.effect = PORTAMENTO_DOWN;
         target.argument = (volc - IT_VOLUME_COLUMN_PORTAMENTO_DOWN) << 2;
@@ -1217,7 +1262,7 @@ void remapEffects( Effect& remapFx )
 // file pointer must be at the correct offset
 // returns non-zero on error
 // pattern numbers are 0-based
-int Module::loadItPattern( 
+int Module::loadItPattern(
     VirtualFile& itFile,
     int patternNr )
 {
@@ -1259,8 +1304,7 @@ int Module::loadItPattern(
         return -1; // DEBUG
     }
 
-    unsigned rowNr = 0;
-    for ( ;rowNr < itPatternHeader.nRows; )
+    for ( unsigned rowNr = 0; rowNr < itPatternHeader.nRows; )
     {
         unsigned char pack;
         if ( itFile.read( &pack,sizeof( unsigned char ) ) ) return -1;
@@ -1284,9 +1328,6 @@ int Module::loadItPattern(
             else if ( n == IT_NOTE_CUT ) n = KEY_NOTE_CUT;
             else if ( n > IT_MAX_NOTE ) n = KEY_NOTE_FADE;
             else n++;
-
-            if ( n >= 12 ) n -= 12;   // TEMP!!! ONE OCTAVE DOWN
-            else n = 0;
 
             note.note = n;
             prevRow[channelNr].note = n;
@@ -1351,21 +1392,202 @@ int Module::loadItPattern(
 #define IT_DEBUG_SHOW_MAX_CHN 13
     _getch();
     std::cout << std::endl << "Pattern nr " << patternNr << ":" << std::endl;
-    for ( unsigned rowNr = 0; rowNr < patterns_[patternNr]->getnRows(); rowNr++ )
+    ItDebugShow::pattern( *(patterns_[patternNr]) );
+#endif
+#endif  
+    return 0;
+}
+
+
+
+
+// DEBUG helper functions that write verbose output to the screen:
+
+void ItDebugShow::fileHeader( ItFileHeader& itFileHeader )
+{
+    std::cout << std::endl << "IT Header: "
+        << std::endl << "Tag                         : " << itFileHeader.tag[0]
+        << itFileHeader.tag[1] << itFileHeader.tag[2] << itFileHeader.tag[3]
+        << std::endl << "Song Name                   : " << itFileHeader.songName
+        << std::endl << "Philight                    : " << itFileHeader.phiLight
+        << std::endl << "Song length                 : " << itFileHeader.songLength
+        << std::endl << "Nr of instruments           : " << itFileHeader.nInstruments
+        << std::endl << "Nr of samples               : " << itFileHeader.nSamples
+        << std::endl << "Nr of patterns              : " << itFileHeader.nPatterns << std::hex
+        << std::endl << "Created w/ tracker version  : 0x" << itFileHeader.createdWTV
+        << std::endl << "Compat. w/ tracker version  : 0x" << itFileHeader.compatibleWTV
+        << std::endl << "Flags                       : 0x" << itFileHeader.flags
+        << std::endl << "Special                     : " << itFileHeader.special << std::dec
+        << std::endl << "Global volume               : " << (unsigned)itFileHeader.globalVolume
+        << std::endl << "Mixing amplitude            : " << (unsigned)itFileHeader.mixingAmplitude
+        << std::endl << "Initial speed               : " << (unsigned)itFileHeader.initialSpeed
+        << std::endl << "Initial bpm                 : " << (unsigned)itFileHeader.initialBpm
+        << std::endl << "Panning separation (0..128) : " << (unsigned)itFileHeader.panningSeparation
+        << std::endl << "Pitch wheel depth           : " << (unsigned)itFileHeader.pitchWheelDepth
+        << std::endl << "Length of song message      : " << itFileHeader.messageLength
+        << std::endl << "Offset of song message      : " << itFileHeader.messageOffset
+        << std::endl
+        << std::endl << "Default volume for each channel: "
+        << std::endl;
+    for ( int i = 0; i < IT_MAX_CHANNELS; i++ )
+        std::cout << std::setw( 3 ) << (unsigned)itFileHeader.defaultVolume[i] << "|";
+    std::cout << std::endl << std::endl
+        << "Default panning for each channel: " << std::endl;
+    for ( int i = 0; i < IT_MAX_CHANNELS; i++ )
+        std::cout << std::setw( 3 ) << (unsigned)itFileHeader.defaultPanning[i] << "|";
+}
+
+void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
+{
+    std::cout //<< std::endl << "Instrument nr " << instrumentNr << " Header: "
+        << std::endl << "Instrument headertag: " << itOldInstHeader.tag[0]
+        << itOldInstHeader.tag[1] << itOldInstHeader.tag[2] << itOldInstHeader.tag[3]
+        << std::endl << "Instrument filename : " << itOldInstHeader.fileName << std::hex
+        << std::endl << "flag                : " << (unsigned)itOldInstHeader.flag << std::dec
+        << std::endl << "Volume loop start   : " << (unsigned)itOldInstHeader.volumeLoopStart
+        << std::endl << "Volume loop end     : " << (unsigned)itOldInstHeader.volumeLoopEnd
+        << std::endl << "Sustain loop start  : " << (unsigned)itOldInstHeader.sustainLoopStart
+        << std::endl << "Sustain loop end    : " << (unsigned)itOldInstHeader.sustainLoopEnd
+        << std::endl << "Fade out            : " << itOldInstHeader.fadeOut << std::hex
+        << std::endl << "New Note Action     : " << (unsigned)itOldInstHeader.NNA
+        << std::endl << "Dupl. Note Action   : " << (unsigned)itOldInstHeader.DNC
+        << std::endl << "Tracker version     : " << itOldInstHeader.trackerVersion
+        << std::endl << "Nr of samples       : " << (unsigned)itOldInstHeader.nSamples
+        << std::endl << "Instrument name     : " << itOldInstHeader.name
+        << std::endl << std::endl
+        << "Note -> Sample table: " << std::endl << std::dec;
+    for ( int i = 0; i < 240; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.sampleForNote[i];
+    std::cout << std::endl << std::endl
+        << "Volume envelope points: " << std::endl;
+    for ( int i = 0; i < 200; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.volumeEnvelope[i];
+    std::cout << std::endl << std::endl
+        << "Envelope node points (?): " << std::endl;
+    for ( int i = 0; i < 25; i++ )
+        std::cout
+        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2] << ","
+        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2 + 1] << " ";
+    std::cout << std::endl << std::endl;
+}
+
+void ItDebugShow::newInstHeader( ItNewInstHeader& itNewInstHeader )
+{
+    std::cout //<< std::endl << "Instrument nr " << instrumentNr << " Header: "
+        << std::endl << "Instrument headertag: " << itNewInstHeader.tag[0]
+        << itNewInstHeader.tag[1] << itNewInstHeader.tag[2] << itNewInstHeader.tag[3]
+        << std::endl << "Instrument filename : " << itNewInstHeader.fileName << std::hex
+        << std::endl << "New Note Action     : " << (unsigned)itNewInstHeader.NNA
+        << std::endl << "Dup check type      : " << (unsigned)itNewInstHeader.dupCheckType
+        << std::endl << "Dup check Action    : " << (unsigned)itNewInstHeader.dupCheckAction << std::dec
+        << std::endl << "Fade out (0..128)   : " << (unsigned)itNewInstHeader.fadeOut        // 0..128
+        << std::endl << "Pitch Pan separation: " << (unsigned)itNewInstHeader.pitchPanSeparation // -32 .. +32
+        << std::endl << "Pitch pan center    : " << (unsigned)itNewInstHeader.pitchPanCenter // C-0 .. B-9 <=> 0..119
+        << std::endl << "Global volume (128) : " << (unsigned)itNewInstHeader.globalVolume   // 0..128
+        << std::endl << "Default panning     : " << (unsigned)itNewInstHeader.defaultPanning // 0..64, don't use if bit 7 is set
+        << std::endl << "Random vol variation: " << (unsigned)itNewInstHeader.randVolumeVariation // expressed in percent
+        << std::endl << "Random pan variation: " << (unsigned)itNewInstHeader.randPanningVariation << std::hex
+        << std::endl << "Tracker version     : " << itNewInstHeader.trackerVersion << std::dec
+        << std::endl << "Nr of samples       : " << (unsigned)itNewInstHeader.nSamples
+        << std::endl << "Instrument name     : " << itNewInstHeader.name
+        << std::endl << "Init. filter cut off: " << (unsigned)itNewInstHeader.initialFilterCutOff
+        << std::endl << "Init. filter reson. : " << (unsigned)itNewInstHeader.initialFilterResonance
+        << std::endl << "Midi channel        : " << (unsigned)itNewInstHeader.midiChannel
+        << std::endl << "Midi program        : " << (unsigned)itNewInstHeader.midiProgram
+        << std::endl << "Midi bank           : " << (unsigned)itNewInstHeader.midiBank
+        << std::endl << std::endl
+        << "Note -> Sample table: " << std::endl << std::dec;
+    for ( int i = 0; i < 240; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)itNewInstHeader.sampleForNote[i];
+    std::cout << std::endl << std::endl
+        << "Volume envelope: "
+        << std::endl << "Flag                : " << (unsigned)itNewInstHeader.volumeEnvelope.flag
+        << std::endl << "Nr of nodes         : " << (unsigned)itNewInstHeader.volumeEnvelope.nNodes
+        << std::endl << "Loop start          : " << (unsigned)itNewInstHeader.volumeEnvelope.loopStart
+        << std::endl << "Loop end            : " << (unsigned)itNewInstHeader.volumeEnvelope.loopEnd
+        << std::endl << "Sustain loop start  : " << (unsigned)itNewInstHeader.volumeEnvelope.sustainLoopStart
+        << std::endl << "Sustain loop end    : " << (unsigned)itNewInstHeader.volumeEnvelope.sustainLoopEnd
+        << std::endl << "Envelope node points: " << std::endl << std::dec;
+    for ( int i = 0; i < 25; i++ )
+        std::cout
+        << std::setw( 2 ) << (unsigned)itNewInstHeader.volumeEnvelope.nodes[i].magnitude << ":"
+        << std::setw( 4 ) << (unsigned)itNewInstHeader.volumeEnvelope.nodes[i].tickIndex << " ";
+    std::cout << std::endl << std::endl
+        << "Panning envelope: "
+        << std::endl << "Flag                : " << (unsigned)itNewInstHeader.panningEnvelope.flag
+        << std::endl << "Nr of nodes         : " << (unsigned)itNewInstHeader.panningEnvelope.nNodes
+        << std::endl << "Loop start          : " << (unsigned)itNewInstHeader.panningEnvelope.loopStart
+        << std::endl << "Loop end            : " << (unsigned)itNewInstHeader.panningEnvelope.loopEnd
+        << std::endl << "Sustain loop start  : " << (unsigned)itNewInstHeader.panningEnvelope.sustainLoopStart
+        << std::endl << "Sustain loop end    : " << (unsigned)itNewInstHeader.panningEnvelope.sustainLoopEnd
+        << std::endl << "Envelope node points: " << std::endl << std::dec;
+    for ( int i = 0; i < 25; i++ )
+        std::cout
+        << std::setw( 2 ) << (unsigned)itNewInstHeader.panningEnvelope.nodes[i].magnitude << ":"
+        << std::setw( 4 ) << (unsigned)itNewInstHeader.panningEnvelope.nodes[i].tickIndex << " ";
+    std::cout << std::endl << std::endl
+        << "Pitch envelope: "
+        << std::endl << "Flag                : " << (unsigned)itNewInstHeader.pitchEnvelope.flag
+        << std::endl << "Nr of nodes         : " << (unsigned)itNewInstHeader.pitchEnvelope.nNodes
+        << std::endl << "Loop start          : " << (unsigned)itNewInstHeader.pitchEnvelope.loopStart
+        << std::endl << "Loop end            : " << (unsigned)itNewInstHeader.pitchEnvelope.loopEnd
+        << std::endl << "Sustain loop start  : " << (unsigned)itNewInstHeader.pitchEnvelope.sustainLoopStart
+        << std::endl << "Sustain loop end    : " << (unsigned)itNewInstHeader.pitchEnvelope.sustainLoopEnd
+        << std::endl << "Envelope node points: " << std::endl << std::dec;
+    for ( int i = 0; i < 25; i++ )
+        std::cout
+        << std::setw( 2 ) << (unsigned)itNewInstHeader.pitchEnvelope.nodes[i].magnitude << ":"
+        << std::setw( 4 ) << (unsigned)itNewInstHeader.pitchEnvelope.nodes[i].tickIndex << " ";
+    std::cout << std::endl << std::endl;
+
+}
+
+void ItDebugShow::sampleHeader( ItSampleHeader& itSampleHeader )
+{
+    bool    is16bitData = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
+    bool    isCompressed = (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) != 0;
+    bool    isStereoSample = (itSampleHeader.flag & IT_SMP_IS_STEREO) != 0;
+    std::cout 
+        << std::endl << "Tag                 : " << itSampleHeader.tag[0]
+        << itSampleHeader.tag[1] << itSampleHeader.tag[2] << itSampleHeader.tag[3]
+        << std::endl << "Dos filename        : " << itSampleHeader.fileName
+        << std::endl << "Global volume       : " << (unsigned)itSampleHeader.globalVolume
+        << std::endl << "Flags               : " << (unsigned)itSampleHeader.flag
+        << std::endl << "Associated w/ header: " << ((itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER) ? "yes" : "no")
+        << std::endl << "16 bit sample       : " << (is16bitData ? "yes" : "no")
+        << std::endl << "Stereo sample       : " << (isStereoSample ? "yes" : "no")
+        << std::endl << "Compressed sample   : " << (isCompressed ? "yes" : "no")
+        << std::endl << "Loop                : " << ((itSampleHeader.flag & IT_SMP_LOOP_ON) ? "on" : "off")
+        << std::endl << "Sustain loop        : " << ((itSampleHeader.flag & IT_SMP_SUSTAIN_LOOP_ON) ? "on" : "off")
+        << std::endl << "Pingpong loop       : " << ((itSampleHeader.flag & IT_SMP_PINGPONG_LOOP_ON) ? "on" : "off")
+        << std::endl << "Pingpong sustain    : " << ((itSampleHeader.flag & IT_SMP_PINGPONG_SUSTAIN_LOOP_ON) ? "on" : "off")
+        << std::endl << "Volume              : " << (unsigned)itSampleHeader.volume
+        << std::endl << "Name                : " << itSampleHeader.name
+        << std::endl << "Convert (1 = signed): " << (unsigned)itSampleHeader.convert        // bit0 set: signed smp data (off = unsigned)
+        << std::endl << "Default Panning     : " << (unsigned)itSampleHeader.defaultPanning // 0..64, bit 7 set == use default panning
+        << std::endl << "Length              : " << itSampleHeader.length
+        << std::endl << "Loop start          : " << itSampleHeader.loopStart
+        << std::endl << "Loop end            : " << itSampleHeader.loopEnd << std::hex
+        << std::endl << "C5 speed            : " << itSampleHeader.c5Speed << std::dec
+        << std::endl << "Sustain loop start  : " << itSampleHeader.sustainLoopStart
+        << std::endl << "Sustain loop end    : " << itSampleHeader.sustainLoopEnd << std::hex
+        << std::endl << "Sample data pointer : " << itSampleHeader.samplePointer << std::dec
+        << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoSpeed   // 0..64
+        << std::endl << "Vibrato depth       : " << (unsigned)itSampleHeader.vibratoDepth   // 0..64
+        << std::endl << "Vibrato wave form   : " << (unsigned)itSampleHeader.vibratoWaveForm// 0 = sine,1 = ramp down,2 = square,3 = random
+        << std::endl << "Vibrato speed       : " << (unsigned)itSampleHeader.vibratoRate;   // 0..64
+}
+
+void ItDebugShow::pattern( Pattern& pattern )
+{
+#define IT_DEBUG_SHOW_MAX_CHN 13
+    const int nChannels_ = 32; // TEMP DEBUG!
+    for ( unsigned rowNr = 0; rowNr < pattern.getnRows(); rowNr++ )
     {
         std::cout << std::endl;
         for ( int channelNr = 0; channelNr < IT_DEBUG_SHOW_MAX_CHN; channelNr++ )
         {
-#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
-#define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
-#define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
-#define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE | FOREGROUND_INTENSITY)
-#define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
-#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
-#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
+
             // **************************************************
             // colors in console requires weird shit in windows
             HANDLE hStdin = GetStdHandle( STD_INPUT_HANDLE );
@@ -1373,7 +1595,7 @@ int Module::loadItPattern(
             CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
             GetConsoleScreenBufferInfo( hStdout,&csbiInfo );
             // **************************************************
-            Note noteData = patterns_[patternNr]->getNote( rowNr * nChannels_ + channelNr );
+            Note noteData = pattern.getNote( rowNr * nChannels_ + channelNr );
             unsigned note = noteData.note;
             unsigned instrument = noteData.instrument;
 
@@ -1435,161 +1657,4 @@ int Module::loadItPattern(
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
         }
     }
-#endif
-#endif  
-    return 0;
-}
-
-int Module::loadItFile() 
-{
-    isLoaded_ = false;
-    VirtualFile itFile( fileName_ );
-    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
-    ItFileHeader itFileHeader;
-    itFile.read( &itFileHeader,sizeof( itFileHeader ) );
-    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
-
-    // some very basic checking
-    if ( //(fileSize < S3M_MIN_FILESIZE) ||
-        (! ((itFileHeader.tag[0] == 'I') &&
-            (itFileHeader.tag[1] == 'M') &&
-            (itFileHeader.tag[2] == 'P') &&
-            (itFileHeader.tag[3] == 'M'))
-            )
-        //|| (itFileHeader.id != 0x1A)
-        //|| (itFileHeader.sampleDataType < 1)
-        //|| (itFileHeader.sampleDataType > 2)
-        ) {
-#ifdef debug_it_loader
-        std::cout << std::endl
-            << "IMPM tag not found or file is too small, exiting.";
-#endif
-        return 0;
-    }
-    songTitle_ = "";
-    trackerTag_ = "";
-    for ( int i = 0; i < 26; i++ ) songTitle_ += itFileHeader.songName[i];
-    for( int i = 0; i < 4; i++ ) trackerTag_ += itFileHeader.tag[i];
-    trackerType_ = TRACKER_IT;
-    useLinearFrequencies_ = (itFileHeader.flags & IT_LINEAR_FREQUENCIES_FLAG) != 0;
-    isCustomRepeat_ = false;
-    //minPeriod_ = 56;    // periods[9 * 12 - 1]
-    //maxPeriod_ = 27392; // periods[0]
-    panningStyle_ = PANNING_STYLE_IT;
-    isCWT215 = itFileHeader.createdWTV >= 0x215; // to check!
-
-    // read pattern order list
-    songLength_ = itFileHeader.songLength;
-    songRestartPosition_ = 0;
-    if ( itFileHeader.songLength > MAX_PATTERNS )
-    {
-        songLength_ = MAX_PATTERNS;
-#ifdef debug_it_loader
-        std::cout << std::endl 
-            << "Reducing song length from " << itFileHeader.songLength 
-            << " to " << MAX_PATTERNS << "!" << std::endl;
-#endif
-    }
-    for ( unsigned i = 0; i < songLength_; i++ )
-    {
-        unsigned char patternNr;
-        itFile.read( &patternNr,sizeof( unsigned char ) );
-        patternTable_[i] = patternNr;
-    }
-    itFile.absSeek( sizeof( ItFileHeader ) + itFileHeader.songLength );
-    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
-
-    // read the file offset pointers to the instrument, sample and pattern data
-    unsigned instHdrPtrs[IT_MAX_INSTRUMENTS];
-    unsigned smpHdrPtrs[IT_MAX_SAMPLES];
-    unsigned ptnHdrPtrs[IT_MAX_PATTERNS];
-    for ( unsigned i = 0; i < itFileHeader.nInstruments; i++ )
-        itFile.read( &(instHdrPtrs[i]),sizeof( unsigned ) );
-    for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
-        itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
-    for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
-        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );        
-
-    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
-#ifdef debug_it_loader
-    std::cout << std::endl << "IT Header: "
-        << std::endl << "Tag                         : " << itFileHeader.tag[0]
-        << itFileHeader.tag[1] << itFileHeader.tag[2] << itFileHeader.tag[3]
-        << std::endl << "Song Name                   : " << itFileHeader.songName
-        << std::endl << "Philight                    : " << itFileHeader.phiLight
-        << std::endl << "Song length                 : " << itFileHeader.songLength
-        << std::endl << "Nr of instruments           : " << itFileHeader.nInstruments
-        << std::endl << "Nr of samples               : " << itFileHeader.nSamples
-        << std::endl << "Nr of patterns              : " << itFileHeader.nPatterns << std::hex
-        << std::endl << "Created w/ tracker version  : 0x" << itFileHeader.createdWTV
-        << std::endl << "Compat. w/ tracker version  : 0x" << itFileHeader.compatibleWTV
-        << std::endl << "Flags                       : 0x" << itFileHeader.flags
-        << std::endl << "Special                     : " << itFileHeader.special << std::dec
-        << std::endl << "Global volume               : " << (unsigned)itFileHeader.globalVolume
-        << std::endl << "Mixing amplitude            : " << (unsigned)itFileHeader.mixingAmplitude
-        << std::endl << "Initial speed               : " << (unsigned)itFileHeader.initialSpeed
-        << std::endl << "Initial bpm                 : " << (unsigned)itFileHeader.initialBpm
-        << std::endl << "Panning separation (0..128) : " << (unsigned)itFileHeader.panningSeparation
-        << std::endl << "Pitch wheel depth           : " << (unsigned)itFileHeader.pitchWheelDepth
-        << std::endl << "Length of song message      : " << itFileHeader.messageLength
-        << std::endl << "Offset of song message      : " << itFileHeader.messageOffset
-        << std::endl
-        << std::endl << "Default volume for each channel: "
-        << std::endl;
-    for ( int i = 0; i < IT_MAX_CHANNELS; i++ )
-        std::cout << std::setw( 3 ) << (unsigned)itFileHeader.defaultVolume[i] << "|";
-    std::cout << std::endl << std::endl
-        << "Default panning for each channel: " << std::endl;
-    for ( int i = 0; i < IT_MAX_CHANNELS; i++ )
-        std::cout << std::setw( 3 ) << (unsigned)itFileHeader.defaultPanning[i] << "|";
-    std::cout << std::endl << std::endl << "Order list: " << std::endl;
-    for ( int i = 0; i < itFileHeader.songLength; i++ )
-        std::cout << std::setw( 4 ) << (unsigned)patternTable_[i];
-    std::cout << std::endl << std::endl << std::hex << "Instrument header pointers: " << std::endl;
-    for ( int i = 0; i < itFileHeader.nInstruments; i++ ) 
-        std::cout << std::setw( 8 ) << instHdrPtrs[i];
-    std::cout << std::endl << std::endl << "Sample header pointers: " << std::endl;
-    for ( int i = 0; i < itFileHeader.nSamples; i++ ) 
-        std::cout << std::setw( 8 ) << smpHdrPtrs[i];
-    std::cout << std::endl << std::endl << "Pattern header pointers: " << std::endl;
-    for ( int i = 0; i < itFileHeader.nPatterns; i++ ) 
-        std::cout << std::setw( 8 ) << ptnHdrPtrs[i];
-#endif
-    defaultTempo_ = itFileHeader.initialSpeed;
-    defaultBpm_ = itFileHeader.initialBpm;
-
-    // load instruments
-    if ( itFileHeader.flags & IT_INSTRUMENT_MODE )
-    {
-        for ( 
-            int instrumentNr = 1; 
-            instrumentNr <= itFileHeader.nInstruments; 
-            instrumentNr++ )
-        {
-            itFile.absSeek( instHdrPtrs[instrumentNr - 1] );
-            if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
-            int result = loadItInstrument( itFile,instrumentNr,itFileHeader.createdWTV );
-            if ( result ) return 0;
-        }
-    }
-
-    // load samples
-    bool convertToInstrument = !(itFileHeader.flags & IT_INSTRUMENT_MODE);
-    if ( convertToInstrument ) nInstruments_ = nSamples_;
-    for ( unsigned sampleNr = 1; sampleNr <= itFileHeader.nSamples; sampleNr++ )
-    {
-        itFile.absSeek( smpHdrPtrs[sampleNr - 1] );
-        int result = loadItSample( itFile,sampleNr,convertToInstrument );
-        if ( result ) return 0;
-    }
-
-    // load patterns
-    for ( int patternNr = 0; patternNr < itFileHeader.nPatterns; patternNr++ )
-    {
-        itFile.absSeek( ptnHdrPtrs[patternNr] );
-        int result = loadItPattern( itFile,patternNr );
-        if ( result ) return 0;
-    }
-    isLoaded_ = true;
-    return 0;
 }

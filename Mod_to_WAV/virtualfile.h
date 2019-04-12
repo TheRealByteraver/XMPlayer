@@ -80,7 +80,7 @@ private:
 
 class VirtualFile {
 public:
-    VirtualFile( std::string &fileName ) :
+    explicit VirtualFile( std::string &fileName ) :
         fileName_( fileName )
     {
         fileSize_ = 0;

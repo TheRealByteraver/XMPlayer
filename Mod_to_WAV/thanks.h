@@ -1,5 +1,19 @@
 /*
-        Thanks for this project fly out to:
+        Thanks for this project fly out to (in no particular order):
+
+        - Jeffrey Lim (Pulse) for creating the awesome Impulse Tracker: the .IT
+        format is seriously next level compared to what preceded it! Too bad it was
+        a real mode app. Should've been a Windows app from the start...
+        - Johannes - Jojo - Schultz (Saga Musix) for helping me out with all kinds of
+        questions related to the .IT format
+        - Nicolas Gramlich for the .IT sample decompression routines itsex.c which I
+        used in my .IT loader. Thanks for explaining how the algorithm works! Source:
+        https://github.com/nicolasgramlich/AndEngineMODPlayerExtension/blob/master/jni/loaders/itsex.c
+
+        - PSI (Sami Tammilehto) / Future Crew for creating Scream Tracker 3
+        - FireLight / Brett Paterson for writing a detailed document explaining how to
+        parse .s3m files. Without fs3mdoc.txt this would have been hell. With his
+        invaluable document, it was a hell of a lot easier
 
         - David Overton for his great tutorial on the windows Wave Mapper 
         functions
@@ -16,8 +30,13 @@
         - ADVANCED GRAVIS for making the Gravis UltraSound. My beloved GUS 
         introduced me to the fascinating PC demo scene (www.scene.org), and
         because it's so easy to program it encouraged me to write my first
-        .MOD player (source available: google for "tnt-mp11.zip" or mail me for
-        the far better version tnt-mp12.zip)
+        .MOD player (source available: google for "tnt-mp11.zip" or get a more
+        complete (protected mode) version from github:
+        https://github.com/TheRealByteraver/tnt-mp12.zip
+
+        - Olivier Lapicque for creating ModPlug Tracker & ModPlug player
+        - The whole OpenMPT team, Saga Musix especially!
+        https://openmpt.org
 
         - My Music Heroes:
 
@@ -43,12 +62,12 @@
             still AND you're such a gifted programmer!!!
             
             Jugi / Complex Media Labs
-            - dope.mod is fantastic for testing, and it sounds good too!
+            - dope.mod is fantastic for testing, great tune as well!
 
             Magnus Högdahl aka Vogue / Triton / Starbreeze
             - you have too many talents, simple as that :)
             
-            And so many others: Gustaf Grefberg aka Lizardking, Jogeir 
+            And also: Gustaf Grefberg aka Lizardking, Jogeir 
             Liljedahl, Sidewinder / Megawatts, otis / inforcorner, Robin van 
             Nooy aka Cygnes / T-Matic: women.s3m is 
             fantastic :), Necros / fm - that Unreal music is truly unreal! , 
@@ -60,14 +79,21 @@
             Jamm, Azazel / TBL - cruel tunes just like we like 'em :)
             mad freak / anarchy, Deathjester, Saint Shoe, Brainbug / 
             alcatraz, twins / phenomena, Laxity / Kefrens, Nuke / Anarchy,
-            Zodiak / Cascada, Jesper Kyd ...  and so many others!!!
+            Zodiak / Cascada, Jesper Kyd, Volker Tripp aka Jester ...  
+            and so many others!!!
 
         - My friends:
-            - Wodan, my programming buddy, bugging me to leave pascal and to
+            - Wodan, my programming buddy, bugging me to leave Pascal and to
             start with C, then to stop me on C++ ;) (failed on that one)
             http://www.caiman.us
             - Bluejazz aka Affective Disorder - for the music, the drawings,
-            the friendship!
+            the friendship! May you rest in peace.
             - Sombritude - for the friendship, shared hardships & the XM's of 
             course!!!
+            - Mister Gustavo, for trying (and so far failing mostly) to convert
+            me into a web developer :D
+
+        - My long time girlfriend Maryna for letting me spend as much hours 
+        behind my computer as I care for and for being generally supportive.
+        Thank you my love <3 
 */
