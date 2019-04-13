@@ -162,6 +162,7 @@
   <ItemGroup>
     <ClCompile Include="Instrument.cpp" />
     <ClCompile Include="ITLoader.cpp" />
+    <ClCompile Include="itsex.cpp" />
     <ClCompile Include="ModLoader.cpp" />
     <ClCompile Include="Module.cpp" />
     <ClCompile Include="Mod_to_wav.cpp" />
@@ -170,6 +171,7 @@
     <ClCompile Include="xm_loader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="itsex.h" />
     <ClInclude Include="Module.h" />
     <ClInclude Include="StyleGuide.h" />
     <ClInclude Include="thanks.h" />

@@ -10,10 +10,23 @@
 *******************************************************************************
 */
 
-class MyClass 
-{
+/*
+    - A Header file is only for the interface, not for code
+    - It is not necessarily a good idea to make a header file for each class
+    - Put a clear comment on top of each source file stating:
+        - author
+        - date
+        - purpose
+
+
+*/
+
+// in .h file:
+class MyClass {  // or struct. Accolade is not on next line
+
 public:
     MyClass() {}
+    void    publicFunction();
 
 private:
     void    privateFunction();
@@ -22,22 +35,74 @@ private:
         privateVariable_ = 25;
     }
 
-
-
 private:
-    int     privateVariable_;
-
-    
+    int     privateVariable_;   
 };
+
+// in .cpp file:
+void MyClass::publicFunction()
+{
+    // statements ...
+}
 
 void MyClass::privateFunction()
 {
-    //milliseconds s = 0;
+    // ...
+    if ( true )
+        ; // statement is not on the same line
+    else
+        ; // else statement, also not on the same line
+
+    if ( true ) { // accolade on the same line but not the statement
+        ; // statement
+    } 
+    else { // accolade on the same line but not the statement 
+        ; // else statement
+    }
+
+    // nested / repeated if statements
+    bool condition1 = true;
+    bool condition2 = false;
+
+    if ( condition1 ) { 
+        // statements ...
+    } 
+    else if ( condition2 ) { 
+        // statements ...
+    } 
+    else {
+        // statements ...
+        if ( condition2 | condition1 ) {
+            // statements ...
+        } 
+        else { 
+            // statements ...
+        }
+    }
+
+    int a = 7;
+    switch ( a ) { 
+        case 1:
+        {
+            break;
+        }
+        case 2:
+        {
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
 }
+
+
 
 void main_function()
 {
-
+    MyClass myClass;
+    myClass.publicFunction();
 }
 
 

@@ -5,8 +5,8 @@
         format is seriously next level compared to what preceded it! Too bad it was
         a real mode app. Should've been a Windows app from the start...
         - Johannes - Jojo - Schultz (Saga Musix) for helping me out with all kinds of
-        questions related to the .IT format
-        - Nicolas Gramlich for the .IT sample decompression routines itsex.c which I
+        questions related to the .IT format and module replay in general
+        - Tammo Hinrichs for the .IT sample decompression routines itsex.c which I
         used in my .IT loader. Thanks for explaining how the algorithm works! Source:
         https://github.com/nicolasgramlich/AndEngineMODPlayerExtension/blob/master/jni/loaders/itsex.c
 
@@ -93,7 +93,7 @@
             - Mister Gustavo, for trying (and so far failing mostly) to convert
             me into a web developer :D
 
-        - My long time girlfriend Maryna for letting me spend as much hours 
-        behind my computer as I care for and for being generally supportive.
-        Thank you my love <3 
+        - ... and last but definitely not least: my long time girlfriend Maryna
+        for letting me spend as much hours behind my computer as I care for and 
+        for being generally supportive.Thank you my love <3 
 */

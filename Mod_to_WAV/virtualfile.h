@@ -3,6 +3,8 @@
 #include <fstream>
 #include <string>
 
+#include "assert.h"
+
 #define VIRTFILE_NO_ERROR           0
 #define VIRTFILE_EOF                1
 #define VIRTFILE_BUFFER_OVERRUN     2

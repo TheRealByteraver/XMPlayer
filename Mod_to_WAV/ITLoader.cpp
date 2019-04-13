@@ -3,13 +3,10 @@ Thanks must go to:
 - Jeffrey Lim (Pulse) for creating the awesome Impulse Tracker
 - Johannes - Jojo - Schultz (Saga Musix) for helping me out with all kinds of
   questions related to the .IT format.
-- Nicolas Gramlich for the .IT sample decompression routines itsex.c which I 
-  used in my .IT loader. Thanks for explaining how the algorithm works! Source:
-  https://github.com/nicolasgramlich/AndEngineMODPlayerExtension/blob/master/jni/loaders/itsex.c
-
-  
+- Tammo Hinrichs for the .IT sample decompression routines itsex.c which I
+  used in my .IT loader. Thanks for explaining how the algorithm works! See 
+  itsex.h for details.
 */
-
 
 #include <conio.h>
 #include <windows.h>
@@ -20,11 +17,12 @@ Thanks must go to:
 
 #include "Module.h"
 #include "virtualfile.h"
+#include "itsex.h"
 
-//#define debug_it_loader
+#define debug_it_loader
 #define debug_it_show_instruments
 #define debug_it_show_patterns
-#define debug_it_play_samples
+//#define debug_it_play_samples
 
 #include <bitset>
 #include <iomanip>
@@ -92,7 +90,7 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define IT_VOLUME_COLUMN_UNDEFINED              213
 #define IT_VOLUME_COLUMN_VIBRATO                203
 #define IT_VOLUME_COLUMN_TONE_PORTAMENTO        193
-#define IT_VOLUME_COLUMN_SET_PANNING            128            
+#define IT_VOLUME_COLUMN_SET_PANNING            128
 #define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
 #define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
 #define IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      94
@@ -102,9 +100,8 @@ extern const char *noteStrings[2 + MAXIMUM_NOTES];
 #define IT_VOLUME_COLUMN_SET_VOLUME             0
 */
 
-                                               
-#pragma pack (1) 
 
+#pragma pack (1) 
 struct ItFileHeader {
     char            tag[4];         // "IMPM"
     char            songName[IT_SONG_NAME_LENGTH];
@@ -136,7 +133,6 @@ struct ItFileHeader {
     - instrument Offset list (nr of instruments): 32 bit
     - sample Header Offset list (nr of samples) : 32 bit
     - pattern Offset list (nr of patterns)      : 32 bit
-
 */
 
 /*
@@ -248,6 +244,7 @@ struct ItPatternHeader {
 
 #pragma pack (8) 
 
+// small class with functions that show debug information
 class ItDebugShow {
 public:
     static void fileHeader( ItFileHeader& itFileHeader );
@@ -257,276 +254,7 @@ public:
     static void pattern( Pattern& Pattern );
 };
 
-// ****************************************************************************
-// ****************************************************************************
-// **                                                                        **
-// **          Sample decompression routines taken from itsex.c              **
-// **                                                                        **
-// ****************************************************************************
-// ****************************************************************************
-
-class ItSex {
-public:
-    ItSex()
-    {
-        sourcebuffer = nullptr;
-        ibuf = nullptr;	            /* actual reading position */
-        isIt215Compression_ = false;
-    }
-    void setIT215CompressionFlag( bool isIt215Compression )
-    {
-        isIt215Compression_ = isIt215Compression;
-    }
-    // ----------------------------------------------------------------------
-    //  decompression routines
-    // ----------------------------------------------------------------------
-    //
-    // decompresses 8-bit sample (params : file, outbuffer, lenght of
-    //                                     uncompressed sample, IT2.15
-    //                                     compression flag
-    //                            returns: status                     )    
-    int  itsex_decompress8( VirtualFile& module,void *dst,int len/*,bool it215*/ )
-    {
-        char            *destbuf;   // the destination buffer which will be returned 
-        unsigned short  blklen;     // length of compressed data block in samples 
-        unsigned short  blkpos;		// position in block 
-        unsigned char   width;		// actual "bit width" 
-        unsigned short  value;		// value read from file to be processed 
-        char            d1,d2;		// integrator buffers (d2 for it2.15) 
-        char            *destpos;
-
-        destbuf = (char *)dst;
-        if ( !destbuf )
-            return 0;
-
-        memset( destbuf,0,len );
-        destpos = destbuf;	// position in output buffer 
-
-                            // now unpack data till the dest buffer is full 
-        while ( len ) {
-            // read a new block of compressed data and reset variables 
-            if ( !readblock( module ) )
-                return 0;
-            blklen = (len < 0x8000) ? len : 0x8000;
-            blkpos = 0;
-
-            width = 9;	    // start with width of 9 bits 
-            d1 = d2 = 0;	// reset integrator buffers 
-                            // now uncompress the data block 
-            while ( blkpos < blklen ) {
-                char    v;
-
-                value = readbits( width );	// read bits 
-
-                if ( width < 7 ) {	                        // method 1 (1-6 bits) 
-                    if ( value == (1 << (width - 1)) ) {	// check for "100..." 
-                        value = readbits( 3 ) + 1;	        // yes -> read new width; 
-                        width = (value < width) ? value : value + 1;	// and expand it 
-                        continue;	                        // ... next value 
-                    }
-                } else if ( width < 9 ) {	                // method 2 (7-8 bits) 
-                    unsigned char border = (0xFF >> (9 - width)) - 4;	// lower border for width chg 
-
-                    if ( value > border && value <= (border + 8) ) {
-                        value -= border;	                // convert width to 1-8 
-                        width = (value < width) ? value : value + 1;	// and expand it 
-                        continue;	                        // ... next value 
-                    }
-                } else if ( width == 9 ) {	                // method 3 (9 bits) 
-                    if ( value & 0x100 ) {	                // bit 8 set? 
-                        width = (value + 1) & 0xff;	        // new width... 
-                        continue;	                        // ... and next value 
-                    }
-                } else {	                                // illegal width, abort 
-                    freeblock();
-                    return 0;
-                }
-
-                // now expand value to signed byte 
-                if ( width < 8 ) {
-                    unsigned char shift = 8 - width;
-                    v = (value << shift);
-                    v >>= shift;
-                } else
-                    v = (char)value;
-
-                // integrate upon the sample values 
-                d1 += v;
-                d2 += d1;
-
-                // ... and store it into the buffer 
-                *(destpos++) = isIt215Compression_ ? d2 : d1;
-                blkpos++;
-
-            }
-            // now subtract block length from total length and go on 
-            freeblock();
-            len -= blklen;
-        }
-        return 1;
-    }
-
-    // decompresses 16-bit sample (params : file, outbuffer, lenght of
-    //                                     uncompressed sample, IT2.15
-    //                                     compression flag
-    //                            returns: status                     )
-    int  itsex_decompress16( VirtualFile& module,void *dst,int len/*,bool it215*/ )
-    {
-        short           *destbuf;	// the destination buffer which will be returned 
-        unsigned        blklen;		// length of compressed data block in samples 
-        unsigned        blkpos;		// position in block 
-        unsigned char   width;		// actual "bit width" 
-        unsigned        value;		// value read from file to be processed 
-        int             d1,d2;		// integrator buffers (d2 for it2.15) 
-        short           *destpos;
-
-        destbuf = (short *)dst;
-        if ( !destbuf )
-            return 0;
-
-        memset( destbuf,0,len << 1 );
-        destpos = destbuf;	// position in output buffer 
-
-                            // now unpack data till the dest buffer is full 
-        while ( len )
-        {
-            // read a new block of compressed data and reset variables 
-
-            if ( !readblock( module ) )
-                return 0;
-            blklen = (len < 0x4000) ? len : 0x4000;	// 0x4000 samples => 0x8000 bytes again 
-            blkpos = 0;
-
-            width = 17;	    // start with width of 17 bits 
-            d1 = d2 = 0;	// reset integrator buffers 
-
-                            // now uncompress the data block 
-            while ( blkpos < blklen ) {
-                short v;
-
-                value = readbits( width );	                             // read bits 
-
-                if ( width < 7 ) {	                                     // method 1 (1-6 bits) 
-                    if ( value == (1 << (width - 1)) ) {	             // check for "100..." 
-                        value = readbits( 4 ) + 1;	                     // yes -> read new width; 
-                        width = (value < width) ? value : value + 1;	 // and expand it 
-                        continue;	                                     // ... next value 
-                    }
-                } else if ( width < 17 ) {	                             // method 2 (7-16 bits) 
-                    unsigned short border = (0xFFFF >> (17 - width)) - 8;// lower border for width chg 
-
-                    if ( value > ( unsigned )border && value <= (unsigned)(border + 16) ) {
-                        value -= border;	                             // convert width to 1-8 
-                        width = (value < width) ? value : value + 1;	 // and expand it 
-                        continue;	                                     // ... next value 
-                    }
-                } else if ( width == 17 ) {	                             // method 3 (17 bits) 
-                    if ( value & 0x10000 ) {	                         // bit 16 set? 
-                        width = (value + 1) & 0xff;	                     // new width... 
-                        continue;	                                     // ... and next value 
-                    }
-                } else {	                                             // illegal width, abort 
-                    freeblock();
-                    return 0;
-                }
-
-                // now expand value to signed word 
-                if ( width < 16 ) {
-                    unsigned char shift = 16 - width;
-                    v = (value << shift);
-                    v >>= shift;
-                } else
-                    v = (int)value;
-
-                // integrate upon the sample values 
-                d1 += v;
-                d2 += d1;
-
-                // ... and store it into the buffer 
-                *(destpos++) = isIt215Compression_ ? d2 : d1;
-                blkpos++;
-            }
-            // now subtract block length from total length and go on 
-            freeblock();
-            len -= blklen;
-        }
-        return 1;
-    }
-
-private:
-    int readblock( VirtualFile& file )
-    {
-        // gets block of compressed data from file 
-        unsigned short size;
-
-        file.read( &size,sizeof( unsigned short ) );
-
-        if ( !size ) return 0;
-
-        sourcebuffer = new unsigned char[size];
-
-        if ( file.read( sourcebuffer,size ) )
-        {
-            delete sourcebuffer;
-            sourcebuffer = nullptr;
-            return 0;
-        }
-
-        ibuf = sourcebuffer;
-        bitnum = 8;
-        bitlen = size;
-        return 1;
-    }
-    int freeblock()
-    {
-        // frees that block again 
-        delete sourcebuffer;
-        sourcebuffer = nullptr;
-        return 1;
-    }
-    inline unsigned readbits( unsigned char n )
-    {
-        unsigned retval = 0;
-        int offset = 0;
-        while ( n ) {
-            int m = n;
-
-            if ( !bitlen )
-            {
-                return 0;
-            }
-
-            if ( m > bitnum )
-                m = bitnum;
-            retval |= (*ibuf & ((1L << m) - 1)) << offset;
-            *ibuf >>= m;
-            n -= m;
-            offset += m;
-            if ( !(bitnum -= m) ) {
-                bitlen--;
-                ibuf++;
-                bitnum = 8;
-            }
-        }
-        return retval;
-    }
-
-    unsigned char    *sourcebuffer; 
-    unsigned char    *ibuf; 
-    unsigned         bitlen;
-    unsigned char    bitnum;
-    bool             isIt215Compression_; 
-};
-// ****************************************************************************
-// ****************************************************************************
-// **                                                                        **
-// **          End of .IT sample decompression routines                      **
-// **                                                                        **
-// ****************************************************************************
-// ****************************************************************************
-
-
-int Module::loadItFile() 
+int Module::loadItFile()
 {
     isLoaded_ = false;
     VirtualFile itFile( fileName_ );
@@ -537,8 +265,8 @@ int Module::loadItFile()
 
     // some very basic checking
     if ( //(fileSize < S3M_MIN_FILESIZE) ||
-        (! ((itFileHeader.tag[0] == 'I') &&
-            (itFileHeader.tag[1] == 'M') &&
+        (!((itFileHeader.tag[0] == 'I') &&
+        (itFileHeader.tag[1] == 'M') &&
             (itFileHeader.tag[2] == 'P') &&
             (itFileHeader.tag[3] == 'M'))
             )
@@ -555,17 +283,14 @@ int Module::loadItFile()
     songTitle_ = "";
     trackerTag_ = "";
     for ( int i = 0; i < 26; i++ ) songTitle_ += itFileHeader.songName[i];
-    for( int i = 0; i < 4; i++ ) trackerTag_ += itFileHeader.tag[i];
+    for ( int i = 0; i < 4; i++ ) trackerTag_ += itFileHeader.tag[i];
     trackerType_ = TRACKER_IT;
     useLinearFrequencies_ = (itFileHeader.flags & IT_LINEAR_FREQUENCIES_FLAG) != 0;
     isCustomRepeat_ = false;
     //minPeriod_ = 56;    // periods[9 * 12 - 1]
     //maxPeriod_ = 27392; // periods[0]
     panningStyle_ = PANNING_STYLE_IT;
-
-    //isIt215Compression = itFileHeader.createdWTV >= 0x215; // to check!
-    //ItSex::setIT215CompressionFlag( itFileHeader.compatibleWTV >= 0x215 );
-    bool isIt215Compression = itFileHeader.compatibleWTV >= 0x215; // to check!
+    bool isIt215Compression = itFileHeader.compatibleWTV >= 0x215;
 
     // read pattern order list
     songLength_ = itFileHeader.songLength;
@@ -574,8 +299,8 @@ int Module::loadItFile()
     {
         songLength_ = MAX_PATTERNS;
 #ifdef debug_it_loader
-        std::cout << std::endl 
-            << "Reducing song length from " << itFileHeader.songLength 
+        std::cout << std::endl
+            << "Reducing song length from " << itFileHeader.songLength
             << " to " << MAX_PATTERNS << "!" << std::endl;
 #endif
     }
@@ -597,7 +322,7 @@ int Module::loadItFile()
     for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
         itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
     for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
-        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );        
+        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );
 
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
 #ifdef debug_it_loader
@@ -622,9 +347,9 @@ int Module::loadItFile()
     nInstruments_ = itFileHeader.nInstruments;
     if ( itFileHeader.flags & IT_INSTRUMENT_MODE )
     {
-        for ( 
-            int instrumentNr = 1; 
-            instrumentNr <= itFileHeader.nInstruments; 
+        for (
+            int instrumentNr = 1;
+            instrumentNr <= itFileHeader.nInstruments;
             instrumentNr++ )
         {
             itFile.absSeek( instHdrPtrs[instrumentNr - 1] );
@@ -641,11 +366,11 @@ int Module::loadItFile()
     for ( unsigned sampleNr = 1; sampleNr <= nSamples_; sampleNr++ )
     {
         itFile.absSeek( smpHdrPtrs[sampleNr - 1] );
-        int result = loadItSample( 
+        int result = loadItSample(
             itFile,
             sampleNr,
             convertToInstrument,
-            isIt215Compression 
+            isIt215Compression
         );
         if ( result ) return 0;
     }
@@ -874,16 +599,13 @@ int Module::loadItSample(
 
         // Now take care of the sample data:
         unsigned    dataLength = sample.length;
-        if ( is16bitData )
-        {
+        if ( is16bitData ) {
             sample.dataType = SAMPLEDATA_SIGNED_16BIT;
             dataLength <<= 1;
         } else {
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
         }
-
         itFile.absSeek( itSampleHeader.samplePointer );
-
         unsigned char *buffer = new unsigned char[dataLength];
 
         if ( !isCompressed )
@@ -891,15 +613,12 @@ int Module::loadItSample(
             if ( itFile.read( buffer,dataLength ) ) return 0;
         } else {
             // decompress sample here
-            // std::cout << std::endl << "isIt215Compression: " << isIt215Compression << std::endl;
-            ItSex itSex;
-            itSex.setIT215CompressionFlag( isIt215Compression );
+            ItSex itSex( isIt215Compression );
             if ( is16bitData )
                 itSex.itsex_decompress16( itFile,buffer,sample.length );
-            else 
+            else
                 itSex.itsex_decompress8( itFile,buffer,sample.length );
         }
-
         sample.data = (SHORT *)buffer;
 
         // convert unsigned to signed sample data:
@@ -1401,6 +1120,8 @@ int Module::loadItPattern(
 
 
 
+
+
 // DEBUG helper functions that write verbose output to the screen:
 
 void ItDebugShow::fileHeader( ItFileHeader& itFileHeader )
@@ -1547,7 +1268,7 @@ void ItDebugShow::sampleHeader( ItSampleHeader& itSampleHeader )
     bool    is16bitData = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
     bool    isCompressed = (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) != 0;
     bool    isStereoSample = (itSampleHeader.flag & IT_SMP_IS_STEREO) != 0;
-    std::cout 
+    std::cout
         << std::endl << "Tag                 : " << itSampleHeader.tag[0]
         << itSampleHeader.tag[1] << itSampleHeader.tag[2] << itSampleHeader.tag[3]
         << std::endl << "Dos filename        : " << itSampleHeader.fileName
