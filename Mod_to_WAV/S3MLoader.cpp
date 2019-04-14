@@ -170,7 +170,6 @@ int Module::loadS3mFile() {
         std::cout << std::endl
             << "SCRM tag not found or file is too small, exiting.";
 #endif
-        //delete[] buf;
         return 0;
     }
     s3mFileHeader.id = '\0'; // use the DOS EOF marker as end of cstring marker    

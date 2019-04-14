@@ -115,7 +115,7 @@ public:
     }
     ~VirtualFile()
     {
-        delete data_;
+        delete[] data_;
     }
     IOError     getIOError()
     {
@@ -169,8 +169,6 @@ public:
         }
         return VIRTFILE_NO_ERROR;
     }
-
-
     IOError     relSeek( int position )
     {
         if ( data_ == nullptr )

@@ -27,37 +27,37 @@ bool Sample::load(const SampleHeader &sampleHeader)
         unsigned k = length_ + 2 * INTERPOLATION_SPACER;
         k += 16;
         k &= 0xFFFFFFF0; 
-        data_ = new SHORT [k]; 
+        data_ = new SHORT[k]; 
 
         switch (sampleHeader.dataType) {
             case SAMPLEDATA_SIGNED_16BIT:
-                {
-                    SHORT  *ps = (SHORT *) sampleHeader.data;
-                    SHORT  *pd = (data_ + INTERPOLATION_SPACER);
+            {
+                SHORT  *ps = (SHORT *) sampleHeader.data;
+                SHORT  *pd = (data_ + INTERPOLATION_SPACER);
 
-                    for (unsigned j = 0; j < length_; j++) {
-                        *pd++ = *ps++;
-                    }
-                    break;
+                for (unsigned j = 0; j < length_; j++) {
+                    *pd++ = *ps++;
                 }
+                break;
+            }
             case SAMPLEDATA_SIGNED_8BIT:
-                {
-                    signed char *ps = (signed char *)(sampleHeader.data);
-                    SHORT       *pd = (data_ + INTERPOLATION_SPACER);
+            {
+                signed char *ps = (signed char *)(sampleHeader.data);
+                SHORT       *pd = (data_ + INTERPOLATION_SPACER);
 
-                    for ( unsigned j = 0; j < length_; j++ ) {
-                        *pd++ = *ps++ << 8;
-                    }
-                    break;
+                for ( unsigned j = 0; j < length_; j++ ) {
+                    *pd++ = *ps++ << 8;
                 }
-            default :
-                {
-                    return false;
-                }
+                break;
+            }
+            default:
+            {
+                return false;
+            }
         }
         if ( INTERPOLATION_SPACER ) {
             SHORT   *iData = data_ + INTERPOLATION_SPACER;
-            for (unsigned iSamples = INTERPOLATION_SPACER; iSamples; iSamples--) {
+            for ( unsigned iSamples = INTERPOLATION_SPACER; iSamples; iSamples-- ) {
                 data_[iSamples - 1] = 
                     data_[INTERPOLATION_SPACER] -
                     iData[INTERPOLATION_SPACER - iSamples + 1];
@@ -79,5 +79,5 @@ bool Sample::load(const SampleHeader &sampleHeader)
 }
 
 Sample::~Sample() {
-    delete data_;
+    delete[] data_;
 }

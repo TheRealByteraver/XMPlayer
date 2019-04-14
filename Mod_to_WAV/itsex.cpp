@@ -4,16 +4,16 @@
 
 #include "itsex.h"
 
+// gets block of compressed data from file 
 int ItSex::readblock( VirtualFile& file )
-{
-    // gets block of compressed data from file 
+{    
     unsigned short size;
     file.read( &size,sizeof( unsigned short ) );
     if ( !size ) 
         return 0;
     sourcebuffer = new unsigned char[size];
     if ( file.read( sourcebuffer,size ) ) {
-        delete sourcebuffer;
+        delete[] sourcebuffer;
         sourcebuffer = nullptr;
         return 0;
     }
@@ -26,7 +26,7 @@ int ItSex::readblock( VirtualFile& file )
 // frees that block again
 int ItSex::freeblock() 
 {
-    delete sourcebuffer;
+    delete[] sourcebuffer;
     sourcebuffer = nullptr;
     return 1;
 }
@@ -63,15 +63,15 @@ unsigned ItSex::readbits( unsigned char n )
 //                                     uncompressed sample, IT2.15
 //                                     compression flag
 //                            returns: status                     )    
-int ItSex::itsex_decompress8( VirtualFile& module,void *dst,int len )
+int ItSex::decompress8( VirtualFile& module,void *dst,int len )
 {
-    char            *destbuf;   // the destination buffer which will be returned 
+    char*           destbuf;   // the destination buffer which will be returned 
     unsigned short  blklen;     // length of compressed data block in samples 
     unsigned short  blkpos;		// position in block 
     unsigned char   width;		// actual "bit width" 
     unsigned short  value;		// value read from file to be processed 
     char            d1,d2;		// integrator buffers (d2 for it2.15) 
-    char            *destpos;
+    char*           destpos;
 
     destbuf = (char *)dst;
     if ( !destbuf )
@@ -142,16 +142,16 @@ int ItSex::itsex_decompress8( VirtualFile& module,void *dst,int len )
 // decompresses 16-bit sample (params : file, outbuffer, lenght of
 //                                     uncompressed sample, IT2.15
 //                                     compression flag
-//                            returns: status                     )
-int ItSex::itsex_decompress16( VirtualFile& module,void *dst,int len )
+//                             returns: status                     )
+int ItSex::decompress16( VirtualFile& module,void *dst,int len )
 {
-    short           *destbuf;	// the destination buffer which will be returned 
+    short*          destbuf;	// the destination buffer which will be returned 
     unsigned        blklen;		// length of compressed data block in samples 
     unsigned        blkpos;		// position in block 
     unsigned char   width;		// actual "bit width" 
     unsigned        value;		// value read from file to be processed 
     int             d1,d2;		// integrator buffers (d2 for it2.15) 
-    short           *destpos;
+    short*          destpos;
 
     destbuf = (short *)dst;
     if ( !destbuf )
@@ -175,38 +175,33 @@ int ItSex::itsex_decompress16( VirtualFile& module,void *dst,int len )
         while ( blkpos < blklen ) {
             short v;
 
-            value = readbits( width );	                             // read bits 
+            value = readbits( width );	                            // read bits 
 
-            if ( width < 7 ) {	                                     // method 1 (1-6 bits) 
-                if ( value == (1 << (width - 1)) ) {	             // check for "100..." 
-                    value = readbits( 4 ) + 1;	                     // yes -> read new width; 
-                    width = (value < width) ? value : value + 1;	 // and expand it 
-                    continue;	                                     // ... next value 
+            if ( width < 7 ) {	                                    // method 1 (1-6 bits) 
+                if ( value == (1 << (width - 1)) ) {	            // check for "100..." 
+                    value = readbits( 4 ) + 1;	                    // yes -> read new width; 
+                    width = (value < width) ? value : value + 1;	// and expand it 
+                    continue;	                                    // ... next value 
                 }
             } 
-            else {
-                if ( width < 17 ) {	                             // method 2 (7-16 bits) 
-                    unsigned short border = (0xFFFF >> (17 - width)) - 8;// lower border for width chg 
-
-                    if ( value > ( unsigned )border && value <= (unsigned)(border + 16) ) {
-                        value -= border;	                             // convert width to 1-8 
-                        width = (value < width) ? value : value + 1;	 // and expand it 
-                        continue;	                                     // ... next value 
-                    }
-                } 
-                else {
-                    if ( width == 17 ) {	                             // method 3 (17 bits) 
-                        if ( value & 0x10000 ) {                         // bit 16 set? 
-                            width = (value + 1) & 0xff;	                 // new width... 
-                            continue;	                                 // ... and next value 
-                        }
-                    } 
-                    else {	                                         // illegal width, abort 
-                        freeblock();
-                        return 0;
-                    }
+            else if ( width < 17 ) {	                            // method 2 (7-16 bits) 
+                unsigned short border = (0xFFFF >> (17 - width)) - 8;// lower border for width chg 
+                if ( value > ( unsigned )border && value <= (unsigned)(border + 16) ) {
+                    value -= border;	                            // convert width to 1-8 
+                    width = (value < width) ? value : value + 1;	// and expand it 
+                    continue;	                                    // ... next value 
                 }
-            }
+            } 
+            else if ( width == 17 ) {	                            // method 3 (17 bits) 
+                if ( value & 0x10000 ) {                            // bit 16 set? 
+                    width = (value + 1) & 0xff;	                    // new width... 
+                    continue;	                                    // ... and next value 
+                }
+            } 
+            else {	                                         // illegal width, abort 
+                freeblock();
+                return 0;
+            }            
 
             // now expand value to signed word 
             if ( width < 16 ) {

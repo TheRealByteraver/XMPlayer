@@ -326,7 +326,7 @@ public:
         data_ = new Note[nChannels * nRows];
         memset( data_,0,nChannels * nRows * sizeof( Note ) );
     }
-    ~Pattern () { delete data_; }
+    ~Pattern () { delete[] data_; }
     void            initialise( unsigned nChannels,unsigned nRows,Note *data )
     {
         nChannels_ = nChannels;
@@ -611,27 +611,30 @@ public:
         loadFile( fileName ); 
     }
     ~Module();
-    std::string     getFileName ()               { return fileName_;             }
+    std::string     getFileName()                { return fileName_;             }
     void            setFileName( std::string &fileName ) { fileName_ = fileName; }
-    int             loadFile ();
+    int             loadFile();
     int             loadFile( std::string &fileName )
                     { setFileName( fileName ); return loadFile(); }
-    bool            isLoaded ()                 { return isLoaded_;             }
-    bool            useLinearFrequencies ()     { return useLinearFrequencies_; }
-    bool            isCustomRepeat ()           { return isCustomRepeat_;       }
-    unsigned        getTrackerType ()           { return trackerType_;          }
-    unsigned        getMinPeriod ()             { return minPeriod_;            }
-    unsigned        getMaxPeriod ()             { return maxPeriod_;            }
+    bool            isLoaded()                  { return isLoaded_;             }
+    bool            getVerboseMode()            { return showDebugInfo_;        }
+    void            enableDebugMode()           { showDebugInfo_ = true;        }
+    void            disableDebugMode()          { showDebugInfo_ = false;       }
+    bool            useLinearFrequencies()      { return useLinearFrequencies_; }
+    bool            isCustomRepeat()            { return isCustomRepeat_;       }
+    unsigned        getTrackerType()            { return trackerType_;          }
+    unsigned        getMinPeriod()              { return minPeriod_;            }
+    unsigned        getMaxPeriod()              { return maxPeriod_;            }
     unsigned        getPanningStyle()           { return panningStyle_;         }
-    unsigned        getnChannels ()             { return nChannels_;            }
-    unsigned        getnInstruments ()          { return nInstruments_;         }
-    unsigned        getnSamples ()              { return nSamples_;             }
-    unsigned        getnPatterns ()             { return nPatterns_;            }
-    unsigned        getDefaultTempo ()          { return defaultTempo_;         }
-    unsigned        getDefaultBpm ()            { return defaultBpm_;           }
-    unsigned        getSongLength ()            { return songLength_;           }
-    unsigned        getSongRestartPosition ()   { return songRestartPosition_;  }
-    std::string     getSongTitle ()             { return songTitle_;            }
+    unsigned        getnChannels()              { return nChannels_;            }
+    unsigned        getnInstruments()           { return nInstruments_;         }
+    unsigned        getnSamples()               { return nSamples_;             }
+    unsigned        getnPatterns()              { return nPatterns_;            }
+    unsigned        getDefaultTempo()           { return defaultTempo_;         }
+    unsigned        getDefaultBpm()             { return defaultBpm_;           }
+    unsigned        getSongLength()             { return songLength_;           }
+    unsigned        getSongRestartPosition()    { return songRestartPosition_;  }
+    std::string     getSongTitle()              { return songTitle_;            }
 
     unsigned        getDefaultPanPosition( unsigned i ) 
     { 
@@ -664,6 +667,7 @@ private:
     std::string     songTitle_;
     std::string     trackerTag_;
     unsigned        trackerType_;
+    bool            showDebugInfo_;
     bool            isLoaded_;
     bool            useLinearFrequencies_;
     bool            isCustomRepeat_;
@@ -687,14 +691,20 @@ private:
     Sample          emptySample_;
     Instrument      emptyInstrument_;
 
-    int             loadModFile ();
-    int             loadS3mFile ();
-    int             loadXmFile ();
+    int             loadItFile();
+    int             loadXmFile();
+    int             loadS3mFile();
+    int             loadModFile();
 
     int             loadItInstrument( VirtualFile& itFile,int instrumentNr,unsigned createdWTV );
     int             loadItSample( VirtualFile& itFile,int sampleNr,bool convertToInstrument,bool isIt215Compression );
     int             loadItPattern( VirtualFile & itFile,int patternNr );
-    int             loadItFile ();
+
+    int             loadXmInstrument( VirtualFile& xmFile,int instrumentNr );
+    int             loadXmSample( VirtualFile& xmFile,int sampleNr );
+    int             loadXmPattern( VirtualFile & xmFile,int patternNr );
+
+    void            playSample( int sampleNr ); // for debugging purposes
 };
 
 #endif // MODULE_H

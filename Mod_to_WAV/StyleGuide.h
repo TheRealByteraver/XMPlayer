@@ -18,6 +18,8 @@
         - date
         - purpose
 
+    - Source lines should not exceed 80 characters
+
 
 */
 
@@ -81,7 +83,7 @@ void MyClass::privateFunction()
     }
 
     int a = 7;
-    switch ( a ) { 
+    switch ( a ) { // accolade on same line
         case 1:
         {
             break;

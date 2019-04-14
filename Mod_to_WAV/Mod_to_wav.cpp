@@ -45,6 +45,32 @@ EE  PatternDelay                        implemented
 EF  Invert Loop
 ---------------------------------
 
+
+
+
+
+bugs:
+- .S3M initial panning is wrong
+
+
+Fixed / cleared up:
+- ssi2.s3m is read as 6 chn???
+--> channel was muted in modplug tracker
+- SSI.S3M: weird deformed sample in 2nd part of the song (after start eastern type music)
+--> portamento memory fixed (hopefully)
+- menutune3.s3m: FF1 effect corrupts sample data (??)
+--> FF1 effect fixed (it did not corrupt sample data)
+- ALGRHYTH.MOD: ghost notes / high pitched notes in 2nd half of song
+--> portamento bug
+- 2ND_PM.S3M: ghost notes / missing notes towards the end of the song
+- arpeggio counter should not be reset when a new note occurs!
+--> at least not in FT2
+- aryx.s3m: too high notes in pattern data
+--> key off commands, is normal
+- SSI.S3M: ghost notes towards the end
+--> should be ok now
+
+
 */
 
 
@@ -64,39 +90,12 @@ EF  Invert Loop
 #include <vector>
 #include <iostream> // for debugging
 #include <iomanip>  // for debugging
-#include "time.h"
 
+#include "time.h"
 #include "Module.h"
 #include "VirtualFile.h" // debug
 
-//extern const char *noteStrings[2 + MAXIMUM_NOTES];
-
-/*
-bugs:
-    - .S3M initial panning is wrong
-
-
-Fixed / cleared up:
-    - ssi2.s3m is read as 6 chn???  
-      --> channel was muted in modplug tracker
-    - SSI.S3M: weird deformed sample in 2nd part of the song (after start eastern type music)
-      --> portamento memory fixed (hopefully)
-    - menutune3.s3m: FF1 effect corrupts sample data (??)
-      --> FF1 effect fixed (it did not corrupt sample data)
-    - ALGRHYTH.MOD: ghost notes / high pitched notes in 2nd half of song 
-      --> portamento bug
-    - 2ND_PM.S3M: ghost notes / missing notes towards the end of the song
-    - arpeggio counter should not be reset when a new note occurs!
-      --> at least not in FT2
-    - aryx.s3m: too high notes in pattern data
-      --> key off commands, is normal
-    - SSI.S3M: ghost notes towards the end
-      --> should be ok now
-
-*/
-
 //#define debug_mixer
-
 
 const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
     "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
@@ -158,7 +157,6 @@ public:
     unsigned        instrumentNo;
     unsigned        sampleNo;
     unsigned        sampleOffset;
-
 
     /*
     effect memory & index counters:
@@ -418,12 +416,6 @@ int Mixer::initialise(Module *m) {
             break;
         }
     }
-    /*
-    for (unsigned i = 0; i < nChannels; i++) {
-        if ( channels[i] == nullptr )
-            channels[i] = new Channel;             
-    }
-    */
     resetSong();
     isInitialised = true;
     return 0;
@@ -700,8 +692,8 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
 Mixer::~Mixer() {
     //for (unsigned i = 0; i < PLAYER_MAX_CHANNELS; i++) delete channels[i];
     //for (unsigned i = 0; i < MIXER_MAX_CHANNELS; i++) delete mixerChannels[i];
-    delete waveHeaders;
-    delete mixBuffer;
+    delete[] waveHeaders;
+    delete[] mixBuffer;
     return;
 }
 
@@ -2228,7 +2220,7 @@ int Mixer::updateEffects () {
                 Handle the pitch & other commands
             */
             switch ( effect ) {
-                case ARPEGGIO :
+                case ARPEGGIO:
                 {
                     if ( channel.pSample ) {                        
                         channel.arpeggioCount++;
@@ -2236,7 +2228,7 @@ int Mixer::updateEffects () {
                             channel.arpeggioCount = 0; // added 
                         unsigned arpeggioPeriod;
                         switch ( channel.arpeggioCount ) {
-                            case 0 : 
+                            case 0: 
                             {
                                 arpeggioPeriod = noteToPeriod(
                                         channel.lastNote +
@@ -2245,7 +2237,7 @@ int Mixer::updateEffects () {
                                 );
                                 break;
                             }
-                            case 1 :
+                            case 1:
                             {
                                 arpeggioPeriod = noteToPeriod(
                                         channel.arpeggioNote1 +
@@ -2254,7 +2246,7 @@ int Mixer::updateEffects () {
                                 );
                                 break;
                             }
-                            case 2 : 
+                            default: // case 2:
                             {
                                 arpeggioPeriod = noteToPeriod(
                                         channel.arpeggioNote2 +
@@ -2353,12 +2345,6 @@ int Mixer::updateEffects () {
                     else                           tableIdx = channel.vibratoCount;                    
                     switch ( channel.vibratoWaveForm & 0x3 )
                     {
-                        case VIBRATO_RANDOM:
-                        case VIBRATO_SINEWAVE:
-                        {
-                            vibAmp = sineTable[tableIdx];
-                            break;
-                        }
                         case VIBRATO_RAMPDOWN:
                         {
                             tableIdx <<= 3;
@@ -2369,6 +2355,13 @@ int Mixer::updateEffects () {
                         case VIBRATO_SQUAREWAVE:
                         {
                             vibAmp = 255;
+                            break;
+                        }
+                        //case VIBRATO_RANDOM:
+                        //case VIBRATO_SINEWAVE:
+                        default:
+                        {
+                            vibAmp = sineTable[tableIdx];
                             break;
                         }
                     }
@@ -2610,7 +2603,8 @@ int Mixer::updateEffects () {
     return 0;
 }
 
-int Mixer::updateImmediateEffects () {
+int Mixer::updateImmediateEffects () 
+{
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
         Channel&     channel = channels[iChannel];
         for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) {
@@ -2667,7 +2661,6 @@ int Mixer::updateImmediateEffects () {
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );                                    
-                            //std::cout << " F ^ by " << channel.lastFinePortamentoUp;
                             break;
                         }
                         case FINE_PORTAMENTO_DOWN :
@@ -2679,7 +2672,6 @@ int Mixer::updateImmediateEffects () {
                                 channel.period = module->getMaxPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
-                            //std::cout << " F v by " << channel.lastFinePortamentoDown;
                             break;
                         }
                         case FINE_VOLUME_SLIDE_UP :
@@ -2721,7 +2713,6 @@ int Mixer::updateImmediateEffects () {
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
-                            //std::cout << " XF ^ by " << channel.lastExtraFinePortamentoUp;
                             break;
                         }
                         case EXTRA_FINE_PORTAMENTO_DOWN :
@@ -2732,7 +2723,6 @@ int Mixer::updateImmediateEffects () {
                                 channel.period = module->getMaxPeriod();
                             setFrequency( iChannel,
                                 periodToFrequency( channel.period ) );
-                            //std::cout << " XF v by " << channel.lastExtraFinePortamentoDown;
                             break;
                         }
                     }
@@ -2744,14 +2734,16 @@ int Mixer::updateImmediateEffects () {
     return 0;
 }
 
-int Mixer::setVolumes () {
+int Mixer::setVolumes () 
+{
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
         setMixerVolume(iChannel);
     }
     return 0;
 }
 
-int Mixer::updateBpm () {
+int Mixer::updateBpm () 
+{
     tick++;
     if ( tick < tempo ) { 
         updateEffects ();         
@@ -2906,7 +2898,8 @@ vibrato is active even if envelope is not
 vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 */
 
-int main(int argc, char *argv[])  { 
+int main(int argc, char *argv[])  
+{ 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
         
@@ -2946,6 +2939,8 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
+        "D:\\MODS\\dosprog\\mods\\starsmuz.xm",
+        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
         "D:\\MODS\\M2W_BUGTEST\\women.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
@@ -2956,7 +2951,6 @@ int main(int argc, char *argv[])  {
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
         "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
 
-        //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
         //"D:\\MODS\\M2W_BUGTEST\\slow-motion-pos15-porta.mod",
@@ -2977,7 +2971,6 @@ int main(int argc, char *argv[])  {
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\dosprog\\mods\\women.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
-        //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\MODS\\dosprog\\china1-okt.s3m",
         //"D:\\MODS\\dosprog\\2nd_pm.xm",
@@ -3208,17 +3201,18 @@ int main(int argc, char *argv[])  {
             return 0;
         }
     }
-    
-
 
     for (unsigned i = 0; i < filePaths.size(); i++) {
-        Module      sourceFile( filePaths[i] );
+        Module      sourceFile;
         Mixer       mixer;
 
-        std::cout << "\n\nLoading " << filePaths[i].c_str()//moduleFilename
+        sourceFile.enableDebugMode();
+        sourceFile.loadFile( filePaths[i] );
+
+        std::cout << "\n\nLoading " << filePaths[i].c_str() //moduleFilename
                   << ": " << (sourceFile.isLoaded() ? "Success." : "Error!") << std::endl;
 
-        if (sourceFile.isLoaded ()) {
+        if ( sourceFile.isLoaded () ) {
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
                       << sourceFile.getSongTitle().c_str()  
@@ -3234,7 +3228,6 @@ int main(int argc, char *argv[])  {
                     << sourceFile.getInstrument( i )->getName().c_str() 
                     << std::endl;
             }
-
 
             _getch();
             mixer.initialise( &sourceFile );          

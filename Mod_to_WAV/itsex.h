@@ -147,16 +147,16 @@ public:
         sourcebuffer = nullptr;
         ibuf = nullptr;	                          /* actual reading position */        
     }
-    int itsex_decompress8( VirtualFile& module,void *dst,int len );
-    int itsex_decompress16( VirtualFile& module,void *dst,int len );
+    int decompress8( VirtualFile& module,void *dst,int len );
+    int decompress16( VirtualFile& module,void *dst,int len );
 
 private:
     int readblock( VirtualFile& file );
     int freeblock();
     unsigned readbits( unsigned char n );
 
-    unsigned char    *sourcebuffer;
-    unsigned char    *ibuf;
+    unsigned char*   sourcebuffer;
+    unsigned char*   ibuf;
     unsigned         bitlen;
     unsigned char    bitnum;
     bool             isIt215Compression_;
