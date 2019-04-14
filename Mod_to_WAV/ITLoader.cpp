@@ -346,7 +346,7 @@ int Module::loadItFile()
     // load instruments
     nInstruments_ = itFileHeader.nInstruments;
     if ( itFileHeader.flags & IT_INSTRUMENT_MODE ) {
-        for ( int instNr = 1; instNr <= nInstruments_; instNr++ ) {
+        for ( unsigned instNr = 1; instNr <= nInstruments_; instNr++ ) {
             itFile.absSeek( instHdrPtrs[instNr - 1] );
             if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
                 return 0;

@@ -701,7 +701,7 @@ private:
     int             loadItPattern( VirtualFile & itFile,int patternNr );
 
     int             loadXmInstrument( VirtualFile& xmFile,int instrumentNr );
-    int             loadXmSample( VirtualFile& xmFile,int sampleNr );
+    int             loadXmSample( VirtualFile & xmFile,int sampleNr,SampleHeader& sampleHeader );
     int             loadXmPattern( VirtualFile & xmFile,int patternNr );
 
     void            playSample( int sampleNr ); // for debugging purposes

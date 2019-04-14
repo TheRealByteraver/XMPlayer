@@ -2924,7 +2924,7 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
-        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\believe.mod",
