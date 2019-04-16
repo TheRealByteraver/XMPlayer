@@ -97,23 +97,10 @@ Fixed / cleared up:
 
 //#define debug_mixer
 
-const char *noteStrings[2 + MAXIMUM_NOTES] = { "---",
-    "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
-    "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
-    "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
-    "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
-    "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
-    "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
-    "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
-    "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
-    "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
-    "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
-    "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
-    "==="
-};
 
 
-#define BUFFER_LENGTH_IN_MINUTES   10
+
+#define BUFFER_LENGTH_IN_MINUTES   16
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -1201,11 +1188,10 @@ int Mixer::updateNotes () {
         if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
-            channel.pInstrument = module->getInstrument( instrument /* - 1 */ ); 
+            channel.pInstrument = module->getInstrument( instrument ); 
             if ( channel.pInstrument ) 
             {
-                if ( channel.lastNote ) 
-                {
+                if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                         ( channel.lastNote - 1 );
                     // std::cout << std::setw( 4 ) << sample; // DEBUG
@@ -1214,11 +1200,11 @@ int Mixer::updateNotes () {
                         module->getSample( sample );
 
                 }
-                if ( channel.pSample ) 
-                {
+                if ( channel.pSample ) {
                     channel.volume = channel.pSample->getVolume();
                     isValidInstrument = true;
-                } else {
+                } 
+                else {
                     isValidInstrument = false;
                     replay = false;
                     stopChannelPrimary( iChannel ); // sundance.mod illegal sample
@@ -1245,10 +1231,11 @@ int Mixer::updateNotes () {
                 }
             }
             channel.sampleOffset = 0;
-        } else {
+        } 
+        else {
             isNewInstrument = false;
             channel.pInstrument = 
-                module->getInstrument( oldInstrument /* - 1 */ );
+                module->getInstrument( oldInstrument );
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
@@ -1261,7 +1248,8 @@ int Mixer::updateNotes () {
             }
         }
 
-        if ( isNewInstrument ) channel.instrumentNo = instrument;
+        if ( isNewInstrument ) 
+            channel.instrumentNo = instrument;
 
         //if ( isNewNote ) replay = true;
         channel.oldNote = channel.newNote;
@@ -1346,8 +1334,7 @@ int Mixer::updateNotes () {
                 
             */
             if ( st3StyleEffectMemory_ && argument &&
-                (fxloop == (MAX_EFFECT_COLUMNS - 1)) )
-            {
+                (fxloop == (MAX_EFFECT_COLUMNS - 1)) ) {
                 //channel.lastNonZeroFXArg = argument; 
                 channel.lastVolumeSlide     = argument;
                 channel.lastPortamentoDown  = argument;
@@ -2913,6 +2900,7 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
+        //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
@@ -2924,7 +2912,7 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
-        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
+        //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
         //"D:\\MODS\\M2W_BUGTEST\\believe.mod",
@@ -2939,9 +2927,9 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
-        "D:\\MODS\\dosprog\\mods\\starsmuz.xm",
-        "D:\\MODS\\dosprog\\mods\\pullmax.xm",
-        "D:\\MODS\\M2W_BUGTEST\\women.it",
+        //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
+        //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
+        "D:\\MODS\\M2W_BUGTEST\\womeni.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6

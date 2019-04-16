@@ -12,19 +12,14 @@ Thanks must go to:
 #pragma comment (lib, "winmm.lib") 
 #include <iostream>
 #include <fstream>
+#include <bitset>
+#include <iomanip>
 
 #include "Module.h"
 #include "virtualfile.h"
 
-//#define debug_s3m_loader
 //#define debug_s3m_show_patterns
-//#define debug_s3m_play_samples
-
-
-#ifdef debug_s3m_loader
-#include <bitset>
-#include <iomanip>
-#endif
+#define debug_s3m_play_samples
 
 #define S3M_MIN_FILESIZE                    (sizeof(S3mFileHeader) + \
                                              sizeof(S3mInstHeader) + 64 + 16)
@@ -124,36 +119,27 @@ struct S3mUnpackedNote {
 };
 #pragma pack (8) 
 
-#ifdef debug_s3m_loader
-const char *notetable[] = { 
-    "---",
-    "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
-    "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
-    "C-2","C#2","D-2","D#2","E-2","F-2","F#2","G-2","G#2","A-2","A#2","B-2",
-    "C-3","C#3","D-3","D#3","E-3","F-3","F#3","G-3","G#3","A-3","A#3","B-3",
-    "C-4","C#4","D-4","D#4","E-4","F-4","F#4","G-4","G#4","A-4","A#4","B-4",
-    "C-5","C#5","D-5","D#5","E-5","F-5","F#5","G-5","G#5","A-5","A#5","B-5",
-    "C-6","C#6","D-6","D#6","E-6","F-6","F#6","G-6","G#6","A-6","A#6","B-6",
-    "C-7","C#7","D-7","D#7","E-7","F-7","F#7","G-7","G#7","A-7","A#7","B-7",
-    "C-8","C#8","D-8","D#8","E-8","F-8","F#8","G-8","G#8","A-8","A#8","B-8",
-    "C-9","C#9","D-9","D#9","E-9","F-9","F#9","G-9","G#9","A-9","A#9","B-9",
-    "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
-    "==="
+class S3mDebugShow {
+public:
+    static void fileHeader( S3mFileHeader& s3mFileHeader );
+    static void instHeader( S3mInstHeader& s3mInstHeader );
+    static void pattern( S3mUnpackedNote* unPackedPtn,int nChannels );
 };
-#endif
+
+void remapS3mEffects( Effect& remapFx ); // temp forward declaration
+
 
 int Module::loadS3mFile() {
-    // initialize s3m specific variables:
-    minPeriod_ = 56;    // periods[9 * 12 - 1]
-    maxPeriod_ = 27392; // periods[0]
-    // load file into byte buffer and then work on that buffer only
     isLoaded_ = false;
 
+    // load file into byte buffer and then work on that buffer only
     VirtualFile s3mFile( fileName_ );
-    if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) return 0;
+    if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) 
+        return 0;
     S3mFileHeader s3mFileHeader;
     unsigned fileSize = s3mFile.fileSize();
-    if ( s3mFile.read( &s3mFileHeader,sizeof( S3mFileHeader ) ) ) return 0;
+    if ( s3mFile.read( &s3mFileHeader,sizeof( S3mFileHeader ) ) ) 
+        return 0;
 
     // some very basic checking
     if ( (fileSize < S3M_MIN_FILESIZE) ||
@@ -166,81 +152,56 @@ int Module::loadS3mFile() {
         || (s3mFileHeader.sampleDataType < 1)
         || (s3mFileHeader.sampleDataType > 2)
         ) { 
-#ifdef debug_s3m_loader
-        std::cout << std::endl
-            << "SCRM tag not found or file is too small, exiting.";
-#endif
+        if ( showDebugInfo_ )
+            std::cout
+            << "\nSCRM tag not found or file is too small, exiting.";
         return 0;
     }
     s3mFileHeader.id = '\0'; // use the DOS EOF marker as end of cstring marker    
-#ifdef debug_s3m_loader
-    std::cout << std::endl
-        << "header info:" << std::endl
-        << "songTitle:          " << s3mFileHeader.songTitle << std::endl
-        << "file type:          " << std::hex << (int)s3mFileHeader.fileType << std::endl
-        << "songLength:         " << std::dec << (int)s3mFileHeader.songLength << std::endl
-        << "# Instruments:      " << (int)s3mFileHeader.nInstruments << std::endl
-        << "# Patterns:         " << (int)s3mFileHeader.nPatterns << std::endl
-        << "Flags:              " << std::bitset<16>( s3mFileHeader.flags ) << std::endl
-        << "made w/ (CWTV):     " << std::hex << s3mFileHeader.CWTV << std::endl
-        << "sampleDataType:     ";
-    if ( (int)s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA )
-        std::cout << "unsigned (standard)";
-    else if ( (int)s3mFileHeader.sampleDataType == S3M_SIGNED_SAMPLE_DATA )
-        std::cout << "signed (non-standard)";
-    else std::cout << "illegal value: error in file!";
-    std::cout << std::endl
-        << "globalVolume:       " << std::dec << (int)s3mFileHeader.globalVolume << std::endl
-        << "defaultTempo:       " << (int)s3mFileHeader.defaultTempo << std::endl
-        << "defaultBpm:         " << (int)s3mFileHeader.defaultBpm << std::endl
-        << "masterVolume:       " << (int)s3mFileHeader.masterVolume << std::endl
-        << "gusClickRemoval:    " << (int)s3mFileHeader.gusClickRemoval << std::endl
-        << "useDefaultPanning:  " << (int)s3mFileHeader.useDefaultPanning << std::endl
-        << "customDataPointer:  " << (int)s3mFileHeader.customDataPointer << std::endl
-        << "channelsEnabled:    " << std::dec << std::endl;
-    for ( int chn = 0; chn < 32; chn++ )
-    {
-        std::cout << std::setw( 2 ) << chn << ":" 
-            << std::setw( 3 ) << (int)s3mFileHeader.channelsEnabled[chn] << " ";
-        if ( (chn + 1) % 8 == 0 ) std::cout << std::endl;
-    }
-    std::cout << std::endl;
-#endif
+    if ( showDebugInfo_ )
+        S3mDebugShow::fileHeader( s3mFileHeader );
+
     if ( (s3mFileHeader.CWTV == 0x1300) ||
         (s3mFileHeader.flags & S3M_ST300_VOLSLIDES_FLAG) )
-            trackerType_ = TRACKER_ST300;
-    else    trackerType_ = TRACKER_ST321;
+        trackerType_ = TRACKER_ST300;
+    else    
+        trackerType_ = TRACKER_ST321;
+
+    // initialize s3m specific variables:
+    minPeriod_ = 56;    // periods[9 * 12 - 1]
+    maxPeriod_ = 27392; // periods[0]
+
     nChannels_ = 0;
     int chnRemap[S3M_MAX_CHANNELS];
     int chnBackmap[S3M_MAX_CHANNELS];
     int chnPanVals[S3M_MAX_CHANNELS];
-    for ( int chn = 0; chn < S3M_MAX_CHANNELS; chn++ )
-    {
+    for ( int chn = 0; chn < S3M_MAX_CHANNELS; chn++ ) {
         chnBackmap[chn] = S3M_CHN_UNUSED;
         chnPanVals[chn] = S3M_DEFAULT_PAN_CENTER;
         int chnInfo = (int)s3mFileHeader.channelsEnabled[chn];
-        if ( chnInfo < 16 ) // channel is used! // x64 FT2 detects weird #chn
-        {
+        if ( chnInfo < 16 ) {// channel is used! // x64 FT2 detects weird #chn
             chnBackmap[nChannels_] = chn;
             chnRemap[chn] = nChannels_;
-            if ( chnInfo < 7 )  chnPanVals[nChannels_] = S3M_DEFAULT_PAN_LEFT;
-            else                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_RIGHT;
+            if ( chnInfo < 7 )  
+                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_LEFT;
+            else                
+                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_RIGHT;
             nChannels_++;
-        } else { 
+        } 
+        else 
             chnRemap[chn] = S3M_CHN_UNUSED;
-        }
     }
-#ifdef debug_s3m_loader
-    std::cout << std::endl
-        << "# channels:         " << std::dec << nChannels_;
-    std::cout << std::endl << "Order list: ";
-#endif
-    for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) {
+    if ( showDebugInfo_ )
+        std::cout 
+            << "\nNr of channels   : " << std::dec << nChannels_
+            << "\nOrder list       : ";
+
+    for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) 
         songTitle_ += s3mFileHeader.songTitle[i];
-    }
-    for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) {
+    
+    for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) 
         trackerTag_ += s3mFileHeader.tag[i];
-    }
+    
     useLinearFrequencies_ = false;   // S3M uses AMIGA periods
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
@@ -249,172 +210,143 @@ int Module::loadS3mFile() {
     nSamples_ = 0;
     defaultTempo_ = s3mFileHeader.defaultTempo;
     defaultBpm_ = s3mFileHeader.defaultBpm;
-    if ( defaultTempo_ == 0 || defaultTempo_ == 255 ) defaultTempo_ = 6;
-    if ( defaultBpm_ < 33 ) defaultBpm_ = 125;
+    if ( defaultTempo_ == 0 || defaultTempo_ == 255 ) 
+        defaultTempo_ = 6;
+    if ( defaultBpm_ < 33 ) 
+        defaultBpm_ = 125;
+
     // Read in the Pattern order table:
     memset( patternTable_,0,sizeof( *patternTable_ ) * MAX_PATTERNS );
     nPatterns_ = 0;
     songLength_ = 0;
 
-    for ( int i = 0; i < s3mFileHeader.songLength; i++ )
-    {
+    for ( int i = 0; i < s3mFileHeader.songLength; i++ ) {
         unsigned char readOrder;
-        if ( s3mFile.read( &readOrder,sizeof( unsigned char ) ) ) return 0;
+        if ( s3mFile.read( &readOrder,sizeof( unsigned char ) ) ) 
+            return 0;
         unsigned order = readOrder;
-        //END_OF_SONG_MARKER
-        if ( order == S3M_END_OF_SONG_MARKER ) order = END_OF_SONG_MARKER;
-        else if ( order >= S3M_MARKER_PATTERN ) order = MARKER_PATTERN;
-        else if ( order > nPatterns_ ) nPatterns_ = order;
+        if ( order == S3M_END_OF_SONG_MARKER ) 
+            order = END_OF_SONG_MARKER;
+        else if ( order >= S3M_MARKER_PATTERN ) 
+            order = MARKER_PATTERN;
+        else if ( order > nPatterns_ ) 
+            nPatterns_ = order;
         patternTable_[songLength_] = order;
         songLength_++;        
-#ifdef debug_s3m_loader
-        std::cout << order << " ";
-#endif
-        
+        if ( showDebugInfo_ )
+            std::cout << order << " ";
     }
     nPatterns_++;
-#ifdef debug_s3m_loader
-    std::cout << std::endl
-        << "SongLength (corr.): " << songLength_ << std::endl
-        << "Number of Patterns: " << nPatterns_ << std::endl;
-#endif
+    if ( showDebugInfo_ )
+        std::cout
+            << "\nSong length (corr.): " << songLength_
+            << "\nNr of patterns     : " << nPatterns_;
+
     unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
     unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
     unsigned char   defPanPositions[S3M_MAX_CHANNELS];
-    for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ )
-    {
+    for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ ) {
         unsigned short instPointer;
-        if ( s3mFile.read( &instPointer,sizeof( unsigned short ) ) ) return 0;
+        if ( s3mFile.read( &instPointer,sizeof( unsigned short ) ) ) 
+            return 0;
         instrParaPtrs[nInst] = instPointer;
     }
-    for ( int nPtn = 0; nPtn < s3mFileHeader.nPatterns; nPtn++ )
-    {
+    for ( int nPtn = 0; nPtn < s3mFileHeader.nPatterns; nPtn++ ) {
         unsigned short ptnPointer;
-        if ( s3mFile.read( &ptnPointer,sizeof( unsigned short ) ) ) return 0;
+        if ( s3mFile.read( &ptnPointer,sizeof( unsigned short ) ) ) 
+            return 0;
         ptnParaPtrs[nPtn] = ptnPointer;
     }
-    if ( s3mFile.read( &defPanPositions,sizeof( unsigned char ) * S3M_MAX_CHANNELS ) ) return 0;
+    if ( s3mFile.read( &defPanPositions,sizeof( unsigned char ) * S3M_MAX_CHANNELS ) ) 
+        return 0;
+
     s3mFile.relSeek( -(int)(sizeof( unsigned char ) * S3M_MAX_CHANNELS) );
-
-
 
     // to be reviewed (ugly code) --------------------------
     if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
-    {
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             defaultPanPositions_[i] = (defPanPositions[i] & 0xF) * 16; // convert to 8 bit pan
-    } else {
+    else 
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             defaultPanPositions_[i] = S3M_DEFAULT_PAN_CENTER;
-    }
-    if ( s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT )
-    {
+    
+    if ( s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT ) 
         for ( unsigned i = 0; i < nChannels_; i++ )
-        {                       
             chnPanVals[i] = defaultPanPositions_[chnBackmap[i]];
-        }
-    }    
+
     for ( unsigned i = 0; i < nChannels_; i++ )
-    {
         defaultPanPositions_[i] = chnPanVals[i];
-    }
     // end "to be reviewed" marker -------------------------
 
 
+    if ( showDebugInfo_ ) {
+        std::cout << "\n\nInstrument pointers: ";
+        for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
+            std::cout << instrParaPtrs[i] << " ";
+        std::cout << "\n\nPattern pointers: ";
+        for ( int i = 0; i < s3mFileHeader.nPatterns; i++ )
+            std::cout << ptnParaPtrs[i] << " ";
+        std::cout 
+            << "\n\nUse default panning from file: "
+            << (s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT 
+                ? "yes" : "no");
+        std::cout << "\n\nDefault panning positions: ";
+        for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
+            std::cout << ((int)defPanPositions[i]) << " ";
+        if ( ((int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG) == 0 )
+            std::cout << "\n\nS3M file is in mono mode.";
+        else    
+            std::cout << "\n\nS3M file is in stereo mode.";
+        std::cout << "\nFinal panning positions: ";
+        for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
+            std::cout << ((int)chnPanVals[i]) << " ";
+        std::cout << "\n";
+    }
 
-
-#ifdef debug_s3m_loader
-    std::cout << std::endl << "Instrument pointers: ";
-    for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
-    {
-        std::cout << instrParaPtrs[i] << " ";
-    }
-    std::cout << std::endl << "Pattern pointers: ";
-    for ( int i = 0; i < s3mFileHeader.nPatterns; i++ )
-    {
-        std::cout << ptnParaPtrs[i] << " ";
-    }
-    std::cout << std::endl << "Use default panning from file: "
-        << ((s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT) ?
-        "yes" : "no");
-    std::cout << std::endl << "Default panning positions: ";
-    for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-    {
-        std::cout << ((int)defPanPositions[i]) << " ";
-    }
-    std::cout << std::endl;
-    if ( ((int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG) == 0 )
-            std::cout << "S3M file is in mono mode.";
-    else    std::cout << "S3M file is in stereo mode.";
-    std::cout << std::endl << "Final panning positions: ";
-    for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
-    {
-        std::cout << ((int)chnPanVals[i]) << " ";
-    }
-    std::cout << std::endl;
-#endif
     // read instruments here
     nSamples_ = 0;
     int smpDataPtrs[S3M_MAX_INSTRUMENTS];
     if ( s3mFileHeader.nInstruments > S3M_MAX_INSTRUMENTS )
         s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
-    for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ )
-    {
+
+    for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ ) {
         S3mInstHeader   s3mInstHeader;
         s3mFile.absSeek( 16 * instrParaPtrs[nInst - 1] );
-        if ( s3mFile.read( &s3mInstHeader,sizeof( S3mInstHeader ) ) ) return 0;
+        if ( s3mFile.read( &s3mInstHeader,sizeof( S3mInstHeader ) ) ) 
+            return 0;
 
-        smpDataPtrs[nInst - 1] = 
-            16 * (((int)s3mInstHeader.memSeg << 16) + (int)s3mInstHeader.memOfs);
+        smpDataPtrs[nInst - 1] = 16 * (((int)s3mInstHeader.memSeg << 16)
+                                      + (int)s3mInstHeader.memOfs);
 
-        if ( !s3mInstHeader.c4Speed ) s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
-#ifdef debug_s3m_loader
-        s3mInstHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
-        s3mInstHeader.tag[3] = '\0';                              // debug only
-        std::cout << std::endl
-            << "Instrument nr " << nInst << " info: " << std::endl
-            << "Sample Type:        ";
-        if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE )
-            std::cout << "digital sample";
-        else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_MELODY )
-            std::cout << "adlib melody";
-        else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_DRUM )
-            std::cout << "adlib drum";
-        std::cout << std::endl
-            << "Sample location:    "
-            << (int)s3mInstHeader.memSeg << ":"
-            << (int)s3mInstHeader.memOfs << " " << std::endl;
-        s3mInstHeader.memSeg = '\0'; // so we can read the DOS file name
-        std::cout
-            << "Sample location:    " << smpDataPtrs[nInst] << std::endl
-            << "Length:             " << s3mInstHeader.length << std::endl
-            << "Loop Start:         " << s3mInstHeader.loopStart << std::endl
-            << "Loop End:           " << s3mInstHeader.loopEnd << std::endl
-            << "Volume:             " << (int)s3mInstHeader.volume << std::endl
-            << "0x1D:               0x" << std::hex << (int)s3mInstHeader.reserved << std::endl << std::dec
-            << "pack ID:            " << (int)s3mInstHeader.packId << std::endl
-            << "flags:              " << (int)s3mInstHeader.flags << std::endl
-            << "C2SPD:              " << s3mInstHeader.c4Speed << std::endl
-            << "Sample DOS Name:    " << s3mInstHeader.dosFilename << std::endl
-            << "Name:               " << s3mInstHeader.name << std::endl
-            << "Tag:                " << s3mInstHeader.tag << std::endl;
-#endif
+        if ( !s3mInstHeader.c4Speed ) 
+            s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
+        
+        if ( showDebugInfo_ ) {
+            std::cout
+                << "\n\nInstrument nr " << nInst << " info:"
+                << "\nSample data ptr   : " << smpDataPtrs[nInst - 1];
+            S3mDebugShow::instHeader( s3mInstHeader );
+        }
+        
         if ( (s3mInstHeader.sampleType != 0) &&
-            (s3mInstHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {
-#ifdef debug_s3m_loader
+            (s3mInstHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {           
             // exit on error disabled for 2nd_pm.s3m
-            std::cout << std::endl
-                << "Unable to read adlib samples!"/*", exiting!"*/;
-#endif
+            if ( showDebugInfo_ ) 
+                std::cout
+                    << "\nWarning: song contains Adlib instruments!";
         }
         InstrumentHeader    instrument;
         SampleHeader        sample;
+
         for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
             sample.name += s3mInstHeader.name[i];
+
         instrument.name = sample.name;
-        instrument.nSamples = 1; // redundant?
-        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
-            instrument.sampleForNote[i] = nInst;
+        //instrument.nSamples = 1; // redundant?
+        for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
+            instrument.sampleForNote[i].note = i;            
+            instrument.sampleForNote[i].sampleNr = nInst;
+        }
         sample.length = s3mInstHeader.length;
         sample.repeatOffset = s3mInstHeader.loopStart;
         sample.volume = (int)s3mInstHeader.volume;
@@ -422,66 +354,69 @@ int Module::loadS3mFile() {
         // safety checks:
         if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
             sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart;
-        else sample.repeatLength = sample.length;
-        if ( sample.volume > S3M_MAX_VOLUME ) sample.volume = S3M_MAX_VOLUME;
-        if ( sample.repeatOffset >= sample.length ) sample.repeatOffset = 0;
+        else 
+            sample.repeatLength = sample.length;
+        if ( sample.volume > S3M_MAX_VOLUME ) 
+            sample.volume = S3M_MAX_VOLUME;
+        if ( sample.repeatOffset >= sample.length ) 
+            sample.repeatOffset = 0;
         if ( sample.repeatOffset + sample.repeatLength > sample.length )
             sample.repeatLength = sample.length - sample.repeatOffset;
         sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
+
         if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
             (smpDataPtrs[nInst - 1] != 0)) {
             nSamples_++;
-
             s3mFile.absSeek( smpDataPtrs[nInst - 1] );
             sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
+
             // temp DEBUG:
-            if ( sample.data == nullptr )
-            {
-#ifdef debug_s3m_loader
-                std::cout << std::endl
-                    << "Missing sample data while reading file, exiting!" << std::endl
-                    << "sample.data:   " << std::dec << (unsigned)sample.data << std::endl
-                    << "sample.length: " << sample.length << std::endl
-                    << "data + length: " << (unsigned)(sample.data + sample.length) << std::endl
-                    << "filesize:      " << fileSize << std::endl
-                    << "overshoot:     "
-                    << "NOT AVAILABLE  "
-                    //<< (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
-                    << std::endl;
-#endif
+            if ( sample.data == nullptr ) {
+                if ( showDebugInfo_ ) 
+                    std::cout << std::dec
+                        << "\nMissing sample data while reading file, exiting!"
+                        << "\nsample.data:   " << (unsigned)sample.data
+                        << "\nsample.length: " << sample.length
+                        << "\ndata + length: " << (unsigned)(sample.data + sample.length)
+                        << "\nfilesize:      " << fileSize
+                        << "\novershoot:     "
+                        << "\nNOT AVAILABLE  "
+                        //<< (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
+                        << "\n";
                 return 0;
             }
 
-            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             // convert sample data from unsigned to signed:
+            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
                 unsigned char *s = (unsigned char *)sample.data;
                 for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
             }            
             // finetune + relative note recalc
-            unsigned int s3mPeriod = ((unsigned)8363 * periods[4 * 12]) / s3mInstHeader.c4Speed;
+            unsigned int s3mPeriod = 
+                ((unsigned)8363 * periods[4 * 12]) / s3mInstHeader.c4Speed;
+
             unsigned j;
-            for ( j = 0; j < MAXIMUM_NOTES; j++ ) {
+            for ( j = 0; j < MAXIMUM_NOTES; j++ ) 
                 if ( s3mPeriod >= periods[j] ) break;
-            }
+            
             if ( j < MAXIMUM_NOTES ) {
                 sample.relativeNote = j - (4 * 12);
                 sample.finetune = (int)round(
                     ((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
                      * 128.0) - 128;
-            } else { 
+            } 
+            else { 
                 sample.relativeNote = 0;
                 sample.finetune = 0;
             }
-#ifdef debug_s3m_loader
-            std::cout 
-                << "relative note: " 
-                << notetable[4 * 12 + sample.relativeNote] << std::endl
-                << "finetune:      " << sample.finetune
-                << std::endl;
-#endif
-            if ( sample.length )
-            {
+            if ( showDebugInfo_ )
+                std::cout 
+                    << "\nRelative note     : " 
+                    << noteStrings[4 * 12 + sample.relativeNote]
+                    << "\nFinetune          : " << sample.finetune;
+            
+            if ( sample.length ) {
                 samples_[nInst] = new Sample;
                 sample.dataType = SAMPLEDATA_SIGNED_8BIT;
                 samples_[nInst]->load( sample );
@@ -489,166 +424,53 @@ int Module::loadS3mFile() {
         }
         instruments_[nInst] = new Instrument;
         instruments_[nInst]->load( instrument );
-#ifdef debug_s3m_loader
+
+        if ( showDebugInfo_ ) {
 #ifdef debug_s3m_play_samples
-        std::cout << "\nSample " << nInst << ": name     = " << instruments_[nInst]->getName();
-        if ( !samples_[nInst] ) _getch();
-
-        if ( samples_[nInst] ) {
-            HWAVEOUT        hWaveOut;
-            WAVEFORMATEX    waveFormatEx;
-            MMRESULT        result;
-            WAVEHDR         waveHdr;
-
-            std::cout << "\nSample " << nInst << ": length   = " << samples_[nInst]->getLength();
-            std::cout << "\nSample " << nInst << ": rep ofs  = " << samples_[nInst]->getRepeatOffset();
-            std::cout << "\nSample " << nInst << ": rep len  = " << samples_[nInst]->getRepeatLength();
-            std::cout << "\nSample " << nInst << ": volume   = " << samples_[nInst]->getVolume();
-            std::cout << "\nSample " << nInst << ": finetune = " << samples_[nInst]->getFinetune();
-
-            // not very elegant but hey, is debug code lol
-            if ( !samples_[nInst]->getData() ) break;
-
-            waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
-            waveFormatEx.nChannels = 1;
-            waveFormatEx.nSamplesPerSec = 16000; // frequency
-            waveFormatEx.wBitsPerSample = 16;
-            waveFormatEx.nBlockAlign = waveFormatEx.nChannels *
-                (waveFormatEx.wBitsPerSample >> 3);
-            waveFormatEx.nAvgBytesPerSec = waveFormatEx.nSamplesPerSec *
-                waveFormatEx.nBlockAlign;
-            waveFormatEx.cbSize = 0;
-
-            result = waveOutOpen( &hWaveOut,WAVE_MAPPER,&waveFormatEx,
-                0,0,CALLBACK_NULL );
-            if ( result != MMSYSERR_NOERROR ) {
-                if ( !nInst ) std::cout << "\nError opening wave mapper!\n";
-            } else {
-                int retry = 0;
-                if ( !nInst ) std::cout << "\nWave mapper successfully opened!\n";
-                waveHdr.dwBufferLength = samples_[nInst]->getLength() *
-                    waveFormatEx.nBlockAlign;
-                waveHdr.lpData = (LPSTR)(samples_[nInst]->getData());
-                waveHdr.dwFlags = 0;
-
-                result = waveOutPrepareHeader( hWaveOut,&waveHdr,
-                    sizeof( WAVEHDR ) );
-                while ( (result != MMSYSERR_NOERROR) && (retry < 10) ) {
-                    retry++;
-                    std::cout << "\nError preparing wave mapper header!";
-                    switch ( result ) {
-                        case MMSYSERR_INVALHANDLE:
-                        {
-                            std::cout << "\nSpecified device handle is invalid.";
-                            break;
-                        }
-                        case MMSYSERR_NODRIVER:
-                        {
-                            std::cout << "\nNo device driver is present.";
-                            break;
-                        }
-                        case MMSYSERR_NOMEM:
-                        {
-                            std::cout << "\nUnable to allocate or lock memory.";
-                            break;
-                        }
-                        default:
-                        {
-                            std::cout << "\nOther unknown error " << result;
-                        }
-                    }
-                    Sleep( 1 );
-                    result = waveOutPrepareHeader( hWaveOut,&waveHdr,
-                        sizeof( WAVEHDR ) );
-                }
-                result = waveOutWrite( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
-                retry = 0;
-                while ( (result != MMSYSERR_NOERROR) && (retry < 10) ) {
-                    retry++;
-                    std::cout << "\nError writing to wave mapper!";
-                    switch ( result ) {
-                        case MMSYSERR_INVALHANDLE:
-                        {
-                            std::cout << "\nSpecified device handle is invalid.";
-                            break;
-                        }
-                        case MMSYSERR_NODRIVER:
-                        {
-                            std::cout << "\nNo device driver is present.";
-                            break;
-                        }
-                        case MMSYSERR_NOMEM:
-                        {
-                            std::cout << "\nUnable to allocate or lock memory.";
-                            break;
-                        }
-                        case WAVERR_UNPREPARED:
-                        {
-                            std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
-                            break;
-                        }
-                        default:
-                        {
-                            std::cout << "\nOther unknown error " << result;
-                        }
-                    }
-                    result = waveOutWrite( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
-                    Sleep( 10 );
-                }
+            if ( !samples_[nInst] ) 
                 _getch();
-                waveOutUnprepareHeader( hWaveOut,&waveHdr,sizeof( WAVEHDR ) );
-                
-                //while(waveOutUnprepareHeader(hWaveOut, &waveHdr,
-                //sizeof(WAVEHDR)) == WAVERR_STILLPLAYING)
-                //{
-                //Sleep(50);
-                //}
-                
-                waveOutReset( hWaveOut );
-                waveOutClose( hWaveOut );
-            }
+            else
+                playSampleNr( nInst );
+#endif
         }
-#endif
-#endif
     }
+
     // Now load the patterns:
     S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
-    for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ )
-    {
+
+    for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ ) {
+
         memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
-        if ( ptnParaPtrs[iPtn] ) // empty patterns are not stored
-        {
+
+        // empty patterns are not stored
+        if ( ptnParaPtrs[iPtn] ) { 
             s3mFile.absSeek( (unsigned)16 * (unsigned)ptnParaPtrs[iPtn] );
             unsigned ptnMaxSize = s3mFile.dataLeft();
             char *s3mPtn = (char *)s3mFile.getSafePointer( ptnMaxSize );
+
             // temp DEBUG:
-            if ( s3mPtn == nullptr )
-            {
-                return 0;
-            }
-
-
-            unsigned packedSize = *((unsigned short *)s3mPtn);
-            if( packedSize > ptnMaxSize )
-            {
-
-#ifdef debug_s3m_loader
-                std::cout << std::endl
-                    << "Missing pattern data while reading file, exiting!"
-                    << std::endl;
-#endif
+            if ( s3mPtn == nullptr ) {
                 delete[] unPackedPtn;
                 return 0;
             }
 
+            unsigned packedSize = *((unsigned short *)s3mPtn);
+            if( packedSize > ptnMaxSize ) {
+                if ( showDebugInfo_ )
+                    std::cout
+                        << "\nMissing pattern data while reading file"
+                        << ", exiting!\n";
+                delete[] unPackedPtn;
+                return 0;
+            }
 
             unsigned char *ptnPtr = (unsigned char *)s3mPtn + 2;
             int row = 0;
             for ( ; (ptnPtr < (unsigned char *)s3mPtn + packedSize) &&
-                (row < S3M_ROWS_PER_PATTERN); )
-            {
+                (row < S3M_ROWS_PER_PATTERN); ) {
                 char pack = *ptnPtr++;
-                if ( pack == S3M_PTN_END_OF_ROW_MARKER ) row++;
+                if ( pack == S3M_PTN_END_OF_ROW_MARKER ) 
+                    row++;
                 else {
                     unsigned chn = chnRemap[pack & S3M_PTN_CHANNEL_MASK]; // may return 255               
                     unsigned char note = 0;
@@ -657,31 +479,31 @@ int Module::loadS3mFile() {
                     unsigned char fx = 0;
                     unsigned char fxp = 0;
                     bool newNote = false;
-                    if ( pack & S3M_PTN_NOTE_INST_FLAG )
-                    {
+                    if ( pack & S3M_PTN_NOTE_INST_FLAG ) {
                         newNote = true;
                         note = *ptnPtr++;
                         inst = *ptnPtr++;
                     }
                     // we add 0x10 to the volume column so we know an effect is there
-                    if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) volc = 0x10 + *ptnPtr++;
-                    if ( pack & S3M_PTN_EFFECT_PARAM_FLAG )
-                    {
+                    if ( pack & S3M_PTN_VOLUME_COLUMN_FLAG ) 
+                        volc = 0x10 + *ptnPtr++;
+
+                    if ( pack & S3M_PTN_EFFECT_PARAM_FLAG ) {
                         fx = *ptnPtr++;
                         fxp = *ptnPtr++;
                     }
-                    if ( chn < nChannels_ )
-                    {
+                    if ( chn < nChannels_ ) {
                         S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                        if ( newNote )
-                        {
-                            if ( note == S3M_KEY_NOTE_CUT ) unpackedNote.note = KEY_NOTE_CUT;
-                            else if ( note != 0xFF )
-                            {
+                        if ( newNote ) {
+                            if ( note == S3M_KEY_NOTE_CUT ) 
+                                unpackedNote.note = KEY_NOTE_CUT;
+                            else if ( note != 0xFF ) {
                                 unpackedNote.note = (note >> 4) * 12 + (note & 0xF) + 1 + 12;
                                 if ( unpackedNote.note > S3M_MAX_NOTE )
                                     unpackedNote.note = 0;
-                            } else note = 0; // added: 0 or 255 means no note
+                            } 
+                            else 
+                                note = 0; // added: 0 or 255 means no note
                         }
                         unpackedNote.inst = inst;
                         unpackedNote.volc = volc;
@@ -691,53 +513,12 @@ int Module::loadS3mFile() {
                 }
             }
         }
-#ifdef debug_s3m_loader
+        if ( showDebugInfo_ ) {
 #ifdef debug_s3m_show_patterns
-        std::cout << std::dec << std::endl << "Pattern nr " << iPtn << ":" << std::endl;
-        for ( int row = 0; row < S3M_ROWS_PER_PATTERN; row++ )
-        {
-            std::cout << std::endl << std::hex << std::setw( 2 ) << row << ":" << std::dec;
-            for ( unsigned chn = 0; chn < nChannels_; chn++ )
-                if ( chn < 8 )
-                {
-                    S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
-                    if ( unpackedNote.note ) {
-                        if( unpackedNote.note < (12 * 11) )
-                            std::cout << notetable[unpackedNote.note];
-                        else if ( unpackedNote.note == KEY_OFF ) std::cout << "===";
-                             else std::cout << "!!!";
-
-                    } else std::cout << "---";
-                    //std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;                    
-                    // std::cout << std::hex;
-                    // if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
-                    // else  std::cout << "  ";
-                    // if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
-                    // else  std::cout << "  ";
-                    // if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
-                    // else  std::cout << "  ";
-                    // if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
-                    // else  
-                    //    std::cout << "  ";
-
-                    /*
-                    if ( chn == 15 ) { 
-                        std::cout << std::hex;
-                        if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
-                        else  std::cout << "  "; 
-                        std::cout << "  ";
-                        if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
-                        else  std::cout << "  ";
-                        std::cout << "  ";
-                        if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
-                        else std::cout << "  ";
-                    }
-                    */
-                    std::cout << "|";
-                }
-        } 
+            std::cout << std::dec << "\nPattern nr " << iPtn << ":\n";
+            S3mDebugShow::pattern( unPackedPtn,nChannels_ );            
 #endif
-#endif
+        }
         // read the pattern into the internal format:
         Note        *iNote,*patternData;
         S3mUnpackedNote* unPackedNote = unPackedPtn;
@@ -749,17 +530,15 @@ int Module::loadS3mFile() {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
 
-            if ( unPackedNote->volc )
-            {
+            if ( unPackedNote->volc ) {
                 unPackedNote->volc -= 0x10;
-                if ( unPackedNote->volc <= S3M_MAX_VOLUME )
-                {
+                if ( unPackedNote->volc <= S3M_MAX_VOLUME ) {
                     iNote->effects[0].effect = SET_VOLUME;
                     iNote->effects[0].argument = unPackedNote->volc;
-                } else {
+                } 
+                else {
                     if ( unPackedNote->volc >= 128 &&
-                         unPackedNote->volc <= 192 )
-                    {
+                         unPackedNote->volc <= 192 ) {
                         iNote->effects[0].effect = SET_FINE_PANNING;
                         iNote->effects[0].argument =
                             (unPackedNote->volc - 128) << 4;
@@ -772,235 +551,12 @@ int Module::loadS3mFile() {
                 S3M effect A = 1, B = 2, etc
                 do some error checking & effect remapping:
             */
+
+            iNote->effects[1].effect = unPackedNote->fx;
             iNote->effects[1].argument = unPackedNote->fxp;
-            switch ( unPackedNote->fx ) {
-                case 1:  // A: set Speed
-                {
-                    iNote->effects[1].effect = SET_TEMPO; 
-                    if ( !unPackedNote->fxp ) 
-                    { 
-                        iNote->effects[1].effect = NO_EFFECT;
-                        iNote->effects[1].argument = NO_EFFECT;
-                    }
-                    break;
-                }
-                case 2: // B
-                {
-                    iNote->effects[1].effect = POSITION_JUMP;
-                    break;
-                }
-                case 3: // C
-                {
-                    iNote->effects[1].effect = PATTERN_BREAK; 
-                    break;
-                }
-                case 4: // D: all kinds of (fine) volume slide
-                {   
-                    iNote->effects[1].effect = VOLUME_SLIDE; 
-                    break;
-                }
-                case 5: // E: all kinds of (extra) (fine) portamento down
-                {
-                    iNote->effects[1].effect = PORTAMENTO_DOWN;
-                    break;
-                }
-                case 6: // F: all kinds of (extra) (fine) portamento up
-                {
-                    iNote->effects[1].effect = PORTAMENTO_UP;
-                    break;
-                }
-                case 7: // G
-                {
-                    iNote->effects[1].effect = TONE_PORTAMENTO;
-                    break;
-                }
-                case 8: // H
-                {
-                    iNote->effects[1].effect = VIBRATO;
-                    break;
-                }
-                case 9: // I
-                {
-                    iNote->effects[1].effect = TREMOR;
-                    break;
-                }
-                case 10: // J
-                {
-                    iNote->effects[1].effect = ARPEGGIO;
-                    break;
-                }
-                case 11: // K
-                {
-                    iNote->effects[1].effect = VIBRATO_AND_VOLUME_SLIDE;
-                    break;
-                }
-                case 12: // L
-                {
-                    iNote->effects[1].effect = TONE_PORTAMENTO_AND_VOLUME_SLIDE;
-                    break;
-                }
-                // skip effects 'M' and 'N' here which are not used
-                case 15: // O
-                {
-                    iNote->effects[1].effect = SET_SAMPLE_OFFSET;
-                    break;
-                }
-                // skip effect 'P'
-                case 17: // Q
-                {
-                    iNote->effects[1].effect = MULTI_NOTE_RETRIG; // retrig + volslide
-                    break;
-                }
-                case 18: // R
-                {
-                    iNote->effects[1].effect = TREMOLO;
-                    break;
-                }
-                case 19: // extended effects 'S'
-                {
-                    iNote->effects[1].effect = EXTENDED_EFFECTS;
-                    // moved parser to player because of effect memory handling
-                    /*
-                    int xfxp = unPackedNote->fxp & 0xF;
-                    iNote->effects[1].argument = xfxp;
-                    switch( unPackedNote->fxp >> 4 )
-                    { 
-                        // effect 0 = set filter => same as .mod
-                        case 1:
-                        {
-                            iNote->effects[1].argument = (SET_GLISSANDO_CONTROL << 4) + xfxp;
-                            break;
-                        }
-                        case 2:
-                        {
-                            iNote->effects[1].argument = (SET_FINETUNE << 4) + xfxp;
-                            break;
-                        }
-                        case 3:
-                        {
-                            iNote->effects[1].argument = (SET_VIBRATO_CONTROL << 4) + xfxp;
-                            break;
-                        }
-                        case 4:
-                        {
-                            iNote->effects[1].argument = (SET_TREMOLO_CONTROL << 4) + xfxp;
-                            break;
-                        }
-                        case 8:
-                        {
-                            iNote->effects[1].effect = SET_FINE_PANNING;
-                            iNote->effects[1].argument = xfxp * 16; // * 17;
-                            break;
-                        }
-                        case 10: // stereo control, for panic.s3m :s
-                        {
-                            
-                            Signed rough panning, meaning:
-                                 0 is center
-                                -8 is full left 
-                                 7 is full right
 
-                            unsigned: | signed nibble: | pan value:
-                            ----------+----------------+-----------
-                             0        |  0             |  8
-                             1        |  1             |  9
-                             2        |  2             | 10
-                             3        |  3             | 11
-                             4        |  4             | 12
-                             5        |  5             | 13
-                             6        |  6             | 14
-                             7        |  7             | 15
-                             8        | -8             |  0
-                             9        | -7             |  1
-                            10        | -6             |  2
-                            11        | -5             |  3
-                            12        | -4             |  4
-                            13        | -3             |  5
-                            14        | -2             |  6
-                            15        | -1             |  7 
+            remapS3mEffects( iNote->effects[1] );
 
-                            Conversion from signed nibble to 
-                            0 .. 15 unsigned panning value:
-
-                            if (nibble > 7), then nibble = nibble - 8
-                            else nibble = nibble + 8 
-
-                            This is according to fs3mdoc.txt
-                            
-                            iNote->effects[1].effect = SET_FINE_PANNING;
-                            if ( xfxp > 7 ) xfxp -= 8;
-                            else            xfxp += 8;
-                            iNote->effects[1].argument = xfxp * 16; // * 17;
-                            break;
-                        }
-                        case 11:
-                        {
-                            iNote->effects[1].argument = (SET_PATTERN_LOOP << 4) + xfxp;
-                            break;
-                        }
-                        // other extended effect commands are again same as in .mod
-                    }       
-                    */
-                    break;
-                }
-                case 20: // T
-                {
-                    iNote->effects[1].effect = SET_BPM; 
-                    if ( unPackedNote->fxp < 0x20 )
-                    {
-                        iNote->effects[1].effect = NO_EFFECT;
-                        iNote->effects[1].argument = NO_EFFECT;
-                    }
-                    break;
-                }
-                case 21: // U 
-                {
-                    iNote->effects[1].effect = FINE_VIBRATO;
-                    break;
-                }
-                case 22: // V
-                {
-                    iNote->effects[1].effect = SET_GLOBAL_VOLUME;
-                    break;
-                }
-                case 23: // W
-                {
-                    iNote->effects[1].effect = GLOBAL_VOLUME_SLIDE;
-                    break;
-                }            
-                case 24: // X
-                {
-                    /*
-                        XA4 = surround:
-                        Enables surround playback on this channel. When using 
-                        stereo playback, the right channel of a sample is 
-                        played with inversed phase (Pro Logic Surround). When 
-                        using quad playback, the rear channels are used for 
-                        playing this channel. Surround mode can be disabled by 
-                        executing a different panning command on the same 
-                        channel. 
-
-                    */
-                    // surround is not supported yet:
-                    if ( iNote->effects[1].argument == 0xA4 ) break; 
-                    iNote->effects[1].effect = SET_FINE_PANNING;
-                    iNote->effects[1].argument <<= 1;
-                    if ( iNote->effects[1].argument > 0xFF )
-                        iNote->effects[1].argument = 0xFF;
-                    break;
-                }
-                case 25: // Y
-                {
-                    iNote->effects[1].effect = PANBRELLO;
-                    break;
-                }
-                default: // unknown effect command
-                {
-                    iNote->effects[1].effect = NO_EFFECT;
-                    iNote->effects[1].argument = NO_EFFECT;
-                    break;
-                }
-            }
             // next note / channel:
             iNote++;
             unPackedNote++;
@@ -1010,3 +566,354 @@ int Module::loadS3mFile() {
     isLoaded_ = true;
     return 0;
 }
+
+void remapS3mEffects( Effect& remapFx )
+{
+    switch ( remapFx.effect ) {
+        case 1:  // A: set Speed
+        {
+            remapFx.effect = SET_TEMPO;
+            if ( remapFx.argument == 0 ) 
+                remapFx.effect = NO_EFFECT;
+            break;
+        }
+        case 2: // B
+        {
+            remapFx.effect = POSITION_JUMP;
+            break;
+        }
+        case 3: // C
+        {
+            remapFx.effect = PATTERN_BREAK;
+            break;
+        }
+        case 4: // D: all kinds of (fine) volume slide
+        {
+            remapFx.effect = VOLUME_SLIDE;
+            break;
+        }
+        case 5: // E: all kinds of (extra) (fine) portamento down
+        {
+            remapFx.effect = PORTAMENTO_DOWN;
+            break;
+        }
+        case 6: // F: all kinds of (extra) (fine) portamento up
+        {
+            remapFx.effect = PORTAMENTO_UP;
+            break;
+        }
+        case 7: // G
+        {
+            remapFx.effect = TONE_PORTAMENTO;
+            break;
+        }
+        case 8: // H
+        {
+            remapFx.effect = VIBRATO;
+            break;
+        }
+        case 9: // I
+        {
+            remapFx.effect = TREMOR;
+            break;
+        }
+        case 10: // J
+        {
+            remapFx.effect = ARPEGGIO;
+            break;
+        }
+        case 11: // K
+        {
+            remapFx.effect = VIBRATO_AND_VOLUME_SLIDE;
+            break;
+        }
+        case 12: // L
+        {
+            remapFx.effect = TONE_PORTAMENTO_AND_VOLUME_SLIDE;
+            break;
+        }
+        // skip effects 'M' and 'N' here which are not used
+        case 15: // O
+        {
+            remapFx.effect = SET_SAMPLE_OFFSET;
+            break;
+        }
+        // skip effect 'P'
+        case 17: // Q
+        {
+            remapFx.effect = MULTI_NOTE_RETRIG; // retrig + volslide
+            break;
+        }
+        case 18: // R
+        {
+            remapFx.effect = TREMOLO;
+            break;
+        }
+        case 19: // extended effects 'S'
+        {
+            remapFx.effect = EXTENDED_EFFECTS;
+            // moved parser to player because of effect memory handling
+            /*
+            int xfxp = unPackedNote->fxp & 0xF;
+            remapFx.argument = xfxp;
+            switch( unPackedNote->fxp >> 4 )
+            {
+            // effect 0 = set filter => same as .mod
+            case 1:
+            {
+            remapFx.argument = (SET_GLISSANDO_CONTROL << 4) + xfxp;
+            break;
+            }
+            case 2:
+            {
+            remapFx.argument = (SET_FINETUNE << 4) + xfxp;
+            break;
+            }
+            case 3:
+            {
+            remapFx.argument = (SET_VIBRATO_CONTROL << 4) + xfxp;
+            break;
+            }
+            case 4:
+            {
+            remapFx.argument = (SET_TREMOLO_CONTROL << 4) + xfxp;
+            break;
+            }
+            case 8:
+            {
+            remapFx.effect = SET_FINE_PANNING;
+            remapFx.argument = xfxp * 16; // * 17;
+            break;
+            }
+            case 10: // stereo control, for panic.s3m :s
+            {
+
+            Signed rough panning, meaning:
+            0 is center
+            -8 is full left
+            7 is full right
+
+            unsigned: | signed nibble: | pan value:
+            ----------+----------------+-----------
+            0        |  0             |  8
+            1        |  1             |  9
+            2        |  2             | 10
+            3        |  3             | 11
+            4        |  4             | 12
+            5        |  5             | 13
+            6        |  6             | 14
+            7        |  7             | 15
+            8        | -8             |  0
+            9        | -7             |  1
+            10        | -6             |  2
+            11        | -5             |  3
+            12        | -4             |  4
+            13        | -3             |  5
+            14        | -2             |  6
+            15        | -1             |  7
+
+            Conversion from signed nibble to
+            0 .. 15 unsigned panning value:
+
+            if (nibble > 7), then nibble = nibble - 8
+            else nibble = nibble + 8
+
+            This is according to fs3mdoc.txt
+
+            remapFx.effect = SET_FINE_PANNING;
+            if ( xfxp > 7 ) xfxp -= 8;
+            else            xfxp += 8;
+            remapFx.argument = xfxp * 16; // * 17;
+            break;
+            }
+            case 11:
+            {
+            remapFx.argument = (SET_PATTERN_LOOP << 4) + xfxp;
+            break;
+            }
+            // other extended effect commands are again same as in .mod
+            }
+            */
+            break;
+        }
+        case 20: // T
+        {
+            remapFx.effect = SET_BPM;
+            if ( remapFx.argument < 0x20 ) {
+                remapFx.effect = NO_EFFECT;
+                remapFx.argument = NO_EFFECT;
+            }
+            break;
+        }
+        case 21: // U 
+        {
+            remapFx.effect = FINE_VIBRATO;
+            break;
+        }
+        case 22: // V
+        {
+            remapFx.effect = SET_GLOBAL_VOLUME;
+            break;
+        }
+        case 23: // W
+        {
+            remapFx.effect = GLOBAL_VOLUME_SLIDE;
+            break;
+        }
+        case 24: // X
+        {
+            /*
+            XA4 = surround:
+            Enables surround playback on this channel. When using
+            stereo playback, the right channel of a sample is
+            played with inversed phase (Pro Logic Surround). When
+            using quad playback, the rear channels are used for
+            playing this channel. Surround mode can be disabled by
+            executing a different panning command on the same
+            channel.
+            */
+            // surround is not supported yet:
+            if ( remapFx.argument == 0xA4 )
+                break;
+            remapFx.effect = SET_FINE_PANNING;
+            remapFx.argument <<= 1;
+            if ( remapFx.argument > 0xFF )
+                remapFx.argument = 0xFF;
+            break;
+        }
+        case 25: // Y
+        {
+            remapFx.effect = PANBRELLO;
+            break;
+        }
+        default: // unknown effect command
+        {
+            remapFx.effect = NO_EFFECT;
+            remapFx.argument = NO_EFFECT;
+            break;
+        }
+    }
+}
+
+
+
+
+
+// DEBUG helper functions that write verbose output to the screen:
+void S3mDebugShow::fileHeader( S3mFileHeader& s3mFileHeader )
+{
+    std::cout
+        << "\nHeader info:"
+        << "\nSong title       : " << s3mFileHeader.songTitle
+        << "\nFile type        : " << std::hex << (int)s3mFileHeader.fileType
+        << "\nSong length      : " << std::dec << (int)s3mFileHeader.songLength
+        << "\nNr of instruments: " << (int)s3mFileHeader.nInstruments
+        << "\nNr of patterns   : " << (int)s3mFileHeader.nPatterns
+        << "\nFlags            : " << std::bitset<16>( s3mFileHeader.flags )
+        << "\nMade w/ (CWTV)   : " << std::hex << s3mFileHeader.CWTV
+        << "\nSample data type : ";
+    if ( (int)s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA )
+        std::cout << "unsigned (standard)";
+    else if ( (int)s3mFileHeader.sampleDataType == S3M_SIGNED_SAMPLE_DATA )
+        std::cout << "signed (non-standard)";
+    else std::cout << "illegal value: error in file!";
+    std::cout
+        << "\nGlobal volume    : " << std::dec << (int)s3mFileHeader.globalVolume
+        << "\nDefault tempo    : " << (int)s3mFileHeader.defaultTempo
+        << "\nDefault bpm      : " << (int)s3mFileHeader.defaultBpm
+        << "\nMaster volume    : " << (int)s3mFileHeader.masterVolume
+        << "\nGus click removal: " << (int)s3mFileHeader.gusClickRemoval
+        << "\nUse def. panning : " << (int)s3mFileHeader.useDefaultPanning
+        << "\nCustom data ptr  : " << (int)s3mFileHeader.customDataPointer
+        << "\nChannels enabled : \n" << std::dec;
+    for ( int chn = 0; chn < 32; chn++ ) {
+        std::cout << std::setw( 2 ) << chn << ":" << std::setw( 3 )
+            << (int)s3mFileHeader.channelsEnabled[chn] << " ";
+        if ( (chn + 1) % 8 == 0 ) std::cout << "\n";
+    }
+}
+
+void S3mDebugShow::instHeader( S3mInstHeader& s3mInstHeader )
+{
+    s3mInstHeader.name[S3M_MAX_SAMPLENAME_LENGTH - 1] = '\0'; // debug only
+    s3mInstHeader.tag[3] = '\0';                              // debug only
+    std::cout << "\nSample Type       : ";
+
+    if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE )
+        std::cout << "digital sample";
+    else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_MELODY )
+        std::cout << "adlib melody";
+    else if ( s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_ADLIB_DRUM )
+        std::cout << "adlib drum";
+
+    std::cout
+        << "\nSample location   : "
+        << (int)s3mInstHeader.memSeg << ":"
+        << (int)s3mInstHeader.memOfs << " ";
+    s3mInstHeader.memSeg = '\0'; // so we can read the DOS file name
+    std::cout
+        << "\nLength            : " << s3mInstHeader.length
+        << "\nLoop Start        : " << s3mInstHeader.loopStart
+        << "\nLoop End          : " << s3mInstHeader.loopEnd
+        << "\nVolume            : " << (int)s3mInstHeader.volume
+        << std::hex
+        << "\n0x1D              : 0x" << (int)s3mInstHeader.reserved
+        << std::dec
+        << "\npack ID           : " << (int)s3mInstHeader.packId
+        << "\nflags             : " << (int)s3mInstHeader.flags
+        << "\nC2SPD             : " << s3mInstHeader.c4Speed
+        << "\nSample DOS Name   : " << s3mInstHeader.dosFilename
+        << "\nName              : " << s3mInstHeader.name
+        << "\nTag               : " << s3mInstHeader.tag;
+
+}
+
+void S3mDebugShow::pattern( S3mUnpackedNote* unPackedPtn,int nChannels )
+{    
+    for ( int row = 0; row < S3M_ROWS_PER_PATTERN; row++ ) {
+        std::cout 
+            << "\n" << std::hex << std::setw( 2 ) << row << ":" << std::dec;
+        for ( int chn = 0; chn < nChannels; chn++ ) {
+            if ( chn < 8 ) {
+                S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels + chn];
+                if ( unpackedNote.note ) {
+                    if ( unpackedNote.note < (12 * 11) )
+                        std::cout << noteStrings[unpackedNote.note];
+                    else if ( unpackedNote.note == KEY_OFF ) std::cout << "===";
+                    else
+                        std::cout << "!!!";
+                } 
+                else
+                    std::cout << "---";
+
+                //std::cout << "." << std::setw( 3 ) << (int)unpackedNote.note;                    
+                // std::cout << std::hex;
+                // if ( unpackedNote.inst ) std::cout << std::setw( 2 ) << (int)unpackedNote.inst;
+                // else  std::cout << "  ";
+                // if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
+                // else  std::cout << "  ";
+                // if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
+                // else  std::cout << "  ";
+                // if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
+                // else  
+                //    std::cout << "  ";
+
+                /*
+                if ( chn == 15 ) {
+                std::cout << std::hex;
+                if ( unpackedNote.volc ) std::cout << std::setw( 2 ) << (int)unpackedNote.volc;
+                else  std::cout << "  ";
+                std::cout << "  ";
+                if ( unpackedNote.fx ) std::cout << std::setw( 2 ) << (int)unpackedNote.fx;
+                else  std::cout << "  ";
+                std::cout << "  ";
+                if ( unpackedNote.fxp ) std::cout << std::setw( 2 ) << (int)unpackedNote.fxp;
+                else std::cout << "  ";
+                }
+                */
+                std::cout << "|";
+            }
+        }
+    }
+}
+

@@ -28,7 +28,7 @@ Thanks must go to:
 #include <bitset>
 #include <iomanip>
 
-extern const char *noteStrings[2 + MAXIMUM_NOTES];
+//extern const char *noteStrings[2 + MAXIMUM_NOTES];
 
 #define IT_MAX_CHANNELS                         64
 #define IT_MAX_PATTERNS                         200
@@ -144,6 +144,11 @@ struct ItFileHeader {
     (note first, range 0->119 for C-0 to B-9, sample ranges from
     1-99, 0=no sample
 */
+struct ItNoteSampleMap {
+    unsigned char   note;
+    unsigned char   sampleNr;
+};
+
 struct ItOldInstHeader {
     char            tag[4];         // "IMPI"
     char            fileName[IT_DOS_FILENAME_LENGTH];
@@ -162,7 +167,8 @@ struct ItOldInstHeader {
     unsigned char   reserved2;
     char            name[IT_INST_NAME_LENGTH];
     unsigned char   reserved3[6];
-    unsigned char   sampleForNote[240];
+    //unsigned char   sampleForNote[240];
+    ItNoteSampleMap sampleForNote[120];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
     unsigned char   nodes[25 * 2];       // ?
 };
@@ -207,7 +213,8 @@ struct ItNewInstHeader {
     unsigned char   midiChannel;
     unsigned char   midiProgram;
     unsigned short  midiBank;
-    unsigned char   sampleForNote[240];
+    //unsigned char   sampleForNote[240];
+    ItNoteSampleMap sampleForNote[120];
     ItNewEnvelope   volumeEnvelope;
     ItNewEnvelope   panningEnvelope;
     ItNewEnvelope   pitchEnvelope;
@@ -441,7 +448,13 @@ int Module::loadItInstrument(
         instrumentHeader.volumeLoopStart = itInstHeader.volumeLoopStart;
         instrumentHeader.volumeLoopEnd = itInstHeader.volumeLoopEnd;
 
-        //instrumentHeader.sampleForNote =
+        for ( int n = 0; n < IT_MAX_NOTE; n++ ) {
+            instrumentHeader.sampleForNote[n].note =
+                itInstHeader.sampleForNote[n].note;
+            instrumentHeader.sampleForNote[n].sampleNr =
+                itInstHeader.sampleForNote[n].sampleNr;
+        }
+
         /*
         instrumentHeader.nVolumePoints =
         instrumentHeader.volumeEnvelope =
@@ -462,13 +475,15 @@ int Module::loadItInstrument(
         instrumentHeader.vibratoType =
         */
 
+        // ...
 
+        instruments_[instrumentNr] = new Instrument;
+        instruments_[instrumentNr]->load( instrumentHeader );
     } 
     else {
         ItNewInstHeader itInstHeader;
         itFile.read( &itInstHeader,sizeof( ItNewInstHeader ) );
-        if ( itFile.getIOError() != VIRTFILE_NO_ERROR )
-        {
+        if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) {
             if ( showDebugInfo_ )
                 std::cout
                     << "\nMissing data while loading instrument headers, "
@@ -481,6 +496,19 @@ int Module::loadItInstrument(
             ItDebugShow::newInstHeader( itInstHeader );
 #endif
         }
+
+        // do stuff with instrument here!
+        for ( int n = 0; n < IT_MAX_NOTE; n++ ) { 
+            instrumentHeader.sampleForNote[n].note =
+                itInstHeader.sampleForNote[n].note;
+            instrumentHeader.sampleForNote[n].sampleNr =
+                itInstHeader.sampleForNote[n].sampleNr;
+        }
+
+        // ...
+
+        instruments_[instrumentNr] = new Instrument;
+        instruments_[instrumentNr]->load( instrumentHeader );
     }
     return 0;
 }
@@ -629,15 +657,16 @@ int Module::loadItSample(
     if ( convertToInstrument ) {
         instruments_[sampleNr] = new Instrument;
         InstrumentHeader    instrumentHeader;
-        for ( int n = 0; n < IT_MAX_NOTE; n++ ) {
-            instrumentHeader.sampleForNote[n] = sampleNr;
+        for ( int n = 0; n < MAXIMUM_NOTES; n++ ) {
+            instrumentHeader.sampleForNote[n].note = n;
+            instrumentHeader.sampleForNote[n].sampleNr = sampleNr;
         }
         instrumentHeader.name = sample.name;
         instruments_[sampleNr]->load( instrumentHeader );
     }
     if ( showDebugInfo_ && !isStereoSample ) {
 #ifdef debug_it_play_samples
-        playSample( sampleNr );
+        playSampleNr( sampleNr );
 #endif
     }
     return 0;
@@ -1044,8 +1073,8 @@ void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
         << "\nInstrument name     : " << itOldInstHeader.name
         << "\n\n"
         << "Note -> Sample table: \n" << std::dec;
-    for ( int i = 0; i < 240; i++ )
-        std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.sampleForNote[i];
+    for ( int i = 0; i < 120; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.sampleForNote[i].sampleNr;
     std::cout << "\n\nVolume envelope points: \n";
     for ( int i = 0; i < 200; i++ )
         std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.volumeEnvelope[i];
@@ -1083,8 +1112,8 @@ void ItDebugShow::newInstHeader( ItNewInstHeader& itNewInstHeader )
         << "\nMidi bank           : " << (unsigned)itNewInstHeader.midiBank
         << "\n\n"
         << "Note -> Sample table: \n" << std::dec;
-    for ( int i = 0; i < 240; i++ )
-        std::cout << std::setw( 4 ) << (unsigned)itNewInstHeader.sampleForNote[i];
+    for ( int i = 0; i < 120; i++ )
+        std::cout << std::setw( 4 ) << (unsigned)itNewInstHeader.sampleForNote[i].sampleNr;
     std::cout << "\n\nVolume envelope: "
         << "\nFlag                : " << (unsigned)itNewInstHeader.volumeEnvelope.flag
         << "\nNr of nodes         : " << (unsigned)itNewInstHeader.volumeEnvelope.nNodes

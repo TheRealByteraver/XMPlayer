@@ -20,10 +20,6 @@
 
 //#define debug_mod_loader
 
-#ifdef debug_mod_loader
-extern const char *noteStrings[2 + MAXIMUM_NOTES];
-#endif
-
 // Constants for the .MOD Format:
 #define MOD_LIMIT                           8    // nr of illegal chars permitted in smp names
 #define MOD_ROWS                            64   // always 64 rows in a MOD pattern
@@ -365,8 +361,11 @@ int Module::loadModFile()
             instrument.name += *c;
         }
         //instrument.nSamples = 1; // redundant?
-        for ( int i = 0; i < MAXIMUM_NOTES; i++ )
-            instrument.sampleForNote[i] = iSample;
+        for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
+            instrument.sampleForNote[i].note = i;
+            instrument.sampleForNote[i].sampleNr = iSample;
+        }
+
         sample.length       = 
             ((unsigned)headerMK->samples[iSample - 1].length)       << 1;
         sample.repeatOffset = 
