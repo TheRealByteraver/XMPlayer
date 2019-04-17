@@ -100,8 +100,13 @@ Module::Module()
 void Module::playSampleNr( int sampleNr )
 {
     if ( !samples_[sampleNr] ) {
+        /*
         if ( showDebugInfo_ )
+            std::cout 
+                << "\nSample " << sampleNr << " is empty"
+                << ", hit any key to continue...";
             _getch();
+        */
         return;
     }
     if ( showDebugInfo_ )

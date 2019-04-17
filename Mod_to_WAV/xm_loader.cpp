@@ -17,7 +17,7 @@
                        
 
 //#define debug_xm_show_patterns
-#define debug_xm_play_samples
+//#define debug_xm_play_samples
 
 #define XM_DEBUG_SHOW_PATTERN_NO        0 // pattern to be shown
 #define XM_DEBUG_SHOW_MAX_CHN           16

@@ -19,7 +19,7 @@ Thanks must go to:
 #include "virtualfile.h"
 
 //#define debug_s3m_show_patterns
-#define debug_s3m_play_samples
+//#define debug_s3m_play_samples
 
 #define S3M_MIN_FILESIZE                    (sizeof(S3mFileHeader) + \
                                              sizeof(S3mInstHeader) + 64 + 16)
