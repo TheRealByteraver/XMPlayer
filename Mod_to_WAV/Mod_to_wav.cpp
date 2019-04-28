@@ -513,15 +513,20 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
             mChn.age++;
 
-            // only works if age of channel is reset at start of downwards volume ramp:
-            if ( (!mChn.isMaster) && 
-                 (mChn.age > VOLUME_RAMP_SPEED) &&
-                 (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) )
+            /* 
+                only works if age of channel is reset at start of downwards 
+                volume ramp. might trigger a warning with backwards playing 
+                samples as there is no volume ramp implemented there
+            */
+            if ( (!mChn.isMaster) &&
+                (mChn.age > 2) &&
+                (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) )
                 std::cout
                 << "\nFailed to stop channel " << i << "!\n"
                 << "\nvolumeRampCounter: " << (unsigned)mChn.volumeRampCounter
                 << "\nvolumeRampDelta  : " << (int)mChn.volumeRampDelta
-                << "\nvolumeRampStart  : " << (int)mChn.volumeRampStart << "\n";
+                << "\nvolumeRampStart  : " << (int)mChn.volumeRampStart
+                << "\nAge              : " << mChn.age << "\n";
 
             nActiveMixChannels++;
                                  
@@ -606,7 +611,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                     // *********************
                     // added for volume ramp
                     // *********************
-                    /* following code overflows mixbuffer and corrupts wave format ex header! */
+                    // following code overflows mixbuffer and corrupts wave format ex header! -> fixed
                     int loopsLeft = nrLoops;
                     if ( mChn.volumeRampCounter ) {
                         int loopEnd;
@@ -660,6 +665,10 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                         if ( (mChn.volumeRampStart <= 0) &&
                             (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) ) {
                             mChn.isActive = false;
+                            if ( mChn.isMaster ) {
+                                channels[mChn.masterChannel].mixerChannelNr = 0;
+                                mChn.isMaster = false;
+                            }
                             j = nSamples;
                             loopsLeft = 0;
                         }
@@ -730,7 +739,6 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                                 channels[mChn.masterChannel].mixerChannelNr = 0;
                                 mChn.isMaster = false;
                             }
-
                             // quit loop, we're done here
                             j = nSamples; 
                         }
@@ -775,8 +783,27 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                         int xd = (0x8000 - (mChn.sampleOffsetFrac & 0x7FFF));       // time delta
                         int yd = s2 - s1;                                            // sample delta
                         s1 += (xd * yd) >> 15;
-                        *mixBufferPTR++ += (s1 * leftGain);
-                        *mixBufferPTR++ += (s1 * rightGain);
+
+                        int lG = leftGain;
+                        int rG = rightGain;
+
+                        // lame volume ramp implementation starts here
+                        if ( mChn.volumeRampCounter ) {
+                            mChn.volumeRampCounter--;
+                            lG = (lG * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+                            rG = (rG * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+                            mChn.volumeRampStart += mChn.volumeRampDelta;
+                        } else if ( mChn.volumeRampDelta == VOLUME_RAMPING_DOWN ) {
+                            mChn.isActive = false;
+                            if ( mChn.isMaster ) {
+                                channels[mChn.masterChannel].mixerChannelNr = 0;
+                                mChn.isMaster = false;
+                            }
+                        }
+                        // lame volume ramp implementation ends here
+
+                        *mixBufferPTR++ += (s1 * lG);
+                        *mixBufferPTR++ += (s1 * rG);
                         mChn.sampleOffsetFrac -= mChn.sampleIncrement;
                     }
                     mixOffset += nrLoops << 1;
@@ -787,10 +814,12 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                             mChn.sampleOffset = sample.getRepeatOffset();
                             mChn.isPlayingBackwards = false;
                         } 
-                        else {
+                        else {                             
                             mChn.isActive = false;
-                            mChn.isMaster = false;
-                            channels[mChn.masterChannel].mixerChannelNr = 0; 
+                            if ( mChn.isMaster ) {
+                                channels[mChn.masterChannel].mixerChannelNr = 0;
+                                mChn.isMaster = false;
+                            }
                             // quit loop, we're done here
                             j = nSamples; 
                         }
@@ -801,7 +830,8 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
         }
     }
     mixIndex += (nSamples << 1); // *2 for stereo
-    //std::cout << "# active chn = " << nActiveMixChannels << std::endl;
+    //std::cout << "\nNr of active chn = " << nActiveMixChannels;
+    std::cout << std::setw( 4 ) << nActiveMixChannels;
 
     /*
     if ( waveHeaders[0].dwBufferLength != 21168000 ) {
