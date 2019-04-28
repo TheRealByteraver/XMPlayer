@@ -100,7 +100,7 @@ Fixed / cleared up:
 
 
 
-#define BUFFER_LENGTH_IN_MINUTES   2
+#define BUFFER_LENGTH_IN_MINUTES   16
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
@@ -345,9 +345,11 @@ Mixer::Mixer()
 
     for ( unsigned i = 0; i < WAVE_BUFFER_NO; i++ ) {
         waveHeaders[i].dwBufferLength = sizeof( SHORT[BUFFER_SIZE] );
+        /*
         std::cout
             << "\ndwBufferLength initialized as " 
             << waveHeaders[i].dwBufferLength << "\n";
+        */
         waveHeaders[i].lpData = (LPSTR) bufData;
         // waveHeaders[i].dwFlags = 0; // is done with memset() earlier
         waveBuffers[i] = (SHORT *) waveHeaders[i].lpData;
@@ -724,8 +726,10 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                         } 
                         else {
                             mChn.isActive = false;
-                            mChn.isMaster = false;
-                            channels[mChn.masterChannel].mixerChannelNr = 0; 
+                            if ( mChn.isMaster ) {
+                                channels[mChn.masterChannel].mixerChannelNr = 0;
+                                mChn.isMaster = false;
+                            }
 
                             // quit loop, we're done here
                             j = nSamples; 
@@ -836,7 +840,7 @@ void Mixer::startReplay()
     MMRESULT mmResult;
     std::cout 
         << "\nTrying to play with parameters: "
-        << hWaveOut
+        << "\n" << hWaveOut
         << "\ndwBufferLength    : " << waveHeaders[0].dwBufferLength
         << "\ndwBytesRecorded   : " << waveHeaders[0].dwBytesRecorded
         << "\ndwFlags           : " << waveHeaders[0].dwFlags
