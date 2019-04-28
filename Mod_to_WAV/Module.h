@@ -126,7 +126,7 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define MAXIMUM_NOTES                       (11 * 12)
 #define PLAYER_MAX_CHANNELS                 32
 #define PANNING_FULL_LEFT                   0
-#define PANNING_CENTER                      128
+#define PANNING_CENTER                      127
 #define PANNING_FULL_RIGHT                  255
 #define PANNING_MAX_STEPS                   256  // must be power of two
 #define PANNING_SHIFT                       8    // divide by 256 <=> SHR 8
@@ -139,6 +139,12 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define TRACKER_ST321                       3
 #define TRACKER_FT2                         4
 #define TRACKER_IT                          5
+
+// New Note Action constants
+#define NNA_NOTE_CUT                        0
+#define NNA_NOTE_CONTINUE                   1
+#define NNA_NOTE_OFF                        2
+#define NNA_NOTE_FADE                       3
 
 // effect nrs:
 #define NO_EFFECT                           0x0 // ARPEGGIO is remapped to 0x25
@@ -716,6 +722,8 @@ private:
     int             loadXmInstrument( VirtualFile& xmFile,int instrumentNr );
     int             loadXmSample( VirtualFile & xmFile,int sampleNr,SampleHeader& sampleHeader );
     int             loadXmPattern( VirtualFile & xmFile,int patternNr );
+
+    int             loadModPattern( VirtualFile & modFile,int patternNr );
 
     void            playSampleNr( int sampleNr ); // for debugging purposes
 };

@@ -128,7 +128,6 @@ public:
 
 void remapS3mEffects( Effect& remapFx ); // temp forward declaration
 
-
 int Module::loadS3mFile() {
     isLoaded_ = false;
 
@@ -179,13 +178,13 @@ int Module::loadS3mFile() {
         chnBackmap[chn] = S3M_CHN_UNUSED;
         chnPanVals[chn] = S3M_DEFAULT_PAN_CENTER;
         int chnInfo = (int)s3mFileHeader.channelsEnabled[chn];
-        if ( chnInfo < 16 ) {// channel is used! // x64 FT2 detects weird #chn
+        if ( chnInfo < 16 ) { // channel is used! // x64 FT2 detects weird #chn
             chnBackmap[nChannels_] = chn;
             chnRemap[chn] = nChannels_;
-            if ( chnInfo < 7 )  
-                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_LEFT;
-            else                
-                chnPanVals[nChannels_] = S3M_DEFAULT_PAN_RIGHT;
+            if ( chnInfo < 7 )
+                chnPanVals[nChannels_] = PANNING_FULL_LEFT;//S3M_DEFAULT_PAN_LEFT;
+            else
+                chnPanVals[nChannels_] = PANNING_FULL_RIGHT;//S3M_DEFAULT_PAN_RIGHT;
             nChannels_++;
         } 
         else 

@@ -751,8 +751,7 @@ void remapItEffects( Effect& remapFx )
         case 1:  // A: set Speed
         {
             remapFx.effect = SET_TEMPO;
-            if ( !remapFx.argument )
-            {
+            if ( !remapFx.argument ) {
                 remapFx.effect = NO_EFFECT;
                 remapFx.argument = NO_EFFECT;
             }
@@ -771,6 +770,19 @@ void remapItEffects( Effect& remapFx )
         case 4: // D: all kinds of (fine) volume slide
         {
             remapFx.effect = VOLUME_SLIDE; // default
+            // check if the command argument is legal:
+            unsigned slide1 = remapFx.argument >> 4;
+            unsigned slide2 = remapFx.argument & 0xF;
+            if ( slide1 & slide2 ) {
+                // these are fine slides:
+                if ( (slide1 == 0xF) || (slide2 == 0xF) )
+                    break;
+                // illegal volume slide effect:
+                else {                     
+                    remapFx.effect = NO_EFFECT;
+                    remapFx.argument = 0;
+                }
+            }
             break;
         }
         case 5: // E: all kinds of (extra) (fine) portamento down

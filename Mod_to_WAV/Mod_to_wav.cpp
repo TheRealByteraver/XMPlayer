@@ -100,22 +100,23 @@ Fixed / cleared up:
 
 
 
-#define BUFFER_LENGTH_IN_MINUTES   16
+#define BUFFER_LENGTH_IN_MINUTES   2
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
 
-#define BUFFER_SIZE (44100 * 2 * 60 * BUFFER_LENGTH_IN_MINUTES) // 0x4000 // temp bloated buf for easy progging
-#define FILTER_SQUARE 0
-#define FILTER_LINEAR 1
-#define FILTER_CUBIC  2
-#define FILTER        FILTER_CUBIC
+#define MIXRATE                 44100
+#define BUFFER_SIZE     (MIXRATE * 2 * 60 * BUFFER_LENGTH_IN_MINUTES) // 0x4000 // temp bloated buf for easy progging
+#define FILTER_SQUARE   0
+#define FILTER_LINEAR   1
+#define FILTER_CUBIC    2
+#define FILTER          FILTER_CUBIC   // not used
 
-#define MIXER_MAX_CHANNELS 256
-#define WAVE_BUFFER_NO 1 // temp, should be at least 4
-#define VOLUME_RAMP_SPEED 41
-#define MAX_NOTES_PER_CHANNEL 16
-#define MIXRATE 44100
+#define MIXER_MAX_CHANNELS      256
+#define WAVE_BUFFER_NO          1 // temp, should be at least 4
+#define VOLUME_RAMP_SPEED       44     // 1 millisecond at mixrate of 44kHz
+#define VOLUME_RAMPING_UP       1
+#define VOLUME_RAMPING_DOWN     -1
 
 typedef int MixBufferType;
 
@@ -186,34 +187,47 @@ public:
     unsigned        lastExtraFinePortamentoDown;
 
     // active mixer channels for this logical channel:
-    unsigned        mixerChannelsTable[MAX_NOTES_PER_CHANNEL]; // 0 means no channel
-    unsigned        iPrimary;   // 0..15
+    //unsigned        mixerChannelsTable[MAX_NOTES_PER_CHANNEL]; // -> mag weg, zie hieronder (iPrimary)
+    unsigned        mixerChannelNr; // 
 public:
-    void            init() { memset( this,0,sizeof( Channel ) ); }
-    Channel() { init(); }
+    void            init() 
+    { 
+        memset( this,0,sizeof( Channel ) ); 
+    }
+    Channel() 
+    { 
+        init(); 
+    }
 };
 
 class MixerChannel {
 public:
-    unsigned        fromChannel;
+    unsigned        masterChannel;     // 0..63
     unsigned        age;
-    bool            isActive;
-    bool            isPrimary;
-    bool            isFadingOut;
+    bool            isActive;          // if not, mixer skips it
+    bool            isMaster;          // false if it is a virtual channel
+//    bool            isFadingOut; // prolly not needed
     Sample          *sample;
     unsigned        sampleOffset;      // samples can be up to 4 GB in theory
     unsigned        sampleOffsetFrac;
 
-
     unsigned        sampleIncrement;
     unsigned        leftVolume;
     unsigned        rightVolume;
-    bool            isVolumeRampActive;
     bool            isPlayingBackwards;
-    unsigned        iVolumeRamp;
+
+    signed char     volumeRampDelta; // if -1 -> ramping down 
+    unsigned char   volumeRampCounter; // no ramp if zero
+    signed char     volumeRampStart;   // VOLUME_RAMP_SPEED if ramping down, 0 if ramping up
 public:
-    void            init() { memset( this,0,sizeof( MixerChannel ) ); }
-    MixerChannel() { init(); }
+    void            init() 
+    { 
+        memset( this,0,sizeof( MixerChannel ) ); 
+    }
+    MixerChannel() 
+    { 
+        init(); 
+    }
 };
 
 class Mixer {
@@ -258,21 +272,22 @@ public: // debug
     SHORT           *waveBuffers[WAVE_BUFFER_NO];
 private: // debug
 
-    unsigned        noteToPeriod(unsigned note, int finetune);
-    unsigned        periodToFrequency(unsigned period /*, unsigned c4Speed */);
-//    int             setVolume   (unsigned fromChannel, unsigned volume);  // range: 0..64
-//    int             setPanning  (unsigned fromChannel, unsigned panning); // range: 0..255: extr left... extr right
-    int             setMixerVolume(unsigned fromChannel);
-    int             setFrequency(unsigned fromChannel, unsigned frequency);
-    int             playSample  (unsigned fromChannel, Sample *sample, unsigned offset, bool direction);
+    unsigned        noteToPeriod( unsigned note, int finetune );
+    unsigned        periodToFrequency( unsigned period );
+    int             setMixerVolume( unsigned fromChannel );
+    int             setFrequency( unsigned fromChannel, unsigned frequency );
+    int             playSample( unsigned fromChannel, Sample *sample, unsigned offset, bool direction );
     int             stopChannelPrimary( unsigned fromChannel );
-    int             setVolumes ();
-    int             updateImmediateEffects (); // grbml pattern delay grmbl... grrr!
-    int             updateEffects ();
-    int             updateNotes ();
-    int             updateBpm ();
-    int             setBpm () 
-                    { callBpm = (MIXRATE * 5) / (bpm << 1); return 0; }
+    int             setVolumes();
+    int             updateImmediateEffects(); 
+    int             updateEffects();
+    int             updateNotes();
+    int             updateBpm();
+    int             setBpm() 
+    { 
+        callBpm = (MIXRATE * 5) / (bpm << 1);
+        return 0; 
+    }
 public:
     Mixer ();
     ~Mixer();
@@ -293,9 +308,9 @@ void Mixer::resetSong()
 {
     mixCount = 0; // added for debugging!!!    should NOT be here
     mixIndex = 0;
-    for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) {
+    for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) 
         mixerChannels[i].init();
-    }
+
     for ( unsigned i = 0; i < nChannels; i++ ) {
         channels[i].init();
         channels[i].panning = module->getDefaultPanPosition( i );
@@ -315,35 +330,35 @@ void Mixer::resetSong()
     iNote = pattern->getRow( 0 );
 }
 
-Mixer::Mixer () {
-    int     bufSize = (sizeof(WAVEHDR) + sizeof(SHORT[BUFFER_SIZE]))
-                      * WAVE_BUFFER_NO;
-    char    *bufData;
+Mixer::Mixer() 
+{
+    int bufSize = (sizeof( WAVEHDR ) + sizeof( SHORT[BUFFER_SIZE] ))
+        * WAVE_BUFFER_NO;
+    char *bufData;
     
-    memset(this, 0, sizeof(Mixer));
+    memset( this, 0, sizeof( Mixer ) );
     mixBuffer = new MixBufferType[BUFFER_SIZE];
-    //memset(mixBuffer, 0, sizeof(MixBufferType[BUFFER_SIZE]));
 
     waveHeaders = (WAVEHDR *)(new char[bufSize]);
-    memset(waveHeaders, 0, bufSize);
+    memset( waveHeaders, 0, bufSize );
 
     // in memory, all headers are side by side,
     // followed by the data buffers - so the
     // audio data will form one continuous block.
     // point to first data buffer:
     bufData = (char *)waveHeaders;
-    bufData += sizeof(WAVEHDR) * WAVE_BUFFER_NO;
+    bufData += sizeof( WAVEHDR ) * WAVE_BUFFER_NO;
 
-    for (unsigned i = 0; i < WAVE_BUFFER_NO; i++) {
-        waveHeaders[i].dwBufferLength = sizeof(SHORT[BUFFER_SIZE]);
+    for ( unsigned i = 0; i < WAVE_BUFFER_NO; i++ ) {
+        waveHeaders[i].dwBufferLength = sizeof( SHORT[BUFFER_SIZE] );
         waveHeaders[i].lpData = (LPSTR) bufData;
         // waveHeaders[i].dwFlags = 0; // is done with memset() earlier
         waveBuffers[i] = (SHORT *) waveHeaders[i].lpData;
-        bufData += sizeof(SHORT[BUFFER_SIZE]);
+        bufData += sizeof( SHORT[BUFFER_SIZE] );
     }
     // prepare the header for the windows WAVE functions
     waveFormatEx.wFormatTag      = WAVE_FORMAT_PCM;
-    waveFormatEx.nChannels       = 2;
+    waveFormatEx.nChannels       = 2; // stereo
     waveFormatEx.nSamplesPerSec  = MIXRATE; 
     waveFormatEx.wBitsPerSample  = 16;
     waveFormatEx.nBlockAlign     = waveFormatEx.nChannels * 
@@ -354,13 +369,22 @@ Mixer::Mixer () {
     return;
 }
 
-int Mixer::initialise(Module *m) {
-    if ( !m )              return 0;
-    if ( !m->isLoaded () ) return 0;
+Mixer::~Mixer()
+{
+    delete[] waveHeaders;
+    delete[] mixBuffer;
+    return;
+}
+
+int Mixer::initialise( Module *m ) 
+{
+    if ( !m )              
+        return 0;
+    if ( !m->isLoaded () ) 
+        return 0;
     module = m;
-    nChannels = module->getnChannels ();
-    switch ( module->getTrackerType() )
-    {
+    nChannels = module->getnChannels();
+    switch ( module->getTrackerType() ) {
         case TRACKER_PROTRACKER:
         {
             st300FastVolSlides_ = false;
@@ -408,27 +432,29 @@ int Mixer::initialise(Module *m) {
     return 0;
 }
 
-int Mixer::doMixBuffer ( SHORT *buffer ) {
+int Mixer::doMixBuffer( SHORT *buffer ) 
+{
     memset( mixBuffer, 0, BUFFER_SIZE * sizeof(MixBufferType) );
     mixIndex = 0;  
     unsigned x = callBpm - mixCount;
     unsigned y = BUFFER_SIZE / 2;   // stereo
     if (x > y) {
         mixCount += y;
-        doMixSixteenbitStereo(y);
-    } else {
-        doMixSixteenbitStereo(x);
+        doMixSixteenbitStereo( y );
+    } 
+    else {
+        doMixSixteenbitStereo( x );
         x = y - x;
         mixCount = 0;
-        updateBpm ();
-        while (x >= callBpm) {
-            doMixSixteenbitStereo(callBpm);
+        updateBpm();
+        while ( x >= callBpm ) {
+            doMixSixteenbitStereo( callBpm );
             x -= callBpm;
-            updateBpm ();
+            updateBpm();
         }
-        if (x) {
+        if ( x ) {
             mixCount = x;
-            doMixSixteenbitStereo(x);
+            doMixSixteenbitStereo( x );
         }
     }
     // transfer sampled data from ?? bit buffer into 16 bit buffer
@@ -437,39 +463,80 @@ int Mixer::doMixBuffer ( SHORT *buffer ) {
     SHORT *dst = buffer;
     for ( unsigned i = 0; i < BUFFER_SIZE; i++ ) {
         MixBufferType tmp = src[i] >> 8;
-        if ( tmp < -32768 ) { tmp = -32768; saturation++; }
-        if ( tmp >  32767 ) { tmp = 32767; saturation++; }
+        if ( tmp < -32768 ) { 
+            tmp = -32768; 
+            saturation++; 
+        }
+        if ( tmp >  32767 ) { 
+            tmp = 32767; 
+            saturation++; 
+        }
         dst[i] = (SHORT)tmp;
     }
     std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
     return 0;
 }
 
-int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
+int Mixer::doMixSixteenbitStereo( unsigned nSamples ) 
+{
+    /*
+    for ( int i = 0; i < 8; i++ )
+        std::cout
+        << "mChn " << std::setw( 1 ) << i << ":"
+        << std::setw( 1 ) << mixerChannels[i].masterChannel << " ";
+    std::cout << "\n";
+    */
+
     nActiveMixChannels = 0;
-    for (unsigned i = 0; i < MIXER_MAX_CHANNELS; i++) {
+    for (unsigned i = 1; i < MIXER_MAX_CHANNELS; i++) {
         MixerChannel& mChn = mixerChannels[i];
-        if (mChn.isActive) {
+
+        /*
+        std::cout
+            << std::setw( 4 ) << i << ": "
+            << std::setw( 4 );
+        if ( mChn.isActive )
+            std::cout << (int)mChn.masterChannel;
+        else 
+            std::cout << "  X ";
+        */
+
+
+        if ( mChn.isActive ) {
             Sample&         sample = *mChn.sample;
             unsigned        mixOffset = mixIndex;
             int             leftGain  = (gain * mChn.leftVolume) >> 12;   
             int             rightGain = (gain * mChn.rightVolume) >> 12;
 
             // div by zero safety. Probably because of portamento over/under flow
-            if ( !mChn.sampleIncrement ) continue; 
+            if ( !mChn.sampleIncrement ) 
+                continue;
 
             mChn.age++;
+
+            /*
+            if ( (mChn.volumeRampDelta == -1) && 
+                 (mChn.age > VOLUME_RAMP_SPEED)
+                )
+                std::cout
+                << "\nFailed to stop channel " << i << "!\n"
+                << "\nvolumeRampCounter: " << (unsigned)mChn.volumeRampCounter
+                << "\nvolumeRampDelta  : " << (int)mChn.volumeRampDelta
+                << "\nvolumeRampStart  : " << (int)mChn.volumeRampStart << "\n";
+            */
+
+
+
+
             nActiveMixChannels++;
-            // quick hack for first tests
-            if ( mChn.isFadingOut) {
-                mChn.isActive = false;
-                //mChn.isVolumeRampActive = true;
-            }
-            if (!mChn.isVolumeRampActive   //     && (i == 16) 
-                ) {                
+
+            { 
+
+            //if ( !mChn.isVolumeRampActive )  //     && (i == 16) 
+                                 
                 MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
                 int chnInc = mChn.sampleIncrement;
-                for (unsigned j = 0; j < nSamples; ) {
+                for ( unsigned j = 0; j < nSamples; ) {
                     // mChn.sampleIncrement is never greater dan 2 ^ 17
                     if ( !mChn.isPlayingBackwards ) {
                         unsigned nrSamplesLeft = sample.getRepeatEnd() - mChn.sampleOffset;
@@ -544,7 +611,85 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         // cubic interpolation:
                         // 31 bit frequency index:                        
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+
+                        // *********************
+                        // added for volume ramp
+                        // *********************
+                        /*
+                        if ( mChn.volumeRampCounter ) {
+                            int loopEnd;
+                            if ( mChn.volumeRampCounter < nrLoops ) {
+                                loopEnd = mChn.volumeRampCounter
+                                        * mChn.sampleIncrement
+                                        + mChn.sampleOffsetFrac;
+                                nrLoops -= mChn.volumeRampCounter;
+                                mChn.volumeRampCounter = 0;
+                            } 
+                            else { 
+                                loopEnd = nrLoops
+                                        * mChn.sampleIncrement
+                                        + mChn.sampleOffsetFrac;
+                                mChn.volumeRampCounter -= nrLoops;
+                                nrLoops = 0;
+                            }                            
+
+                            for ( int ofsFrac = mChn.sampleOffsetFrac;
+                                ofsFrac < loopEnd; ofsFrac += chnInc ) {
+
+                                int idx = ofsFrac >> 15;
+                                int p0 = SampleDataPTR[idx - 1];
+                                int p1 = SampleDataPTR[idx];
+                                int p2 = SampleDataPTR[idx + 1];
+                                int p3 = SampleDataPTR[idx + 2];
+#define FRAC_RES_SHIFT  7
+#define SAR             (15 - FRAC_RES_SHIFT)
+
+                                int fract = (ofsFrac & 0x7FFF) >> SAR;
+                                int t = p1 - p2;
+                                int a = ((t << 1) + t - p0 + p3) >> 1;
+                                int b = (p2 << 1) + p0 - (((p1 << 2) + p1 + p3) >> 1);
+                                int c = (p2 - p0) >> 1;
+
+                                int f2 = ((
+                                    ((((((a  * fract) >> FRAC_RES_SHIFT)
+                                        + b) * fract) >> FRAC_RES_SHIFT)
+                                        + c) * fract) >> FRAC_RES_SHIFT)
+                                    + p1;
+
+                                //f2 = p1; // disable interpolation for testing
+                               
+                                int lG = (leftGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+                                int rG = (rightGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+                                mChn.volumeRampStart += mChn.volumeRampDelta;
+                                
+                                //if ( mChn.volumeRampDelta < 0 )
+                                //    std::cout 
+                                //    << std::setw( 4 ) << (int)mChn.masterChannel
+                                //    << std::setw( 4 ) << (int)mChn.volumeRampStart;
+
+                                *mixBufferPTR++ += (f2 * lG);
+                                *mixBufferPTR++ += (f2 * rG);
+                            }
+                            mChn.sampleOffsetFrac = loopEnd;
+
+                            if ( (mChn.volumeRampStart <= 0) &&
+                                (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) ) {
+                                mChn.isActive = false;
+                                //channels[mChn.masterChannel].mixerChannelNr = 0; // NO! chn is virtual!
+                                j = nSamples;
+                                nrLoops = 0;
+                                //std::cout << std::setw( 3 ) << (int)mChn.masterChannel << ":X ";
+                                //std::cout << "\nstopped mChn " << i;
+                            }
+
+                        }
+                        */
+                        // **************************
+                        // added for volume ramp: end
+                        // **************************
+
                         int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+
                         for ( int ofsFrac = mChn.sampleOffsetFrac;
                             ofsFrac < loopEnd; ofsFrac += chnInc ) {
 
@@ -588,23 +733,31 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         mChn.sampleOffsetFrac &= 0x7FFF;
                         if( mChn.sampleOffset >= sample.getRepeatEnd() ) {
                             if ( sample.isRepeatSample() ) {
-                                if ( !sample.isPingpongSample() )
-                                {
+                                if ( !sample.isPingpongSample() ) {
                                     mChn.sampleOffset = sample.getRepeatOffset();  // ?
-                                } else {
+                                } 
+                                else {
                                     mChn.sampleOffset = sample.getRepeatEnd() - 1; // ?
                                     mChn.isPlayingBackwards = true;
                                 }
-                            } else {
+                            } 
+                            else {
                                 mChn.isActive = false;
-                                mChn.isPrimary = false;
+                                mChn.isMaster = false;
+                                channels[mChn.masterChannel].mixerChannelNr = 0; // TEMP DEBUG
+
+                                /*
                                 // remove reference to this mixer channel in the channels mixer channels table
                                 unsigned k;
-                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; k++ ) {
-                                    if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
+                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL; k++ ) {
+                                    if ( channels[mChn.masterChannel].mixerChannelsTable[k] == i )
+                                        break;
                                 }
                                 channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
-                                j = nSamples; // quit loop, we're done here
+                                */
+
+                                // quit loop, we're done here
+                                j = nSamples; 
                             }
                         }
 
@@ -613,16 +766,20 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                     // *********** Backwards playing code *********************
                     // ********************************************************
                     // ********************************************************
-                    } else { 
+                    } 
+                    else { 
                         // max sample length: 2 GB :)
                         int nrSamplesLeft = mChn.sampleOffset - sample.getRepeatOffset();
-                        if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
+                        if ( nrSamplesLeft > 8191 ) 
+                            nrSamplesLeft = 8191;
                         int nrLoops = 
                         //    ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
                             ((nrSamplesLeft << 15) + (int)mChn.sampleIncrement - 1
                             - (int)mChn.sampleOffsetFrac) / (int)mChn.sampleIncrement;
-                        if ( nrLoops >= (int)(nSamples - j) ) nrLoops = (int)(nSamples - j);
-                        if ( nrLoops < 0 ) nrLoops = 0;
+                        if ( nrLoops >= (int)(nSamples - j) ) 
+                            nrLoops = (int)(nSamples - j);
+                        if ( nrLoops < 0 ) 
+                            nrLoops = 0;
 
                         mChn.sampleOffsetFrac = (int)mChn.sampleOffsetFrac + nrLoops * (int)mChn.sampleIncrement;
                         //int smpDataShift = mChn.sampleOffsetFrac >> 16;
@@ -630,7 +787,8 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         if ( (int)mChn.sampleOffset < smpDataShift ) { // for bluishbg2.xm
                             mChn.sampleOffset = 0;
                             //std::cout << "underrun!" << std::endl;
-                        } else mChn.sampleOffset -= smpDataShift;
+                        } 
+                        else mChn.sampleOffset -= smpDataShift;
                         SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
 
                         for ( int j2 = 0; j2 < nrLoops; j2++ ) {
@@ -650,20 +808,16 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
                         j += nrLoops;
                        
                         if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
-                            if ( sample.isRepeatSample() )
-                            {
+                            if ( sample.isRepeatSample() ) {
                                 mChn.sampleOffset = sample.getRepeatOffset();
                                 mChn.isPlayingBackwards = false;
-                            } else {
+                            } 
+                            else {
                                 mChn.isActive = false;
-                                mChn.isPrimary = false;
-                                // remove reference to this mixer channel in the channels mixer channels table
-                                unsigned k;
-                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; k++ ) {
-                                    if ( channels[mChn.fromChannel].mixerChannelsTable[k] == i ) break;
-                                }
-                                channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
-                                j = nSamples; // quit loop, we're done here
+                                mChn.isMaster = false;
+                                channels[mChn.masterChannel].mixerChannelNr = 0; 
+                                // quit loop, we're done here
+                                j = nSamples; 
                             }
                         }
                     }
@@ -673,15 +827,8 @@ int Mixer::doMixSixteenbitStereo(unsigned nSamples) {
     }
     mixIndex += (nSamples << 1); // *2 for stereo
     //std::cout << "# active chn = " << nActiveMixChannels << std::endl;
-    return 0;
-}
 
-Mixer::~Mixer() {
-    //for (unsigned i = 0; i < PLAYER_MAX_CHANNELS; i++) delete channels[i];
-    //for (unsigned i = 0; i < MIXER_MAX_CHANNELS; i++) delete mixerChannels[i];
-    delete[] waveHeaders;
-    delete[] mixBuffer;
-    return;
+    return 0;
 }
 
 static CRITICAL_SECTION waveCriticalSection;
@@ -691,21 +838,23 @@ static void CALLBACK waveOutProc(
                                 UINT uMsg, 
                                 DWORD dwInstance, 
                                 DWORD dwParam1,
-                                DWORD dwParam2 ) {
+                                DWORD dwParam2 ) 
+{
 
     // pointer to free block counter
     int *freeBlockCounter = (int *)dwInstance;
     
     // ignore calls that occur due to openining and closing the device.
-    if(uMsg != WOM_DONE) return;
-    EnterCriticalSection(&waveCriticalSection);
-    (*freeBlockCounter)++;
-    LeaveCriticalSection(&waveCriticalSection);
+    if( uMsg != WOM_DONE ) 
+        return;
+    EnterCriticalSection( &waveCriticalSection );
+    ( *freeBlockCounter )++;
+    LeaveCriticalSection( &waveCriticalSection );
 }
 
-void Mixer::startReplay() {
-        MMRESULT        mmResult;
-
+void Mixer::startReplay() 
+{
+    MMRESULT mmResult;
     mmResult = waveOutOpen( &hWaveOut, 
                             WAVE_MAPPER, 
                             &waveFormatEx, 
@@ -746,7 +895,7 @@ void Mixer::startReplay() {
         }
     }
 #endif 
-    mmResult = waveOutPrepareHeader(hWaveOut, &(waveHeaders[0]), sizeof(WAVEHDR));
+    mmResult = waveOutPrepareHeader( hWaveOut, &(waveHeaders[0]), sizeof( WAVEHDR ) );
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
         std::cout << "\nError preparing wave mapper header!";
@@ -778,7 +927,7 @@ void Mixer::startReplay() {
         }
     }
 #endif 
-    mmResult = waveOutWrite(hWaveOut, &(waveHeaders[0]), sizeof(WAVEHDR));
+    mmResult = waveOutWrite( hWaveOut, &(waveHeaders[0]), sizeof( WAVEHDR ) );
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
         std::cout << "\nError preparing wave mapper header!";
@@ -813,9 +962,10 @@ void Mixer::startReplay() {
     //return 0;
 }
 
-int Mixer::stopReplay () {
-    waveOutReset(hWaveOut);
-    waveOutClose(hWaveOut);
+int Mixer::stopReplay () 
+{
+    waveOutReset( hWaveOut );
+    waveOutClose( hWaveOut );
     return 0;
 }
 
@@ -851,10 +1001,10 @@ NTSC freq * 4 = 7894
 
 unsigned Mixer::noteToPeriod( unsigned note, int finetune ) 
 {
-    if ( module->useLinearFrequencies() ) 
-    {
+    if ( module->useLinearFrequencies() ) {
         return (7680 - ((note - 1) << 6) - (finetune >> 1));  
-    } else {
+    } 
+    else {
         return (unsigned)(
             pow(2.0, 
                 ( (11.0 * 12.0) - ((double)(note - 1) + ((double)finetune / 128.0))) / 12.0
@@ -878,8 +1028,30 @@ int Mixer::setMixerVolume( unsigned fromChannel )
     bool            invchn = (gp >= PANNING_CENTER);
     unsigned        soften = (invchn ? (PANNING_FULL_RIGHT - gp) : gp);
 
+    MixerChannel& pmc = mixerChannels[channels[fromChannel].mixerChannelNr];    
+    if ( pmc.isActive ) {
+        unsigned p = channels[fromChannel].panning;
+        unsigned v = channels[fromChannel].volume * globalVolume_;
+
+        p = soften + 
+            ((p * (PANNING_MAX_STEPS - (soften << 1))) >> PANNING_SHIFT);
+        if ( invchn ) 
+            p = PANNING_FULL_RIGHT - p;
+        pmc.leftVolume = ((PANNING_FULL_RIGHT - p) * v) >> PANNING_SHIFT;
+        pmc.rightVolume = (p                       * v) >> PANNING_SHIFT;
+        if ( balance_ < 0 ) {
+            pmc.rightVolume *= (100 + balance_);
+            pmc.rightVolume /= 100;
+        }
+        if ( balance_ > 0 ) {
+            pmc.leftVolume *= (100 - balance_);
+            pmc.leftVolume /= 100;
+        }
+    }
+
+    /*
     //std::cout << " fc " << fromChannel << ",";
-    for (int i = 0; i < MAX_NOTES_PER_CHANNEL /* MAX_SAMPLES */; i++) {
+    for ( int i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
         unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
         //assert( mc <= 16 );
         //std::cout << " mc " << mc;
@@ -906,29 +1078,22 @@ int Mixer::setMixerVolume( unsigned fromChannel )
         }
         //std::cout << std::endl;
     }
+    */
     return 0;
 }
 
-/*
-int Mixer::setVolume   (unsigned fromChannel, unsigned volume) {  // range: 0..64
-    channels[fromChannel]->volume = volume;
-    //setMixerVolume(fromChannel);
-    return 0;
-}
+int Mixer::setFrequency( unsigned fromChannel, unsigned frequency ) 
+{
+    MixerChannel& pmc = mixerChannels[channels[fromChannel].mixerChannelNr];
+    pmc.sampleIncrement = (unsigned)
+        (((double)frequency * 32768.0) / (double)MIXRATE);
 
-// range: 0..255: extr left... extr right
-int Mixer::setPanning  (unsigned fromChannel, unsigned panning) { 
-    channels[fromChannel]->panning = panning;
-    //setMixerVolume(fromChannel);
-    return 0;
-}
-*/
-int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
-    for (int i = 0; i < MAX_NOTES_PER_CHANNEL /*MAX_SAMPLES */; i++) {
+    /*
+    for ( int i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
         unsigned    mc = channels[fromChannel].mixerChannelsTable[i];
         if (mc) {
             MixerChannel&    pmc = mixerChannels[mc];
-            if (pmc.isPrimary) {
+            if ( pmc.isMaster ) {
                 //double f = ((double)frequency * 65536.0) / (double)MIXRATE;
                 double f = ((double)frequency * 32768.0) / (double)MIXRATE;
                 pmc.sampleIncrement = (unsigned) f;
@@ -936,171 +1101,92 @@ int Mixer::setFrequency(unsigned fromChannel, unsigned frequency) {
             }
         }
     }
+    */
     return 0;
 }
 // range: 0..255 (extreme stereo... extreme reversed stereo)
-int Mixer::setGlobalPanning( unsigned panning ) { 
+int Mixer::setGlobalPanning( unsigned panning ) 
+{ 
     globalPanning_ = panning;
-    //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
     return 0;
 }
-/*
-int Mixer::setGlobalVolume ( unsigned volume ) {  // range: 0..64  // useless fn?
-    globalVolume_ = volume;
-    //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
-    return 0;
-}
-*/
 
-int Mixer::setGlobalBalance( int balance ) { // range: -100...0...+100
+int Mixer::setGlobalBalance( int balance )  // range: -100...0...+100
+{
     balance_ = balance;
-    //for (unsigned i = 0; i < nChannels; i++) setMixerVolume(i);
     return 0;
 }
 
-int Mixer::playSample ( unsigned fromChannel, Sample *sample, unsigned sampleOffset, bool direction ) {
-    unsigned    oldestSlot;
-    unsigned    emptySlot;
-    unsigned    age;
-    unsigned    newMc;
-    unsigned    mcIndex;
-    bool        sampleStarted = false;
+int Mixer::playSample ( 
+    unsigned    fromChannel, 
+    Sample      *sample, 
+    unsigned    sampleOffset, 
+    bool        direction ) 
+{    
+/*
+    todo:
+    - check NNA situation; 
+        - if NNA = cut, set the virtual channel to volume fade out 
+        - if NNA = fade, ...
+        - if NNA = continue, ...
+      
+      --=> Set the isPrimary (isMaster) flag to false, and allocate a new 
+      virtual channel for this master channel. "fromChannel" is always a 
+      "Master" Channel
 
-    //assert( sample != nullptr );
-    // stop previous note in same logical Channel    
-    for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
-        unsigned j = channels[fromChannel].mixerChannelsTable[i]; 
-        if ( j ) {
-            if ( mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel) ) {
-                mixerChannels[j].isPrimary = false;
-                channels[fromChannel].mixerChannelsTable[i] = 0;
-                // temp: 
-                mixerChannels[j].isFadingOut = true;
-                mixerChannels[j].isActive = false;
-                break;
-            }
-        }
-    }
-    /*
-    mixerChannels[channels[fromChannel].iPrimary].isPrimary = false;
-    mixerChannels[channels[fromChannel].iPrimary].isActive = false;
-    channels[fromChannel].mixerChannelsTable[channels[fromChannel].iPrimary] = 0;
-    */
+*/
+    // cut previous note if it is still playing:
+    stopChannelPrimary( fromChannel );
+
     // find an empty slot in mixer channels table
-    for ( emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++ ) {
-        if( !channels[fromChannel].mixerChannelsTable[emptySlot] ) break;
-    }
-    // None found, remove oldest sample (the longest playing one)
-    // and use it's channel for the new sample
-    if ( emptySlot >= MAX_NOTES_PER_CHANNEL ) {
-        oldestSlot = 0;
-        age = 0;
-        for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
-            mcIndex = channels[fromChannel].mixerChannelsTable[i];
-            if ( mixerChannels[mcIndex].age > age ) {
-                age = mixerChannels[mcIndex].age;
-                oldestSlot = i;
-            }
-        }
-        emptySlot = oldestSlot;
-        newMc = mcIndex;
-    } else {
-    // find a new channel for mixing
-        newMc = 1; // mix channel 0 is never used
-        while ( newMc < MIXER_MAX_CHANNELS ) {
-            if ( !mixerChannels[newMc].isActive ) break;
-            newMc++;
-        }
-    }
+    unsigned newMc;
+    /*
+    for ( newMc = 1; 
+        (newMc < MIXER_MAX_CHANNELS) && mixerChannels[newMc].isActive; 
+        newMc++ );
+    */
+    for ( newMc = 1; (newMc < MIXER_MAX_CHANNELS); newMc++ )
+        if ( !mixerChannels[newMc].isActive )
+            break;
 
-    if ( newMc < MIXER_MAX_CHANNELS ) { // should be unnecessary  (the check)
-        mixerChannels[newMc].isActive = true;
-        mixerChannels[newMc].isPrimary = true;
-        mixerChannels[newMc].isPlayingBackwards = direction;
-        mixerChannels[newMc].isFadingOut = false;
-        mixerChannels[newMc].age = 0;
-        mixerChannels[newMc].fromChannel = fromChannel;
-        mixerChannels[newMc].sample = sample;
-            // temp hack
-        mixerChannels[newMc].isVolumeRampActive = false;
-        mixerChannels[newMc].sampleOffset = sampleOffset;
-        channels[fromChannel].mixerChannelsTable[emptySlot] = newMc; 
-        channels[fromChannel].iPrimary = emptySlot;
+
+    // "no free channel found" logic here
+    // find oldest channel logic and use that instead
+    if ( newMc >= MIXER_MAX_CHANNELS ) {
+        std::cout << "\nFailed to allocate mixer channel!\n";
+        return -1;
     }
+    mixerChannels[newMc].isActive = true;
+    mixerChannels[newMc].isMaster = true;
+    mixerChannels[newMc].isPlayingBackwards = direction;
+    mixerChannels[newMc].age = 0;
+    mixerChannels[newMc].masterChannel = fromChannel;
+    mixerChannels[newMc].sample = sample;
+        
+    mixerChannels[newMc].volumeRampDelta = VOLUME_RAMPING_UP;
+    mixerChannels[newMc].volumeRampCounter = VOLUME_RAMP_SPEED;
+    mixerChannels[newMc].volumeRampStart = 0;
+    mixerChannels[newMc].sampleOffset = sampleOffset;
+    channels[fromChannel].mixerChannelNr = newMc;
+
+    //std::cout << std::setw( 4 ) << newMc;// << ":" << std::setw( 3 ) << mc; // DEBUG
     return 0;
 }
 
-int Mixer::stopChannelPrimary( unsigned fromChannel ) {
-    /*
-    unsigned    oldestSlot;
-    unsigned    emptySlot;
-    unsigned    age;
-    unsigned    newMc;
-    unsigned    mcIndex;
-    bool        sampleStarted = false;
-    */
-    // stop previous note in same logical Channel
-    for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
-        unsigned j = channels[fromChannel].mixerChannelsTable[i];
-        if ( j ) {
-            if ( mixerChannels[j].isPrimary && (mixerChannels[j].fromChannel == fromChannel) ) {
-                mixerChannels[j].isPrimary = false;
-                channels[fromChannel].mixerChannelsTable[i] = 0;
-                // temp: 
-                mixerChannels[j].isFadingOut = true;
-                mixerChannels[j].isActive = false;
-                break;
-            }
-        }
-    }
-    /*
-    mixerChannels[channels[fromChannel].iPrimary].isPrimary = false;
-    mixerChannels[channels[fromChannel].iPrimary].isActive = false;
-    channels[fromChannel].mixerChannelsTable[channels[fromChannel].iPrimary] = 0;
-    */
-    /*
-    // find an empty slot in mixer channels table
-    for ( emptySlot = 0; emptySlot < MAX_NOTES_PER_CHANNEL; emptySlot++ ) {
-        if ( !channels[fromChannel].mixerChannelsTable[emptySlot] ) break;
-    }
-    // None found, remove oldest sample (the longest playing one)
-    // and use it's channel for the new sample
-    if ( emptySlot >= MAX_NOTES_PER_CHANNEL ) {
-        oldestSlot = 0;
-        age = 0;
-        for ( unsigned i = 0; i < MAX_NOTES_PER_CHANNEL; i++ ) {
-            mcIndex = channels[fromChannel].mixerChannelsTable[i];
-            if ( mixerChannels[mcIndex].age > age ) {
-                age = mixerChannels[mcIndex].age;
-                oldestSlot = i;
-            }
-        }
-        emptySlot = oldestSlot;
-        newMc = mcIndex;
-    } else {
-        // find a new channel for mixing
-        newMc = 1; // mix channel 0 is never used
-        while ( newMc < MIXER_MAX_CHANNELS ) {
-            if ( !mixerChannels[newMc].isActive ) break;
-            newMc++;
-        }
-    }
-
-    if ( newMc < MIXER_MAX_CHANNELS ) { // should be unnecessary  (the check)
-        mixerChannels[newMc].isActive = true;
-        mixerChannels[newMc].isPrimary = true;
-        mixerChannels[newMc].isPlayingBackwards = direction;
-        mixerChannels[newMc].isFadingOut = false;
-        mixerChannels[newMc].age = 0;
-        mixerChannels[newMc].fromChannel = fromChannel;
-        mixerChannels[newMc].sample = sample;
-        // temp hack
-        mixerChannels[newMc].isVolumeRampActive = false;
-        mixerChannels[newMc].sampleOffset = sampleOffset;
-        channels[fromChannel].mixerChannelsTable[emptySlot] = newMc;
-        channels[fromChannel].iPrimary = emptySlot;
-    }
-    */
+int Mixer::stopChannelPrimary( unsigned fromChannel ) 
+{
+    MixerChannel& pmc = mixerChannels[channels[fromChannel].mixerChannelNr];
+    if ( ((pmc.masterChannel == fromChannel) && pmc.isMaster) 
+         // || (channels[fromChannel].mixerChannelNr == 0)
+        ) {
+        pmc.isActive = false;//debug: no vol ramping
+        pmc.isMaster = false;
+        pmc.age = 0; // TEMP DEBUG!!!
+        channels[fromChannel].mixerChannelNr = 0;
+        pmc.volumeRampDelta = VOLUME_RAMPING_DOWN;
+        pmc.volumeRampCounter = VOLUME_RAMP_SPEED;
+        pmc.volumeRampStart = VOLUME_RAMP_SPEED;
+    }    
     return 0;
 }
 
@@ -1108,8 +1194,6 @@ int Mixer::updateNotes () {
     bool            patternBreak = false;
     unsigned        patternStartRow = 0;
     int             nextPatternDelta = 1;
-
-    //if ( patternDelay_ ) { patternDelay_--; return 0; }
 
 #ifdef debug_mixer
     
@@ -1128,10 +1212,6 @@ int Mixer::updateNotes () {
 #endif
 
     patternLoopFlag_ = false;
-
-
-
-    //std::cout << " t = " << tempo << ", bpm = " << bpm << "; " << std::endl;
 
 
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
@@ -1154,21 +1234,26 @@ int Mixer::updateNotes () {
             if ( note == KEY_OFF ) {
                 isNewNote = false;
                 keyedOff = true;
-            } else if ( note == KEY_NOTE_CUT ) {
+            } 
+            else if ( note == KEY_NOTE_CUT ) {
                 isNewNote = false;
                 stopChannelPrimary( iChannel ); // TEMP
-            } else {
-                if ( note > MAXIMUM_NOTES ) std::cout << "!" << (unsigned)note << "!"; // DEBUG
+            } 
+            else {
+                if ( note > MAXIMUM_NOTES ) 
+                    std::cout << "!" << (unsigned)note << "!"; // DEBUG
                 channel.lastNote = note;
                 isNewNote = true;
                 replay = true;
                 channel.retrigCount = 0; // to check if that resets the counter, and when
                 if( (channel.vibratoWaveForm & VIBRATO_NO_RETRIG_FLAG) == 0 ) 
                     channel.vibratoCount = 0;
-                if ( ft2StyleEffects_ ) channel.sampleOffset = 0;  // ??
+                if ( ft2StyleEffects_ ) 
+                    channel.sampleOffset = 0;  // ??
                 //if ( ft2StyleEffects_ ) std::cout << "ft2!";
             }
-        } else {
+        } 
+        else {
             isNewNote = false;
         }
         /*
@@ -1189,8 +1274,7 @@ int Mixer::updateNotes () {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
             channel.pInstrument = module->getInstrument( instrument ); 
-            if ( channel.pInstrument ) 
-            {
+            if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                         ( channel.lastNote - 1 );
@@ -1218,8 +1302,7 @@ int Mixer::updateNotes () {
                         << ", channel " << std::setw( 2 ) << iChannel 
                         << std::endl;
                     /*
-                    if ( channel.pInstrument )
-                    {
+                    if ( channel.pInstrument ) {
                         for ( int i = 0; i < MAXIMUM_NOTES; i++ )
                         {
                             std::cout << channel.pInstrument->getSampleForNote( i )
@@ -1259,8 +1342,7 @@ int Mixer::updateNotes () {
             Start effect handling
         */
         // check if a portamento effect occured:
-        for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ )
-        {
+        for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
             
             // disable fx for now:
             /*
@@ -1310,8 +1392,7 @@ int Mixer::updateNotes () {
                 finetune );
         }
 
-        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) 
-        {
+        for (unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++) {
             const unsigned& effect   = iNote->effects[fxloop].effect;
             const unsigned& argument = iNote->effects[fxloop].argument;
             /* 
@@ -1349,8 +1430,7 @@ int Mixer::updateNotes () {
             if ( (fxloop == (MAX_EFFECT_COLUMNS - 1)) &&
                 (effect != VIBRATO) &&
                 (effect != FINE_VIBRATO) &&
-                (effect != VIBRATO_AND_VOLUME_SLIDE) )
-            {
+                (effect != VIBRATO_AND_VOLUME_SLIDE) ) {
                 //channel.vibratoCount = 0; // only on new note
                 setFrequency( iChannel,periodToFrequency( channel.period ) );
             }
@@ -1434,16 +1514,15 @@ int Mixer::updateNotes () {
                 }
                 case PORTAMENTO_UP :
                 {
-                    if ( argument ) channel.lastPortamentoUp = argument;
-                    if ( st3StyleEffectMemory_ || itStyleEffects_ )
-                    {
+                    if ( argument ) 
+                        channel.lastPortamentoUp = argument;
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) {
                         unsigned lastPorta = channel.lastPortamentoUp;
                         //argument = channel.lastNonZeroFXArg;
                         unsigned xfx = lastPorta >> 4;
                         unsigned xfxArg = lastPorta & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
-                        switch ( xfx )
-                        {
+                        switch ( xfx ) {
                             case 0xE: // extra fine slide
                             {                                
                                 fxRemap.effect = EXTRA_FINE_PORTAMENTO;
@@ -1465,15 +1544,14 @@ int Mixer::updateNotes () {
                 }
                 case PORTAMENTO_DOWN :
                 {
-                    if ( argument ) channel.lastPortamentoDown = argument;
-                    if ( st3StyleEffectMemory_ || itStyleEffects_ )
-                    {
+                    if ( argument ) 
+                        channel.lastPortamentoDown = argument;
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) {
                         unsigned lastPorta = channel.lastPortamentoDown;
                         unsigned xfx = lastPorta >> 4;
                         unsigned xfxArg = lastPorta & 0xF;
                         Effect& fxRemap = channel.newNote.effects[fxloop];
-                        switch ( xfx )
-                        {
+                        switch ( xfx ) {
                             case 0xE: // extra fine slide
                             {
                                 fxRemap.effect = EXTRA_FINE_PORTAMENTO;
@@ -1504,17 +1582,18 @@ int Mixer::updateNotes () {
                     if ( argument & 0xF ) 
                             lv = (lv & 0xF0) + (argument & 0xF);
 
-                    if ( ft2StyleEffects_ && (effect != SET_VIBRATO_SPEED) )
-                    {
+                    if ( ft2StyleEffects_ && (effect != SET_VIBRATO_SPEED) ) {
                         // Hxy: vibrato with x speed and y amplitude
                         channel.vibratoCount += channel.lastVibrato >> 4;
-                        if ( channel.vibratoCount > 31 ) channel.vibratoCount -= 64;
+                        if ( channel.vibratoCount > 31 ) 
+                            channel.vibratoCount -= 64;
                         unsigned vibAmp;
                         unsigned tableIdx;
-                        if ( channel.vibratoCount < 0 ) tableIdx = -channel.vibratoCount;
-                        else                           tableIdx = channel.vibratoCount;
-                        switch ( channel.vibratoWaveForm & 0x3 )
-                        {
+                        if ( channel.vibratoCount < 0 )
+                            tableIdx = -channel.vibratoCount;
+                        else 
+                            tableIdx = channel.vibratoCount;
+                        switch ( channel.vibratoWaveForm & 0x3 ) {
                             case VIBRATO_RANDOM:
                             case VIBRATO_SINEWAVE:
                             {
@@ -1524,7 +1603,8 @@ int Mixer::updateNotes () {
                             case VIBRATO_RAMPDOWN:
                             {
                                 tableIdx <<= 3;
-                                if ( channel.vibratoCount < 0 ) vibAmp = 255 - tableIdx;
+                                if ( channel.vibratoCount < 0 ) 
+                                    vibAmp = 255 - tableIdx;
                                 else vibAmp = tableIdx;
                                 break;
                             }
@@ -1536,10 +1616,13 @@ int Mixer::updateNotes () {
                         }
                         vibAmp *= channel.lastVibrato & 0xF;
                         vibAmp >>= 7;
-                        if ( effect != FINE_VIBRATO ) vibAmp <<= 2;
+                        if ( effect != FINE_VIBRATO ) 
+                            vibAmp <<= 2;
                         unsigned period = channel.period;
-                        if ( channel.vibratoCount > 0 ) period += vibAmp;
-                        else                            period -= vibAmp;
+                        if ( channel.vibratoCount > 0 ) 
+                            period += vibAmp;
+                        else                            
+                            period -= vibAmp;
                         setFrequency( iChannel,periodToFrequency( period ) );
                     }
                     break;
@@ -1609,9 +1692,9 @@ int Mixer::updateNotes () {
                 // In .S3M the volume decrease has priority if both values are 
                 // non zero and different from 0xF (which is a fine slide)
                 {
-                    if ( argument ) channel.lastVolumeSlide = argument;
-                    if ( st3StyleEffectMemory_ && st300FastVolSlides_ )
-                    { 
+                    if ( argument )
+                        channel.lastVolumeSlide = argument; // illegal argument?? -> .mod compat?
+                    if ( st3StyleEffectMemory_ && st300FastVolSlides_ ) { 
                         /*
                             So, apparently, in .S3M:
                             D01 = volume slide down by 1
@@ -1626,23 +1709,27 @@ int Mixer::updateNotes () {
                                 volume slide up has priority over volume slide
                                 down if both values are specified. Impulse 
                                 tracker (.IT) ignores illegal volume slide 
-                                altogether.
+                                altogether. --> to check!
                         */
                         unsigned& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
                         unsigned slide2 = lastSlide & 0xF;
-                        if ( slide1 & slide2 )
-                        {
+                        if ( slide1 & slide2 ) {
                             // these are fine slides:
-                            if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
+                            if ( (slide1 == 0xF) || (slide2 == 0xF) ) 
+                                break;
                         }
                         unsigned& v = channel.volume;
                         if ( slide2 ) { // slide down comes first
-                            if ( slide2 > v ) v = 0;
-                            else             v -= slide2;
-                        } else {        // slide up
+                            if ( slide2 > v ) 
+                                v = 0;
+                            else
+                                v -= slide2;
+                        } 
+                        else {        // slide up
                             v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
+                            if ( v > MAX_VOLUME ) 
+                                v = MAX_VOLUME;
                         }
                     }
                     break;
@@ -1696,10 +1783,8 @@ int Mixer::updateNotes () {
                         extFXArg = channel.lastExtendedEffect;
                     unsigned xfx    = extFXArg >> 4;
                     unsigned xfxArg = extFXArg & 0xF;
-                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) // remap st3 style effects
-                    {
-                        switch ( xfx )
-                        {
+                    if ( st3StyleEffectMemory_ || itStyleEffects_ ) { // remap st3 style effects
+                        switch ( xfx ) {
                             case S3M_SET_GLISSANDO_CONTROL: 
                             {                                    
                                 xfx = SET_GLISSANDO_CONTROL;
@@ -1774,12 +1859,14 @@ int Mixer::updateNotes () {
                         }
                         case FINE_PORTAMENTO_UP:
                         {
-                            if ( xfxArg ) channel.lastFinePortamentoUp = xfxArg;
+                            if ( xfxArg ) 
+                                channel.lastFinePortamentoUp = xfxArg;
                             break;
                         }
                         case FINE_PORTAMENTO_DOWN:
                         {
-                            if ( xfxArg ) channel.lastFinePortamentoDown = xfxArg;
+                            if ( xfxArg ) 
+                                channel.lastFinePortamentoDown = xfxArg;
                             break;
                         }
                         case SET_GLISSANDO_CONTROL:
@@ -1794,20 +1881,21 @@ int Mixer::updateNotes () {
                         case SET_FINETUNE:
                         {
                             finetune = xfxArg;
-                            if (finetune & 8) finetune |= 0xFFFFFFF0;
+                            if (finetune & 8)
+                                finetune |= 0xFFFFFFF0;
                             break;
                         }
                         case SET_PATTERN_LOOP: 
                         {
                             if ( !xfxArg ) channel.patternLoopStart = patternRow;
                             else {
-                                if ( !channel.patternIsLooping ) 
-                                { 
+                                if ( !channel.patternIsLooping ) { 
                                     channel.patternLoopCounter = xfxArg;
                                     patternLoopStartRow_ = channel.patternLoopStart;
                                     channel.patternIsLooping = true;
                                     patternLoopFlag_ = true;
-                                } else { 
+                                } 
+                                else { 
                                     channel.patternLoopCounter--;
                                     if ( !channel.patternLoopCounter )
                                         channel.patternIsLooping = false;
@@ -1832,7 +1920,8 @@ int Mixer::updateNotes () {
                         }
                         case NOTE_CUT: 
                         {
-                            if ( !xfxArg ) channel.volume = 0;
+                            if ( !xfxArg ) 
+                                channel.volume = 0;
                             break;
                         }
                         case NOTE_DELAY: 
@@ -1858,7 +1947,8 @@ int Mixer::updateNotes () {
                                 row.
                             */
                             if ( st3StyleEffectMemory_ || itStyleEffects_ ) {
-                                if ( !patternDelay_ ) patternDelay_ = xfxArg;
+                                if ( !patternDelay_ ) 
+                                    patternDelay_ = xfxArg;
                             } else patternDelay_ = xfxArg;
                             break;
                         }
@@ -1893,12 +1983,14 @@ int Mixer::updateNotes () {
                 }
                 case PANNING_SLIDE :
                 {
-                    if ( argument ) channel.lastPanningSlide = argument;
+                    if ( argument ) 
+                        channel.lastPanningSlide = argument;
                     break;
                 }
                 case MULTI_NOTE_RETRIG :
                 {
-                    if( argument ) channel.lastMultiNoteRetrig = argument;                        
+                    if( argument ) 
+                        channel.lastMultiNoteRetrig = argument;                        
                     break;
                 }
                 case TREMOR :
@@ -1912,12 +2004,14 @@ int Mixer::updateNotes () {
                     switch ( xfx ) {
                         case EXTRA_FINE_PORTAMENTO_UP:
                         {
-                            if ( xfxArg ) channel.lastExtraFinePortamentoUp = xfxArg;
+                            if ( xfxArg ) 
+                                channel.lastExtraFinePortamentoUp = xfxArg;
                             break;
                         }
                         case EXTRA_FINE_PORTAMENTO_DOWN:
                         {
-                            if ( xfxArg ) channel.lastExtraFinePortamentoDown = xfxArg;
+                            if ( xfxArg ) 
+                                channel.lastExtraFinePortamentoDown = xfxArg;
                             break;
                         }
                     }
@@ -1937,7 +2031,7 @@ int Mixer::updateNotes () {
                 iChannel,
                 periodToFrequency( channel.period ) );
         }
-        if (!isNoteDelayed) { 
+        if ( !isNoteDelayed ) { 
             /*
                channel->panning = channel->newpanning;
                channel->volume  = channel->newvolume;
@@ -2067,13 +2161,14 @@ S3M and IT set a new start point in the line after the end of the previous
 loop, making the infinite loop impossible.
 */
 
-    if ( patternLoopFlag_ ) 
-    { 
+    if ( patternLoopFlag_ ) { 
         patternRow = patternLoopStartRow_;
         iNote = pattern->getRow( patternRow );
-    } else {
+    } 
+    else {
         // prepare for next row / next function call
-        if ( !patternBreak ) patternRow++;
+        if ( !patternBreak ) 
+            patternRow++;
         else {
             patternLoopStartRow_ = 0;
             patternRow = pattern->getnRows();
@@ -2089,14 +2184,15 @@ loop, making the infinite loop impossible.
             FT2 starts the pattern on the same row that the pattern loop 
             started in the pattern before it
         */
-        if ( ft2StyleEffects_ ) 
-        {
+        if ( ft2StyleEffects_ ) {
             patternRow = patternLoopStartRow_;
             patternLoopStartRow_ = 0;
         }
         int iPtnTable = (int)iPatternTable + nextPatternDelta;
-        if ( iPtnTable < 0 ) iPatternTable = 0; // should be impossible
-        else iPatternTable = iPtnTable;
+        if ( iPtnTable < 0 ) 
+            iPatternTable = 0; // should be impossible
+        else 
+            iPatternTable = iPtnTable;
         // skip marker patterns:
         for ( ; 
             (iPatternTable < module->getSongLength()) && 
@@ -2104,8 +2200,7 @@ loop, making the infinite loop impossible.
             ; iPatternTable++ 
             );
         if ( (iPatternTable >= module->getSongLength()) ||
-            (module->getPatternTable( iPatternTable ) == END_OF_SONG_MARKER) )
-        { 
+            (module->getPatternTable( iPatternTable ) == END_OF_SONG_MARKER) ) { 
             iPatternTable = module->getSongRestartPosition(); // repeat song
             // skip marker patterns:
             for ( ;
@@ -2116,7 +2211,8 @@ loop, making the infinite loop impossible.
         }
 
         pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
-        if( patternRow >= pattern->getnRows() ) patternRow = 0;
+        if( patternRow >= pattern->getnRows() ) 
+            patternRow = 0;
         iNote = pattern->getRow( patternRow );
 #ifdef debug_mixer
         std::cout << std::endl
@@ -2171,35 +2267,30 @@ int Mixer::updateEffects () {
                     unsigned& lastSlide = channel.lastVolumeSlide;
                     unsigned slide1 = lastSlide >> 4;
                     unsigned slide2 = lastSlide & 0xF;
-                    if ( slide1 & slide2 )
-                    {
+                    if ( slide1 & slide2 ) {
                         // these are fine slides:
-                        if ( (slide1 == 0xF) || (slide2 == 0xF) ) break;
-                        if ( itStyleEffects_ ) break; // impulse tracker ignores illegal vol slides!
+                        if ( (slide1 == 0xF) || (slide2 == 0xF) )
+                            break;
+                        // illegal vol slides are removed in .IT loader
+                        // but can reoccur due to effect memory? To check
+                        if ( itStyleEffects_ ) 
+                            break; // impulse tracker ignores illegal vol slides!
                     }
                     unsigned& v = channel.volume;
-                    //if ( st3StyleEffectMemory_ )
-                    //{
-                        // slide down has priority in .s3m
-                        if ( slide2 ) { 
-                            if ( slide2 > v ) v = 0;
-                            else              v -= slide2;
-                        } else {        // slide up
-                            v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        }
-                    /* // fixed in .mod and .xm loader
-                    } else { 
-                        // slide up has priority in .mod
-                        if ( slide1 ) {
-                            v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        } else {        // slide down
-                            if ( slide2 > v ) v = 0;
-                            else              v -= slide2;
-                        }
+                    // slide down has priority in .s3m. 
+                    // illegal volume slide effects are corrected 
+                    // or removed in .mod, .xm and .it (?) loaders
+                    if ( slide2 ) { 
+                        if ( slide2 > v ) 
+                            v = 0;
+                        else
+                            v -= slide2;
+                    } 
+                    else {        // slide up
+                        v += slide1;
+                        if ( v > MAX_VOLUME ) 
+                            v = MAX_VOLUME;
                     }
-                    */
                     break;
                 }
             }
@@ -2296,15 +2387,13 @@ int Mixer::updateEffects () {
                         || (note.note && (note.note != KEY_OFF)) )
                     */
                     {
-                        if ( channel.portaDestPeriod )
-                        {
-                            if ( channel.period < channel.portaDestPeriod )
-                            {
+                        if ( channel.portaDestPeriod ) {
+                            if ( channel.period < channel.portaDestPeriod ) {
                                 channel.period += portaSpeed;
                                 if ( channel.period > channel.portaDestPeriod )
                                     channel.period = channel.portaDestPeriod;
-                            } else if ( channel.period > channel.portaDestPeriod )
-                            {
+                            } 
+                            else if ( channel.period > channel.portaDestPeriod ) {
                                 if ( channel.period > portaSpeed )
                                     channel.period -= portaSpeed;
                                 else channel.period = channel.portaDestPeriod;
@@ -2325,13 +2414,15 @@ int Mixer::updateEffects () {
                 {
                     // Hxy: vibrato with x speed and y amplitude
                     channel.vibratoCount += channel.lastVibrato >> 4;
-                    if ( channel.vibratoCount > 31 ) channel.vibratoCount -= 64;
+                    if ( channel.vibratoCount > 31 ) 
+                        channel.vibratoCount -= 64;
                     unsigned vibAmp;
                     unsigned tableIdx;
-                    if (channel.vibratoCount < 0 ) tableIdx = -channel.vibratoCount;
-                    else                           tableIdx = channel.vibratoCount;                    
-                    switch ( channel.vibratoWaveForm & 0x3 )
-                    {
+                    if (channel.vibratoCount < 0 ) 
+                        tableIdx = -channel.vibratoCount;
+                    else                           
+                        tableIdx = channel.vibratoCount;                    
+                    switch ( channel.vibratoWaveForm & 0x3 ) {
                         case VIBRATO_RAMPDOWN:
                         {
                             tableIdx <<= 3;
@@ -2364,8 +2455,10 @@ int Mixer::updateEffects () {
                     //setFrequency( iChannel,frequency );
 
                     unsigned period = channel.period;
-                    if ( channel.vibratoCount > 0 ) period += vibAmp;
-                    else                            period -= vibAmp;
+                    if ( channel.vibratoCount > 0 )
+                        period += vibAmp;
+                    else                           
+                        period -= vibAmp;
                     setFrequency( iChannel,periodToFrequency( period ) );
 
                     break;
@@ -2453,7 +2546,8 @@ int Mixer::updateEffects () {
                                 row
                             */
                             if ( channel.pSample ) {
-                                if ( ft2StyleEffects_ && (argument >= tempo) ) break;
+                                if ( ft2StyleEffects_ && (argument >= tempo) ) 
+                                    break;
                                 channel.retrigCount++;
                                 if ( channel.retrigCount >= argument ) {
                                     channel.retrigCount = 0;
@@ -2468,7 +2562,7 @@ int Mixer::updateEffects () {
                         case NOTE_CUT : 
                         {
                             //std::cout << "vv"; // DEBUG
-                            if (tick >= argument) {
+                            if ( tick >= argument ) {
                                 channel.volume = 0;
                                 note.effects[fxloop].effect   = 0;
                                 note.effects[fxloop].argument = 0;
@@ -2477,15 +2571,15 @@ int Mixer::updateEffects () {
                         }
                         case NOTE_DELAY : 
                         {                                    
-                            if (channel.delayCount <= tick) {
+                            if ( channel.delayCount <= tick ) {
                                 // valid sample for replay ? 
                                 //  -> replay sample if new note
-                                if (channel.pSample) { 
-                                    playSample(iChannel, 
+                                if ( channel.pSample ) { 
+                                    playSample( iChannel, 
                                                 channel.pSample, 
                                                 channel.sampleOffset, 
-                                                FORWARD);
-                                    setFrequency(iChannel, 
+                                                FORWARD );
+                                    setFrequency( iChannel, 
                                         periodToFrequency(
                                             noteToPeriod(
                                                 channel.lastNote + 
@@ -2514,11 +2608,13 @@ int Mixer::updateEffects () {
                         globalVolume_ += slide;
                         if (globalVolume_ > MAX_VOLUME) 
                             globalVolume_ = MAX_VOLUME;
-                    } else {     // slide down
+                    } 
+                    else {     // slide down
                         slide = arg & 0x0F;
-                        if (slide > globalVolume_) 
-                                globalVolume_ = 0;
-                        else globalVolume_ -= slide;
+                        if ( slide > globalVolume_ ) 
+                            globalVolume_ = 0;
+                        else 
+                            globalVolume_ -= slide;
                     }
                     break;
                 }
@@ -2531,11 +2627,13 @@ int Mixer::updateEffects () {
                         panning += slide;
                         if (panning > PANNING_FULL_RIGHT) 
                             panning = PANNING_FULL_RIGHT;
-                    } else {     // slide down
+                    } 
+                    else {     // slide down
                         slide = arg & 0x0F;
                         if  (slide > panning ) 
-                                panning = PANNING_FULL_LEFT;
-                        else panning -= slide;
+                            panning = PANNING_FULL_LEFT;
+                        else 
+                            panning -= slide;
                     }
                     channel.panning = panning;
                     break;
@@ -2569,8 +2667,10 @@ int Mixer::updateEffects () {
                                 case 14: { v *= 3; v >>= 1; break; }
                                 case 15: { v <<= 1;         break; }
                             }
-                            if ( v < 0 )          channel.volume = 0;
-                            if ( v > MAX_VOLUME ) channel.volume = MAX_VOLUME;
+                            if ( v < 0 )          
+                                channel.volume = 0;
+                            if ( v > MAX_VOLUME ) 
+                                channel.volume = MAX_VOLUME;
                             playSample(
                                 iChannel, 
                                 channel.pSample, 
@@ -2621,13 +2721,16 @@ int Mixer::updateImmediateEffects ()
                         unsigned slide1 = lastSlide >> 4;
                         unsigned slide2 = lastSlide & 0xF;
                         unsigned& v = channel.volume;
-                        if ( slide2 == 0xF )
-                        {
+                        if ( slide2 == 0xF ) {
                             v += slide1;
-                            if ( v > MAX_VOLUME ) v = MAX_VOLUME;
-                        } else if (slide1 == 0xF) {
-                            if ( slide2 > v ) v = 0;
-                            else              v -= slide2;
+                            if ( v > MAX_VOLUME ) 
+                                v = MAX_VOLUME;
+                        } 
+                        else if ( slide1 == 0xF ) {
+                            if ( slide2 > v ) 
+                                v = 0;
+                            else
+                                v -= slide2;
                         } 
                     }
                     break;
@@ -2636,14 +2739,15 @@ int Mixer::updateImmediateEffects ()
                 {
                     effect = argument >> 4;
                     argument &= 0xF;
-                    switch (effect) {
+                    switch ( effect ) {
                         case FINE_PORTAMENTO_UP :
                         {
                             argument = channel.lastFinePortamentoUp;
                             argument <<= 2;
                             if ( argument < channel.period )
                                 channel.period -= argument;
-                            else channel.period = module->getMinPeriod();
+                            else 
+                                channel.period = module->getMinPeriod();
                             if ( channel.period < module->getMinPeriod() )
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
@@ -2678,7 +2782,8 @@ int Mixer::updateImmediateEffects ()
                             if ( channel.lastFineVolumeSlideDown >= 
                                 channel.volume ) 
                                     channel.volume = 0;
-                            else channel.volume -= 
+                            else 
+                                channel.volume -= 
                                     channel.lastFineVolumeSlideDown;
                             break;
                         }
@@ -2695,7 +2800,8 @@ int Mixer::updateImmediateEffects ()
                             argument = channel.lastExtraFinePortamentoUp;
                             if ( argument < channel.period )
                                 channel.period -= argument;
-                            else channel.period = module->getMinPeriod();
+                            else 
+                                channel.period = module->getMinPeriod();
                             if ( channel.period < module->getMinPeriod() )
                                 channel.period = module->getMinPeriod();
                             setFrequency( iChannel,
@@ -2734,10 +2840,13 @@ int Mixer::updateBpm ()
     tick++;
     if ( tick < tempo ) { 
         updateEffects ();         
-    } else { 
+    } 
+    else { 
         tick = 0;
-        if ( !patternDelay_ ) updateNotes();
-        else                  patternDelay_--;
+        if ( !patternDelay_ ) 
+            updateNotes();
+        else                  
+            patternDelay_--;
         updateImmediateEffects();
     }
     setVolumes ();
@@ -2749,8 +2858,6 @@ int Mixer::updateBpm ()
 // ******* Start of Benchmarking code *****************************************
 // ****************************************************************************
 // ****************************************************************************
-
-
 
 enum TimerToUseType { ttuUnknown,ttuHiRes,ttuClock };
 TimerToUseType TimerToUse = ttuUnknown;
@@ -2885,7 +2992,7 @@ vibrato is active even if envelope is not
 vibrato sweep: amount of ticks before vibrato reaches max. amplitude
 */
 
-int main(int argc, char *argv[])  
+int main( int argc, char *argv[] )  
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
@@ -2911,7 +3018,7 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\alf_-_no-mercy-SampleOffsetBug.mod",
         //"D:\\MODS\\M2W_BUGTEST\\against-retrigtest.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\zak.s3m",
-        "D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
+        //"D:\\MODS\\dosprog\\audiopls\\YEO.MOD",
         //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data.xm",
         //"D:\\MODS\\M2W_BUGTEST\\resolution-loader-corrupts-sample-data2.mod",
@@ -2929,15 +3036,15 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
-        "D:\\MODS\\M2W_BUGTEST\\womeni.it",
+        //"D:\\MODS\\M2W_BUGTEST\\womeni.it",
         //"D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        "D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
-        "D:\\MODS\\M2W_BUGTEST\\Crea.it",         // impulse tracker v2.0+
+        //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
+        //"D:\\MODS\\M2W_BUGTEST\\Crea.it",         // impulse tracker v2.0+
         //"D:\\MODS\\M2W_BUGTEST\\WOMEN.xm",
-        "D:\\MODS\\M2W_BUGTEST\\module1.mptm",
-        "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
-        "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
+        //"D:\\MODS\\M2W_BUGTEST\\module1.mptm",
+        //"D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
+        //"D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
 
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
@@ -2957,7 +3064,7 @@ int main(int argc, char *argv[])
         //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        "D:\\MODS\\dosprog\\mods\\women.s3m",
+        //"D:\\MODS\\dosprog\\mods\\women.s3m",
         //"D:\\MODS\\dosprog\\audiopls\\ALGRHYTH.MOD",
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\MODS\\dosprog\\china1-okt.s3m",
@@ -3040,148 +3147,28 @@ int main(int argc, char *argv[])
         "D:\\MODS\\dosprog\\mods\\probmod\\flt8_1.mod",
         nullptr
     };
-    /*
-    int positive_val = 199;
-    int negative_val = -199;
-    std::cout << (positive_val / 2) << std::endl; // rondt af naar beneden
-    std::cout << (positive_val >> 1) << std::endl; // rondt af naar beneden
-
-    std::cout << (negative_val / 2) << std::endl; // rondt af naar BOVEN!
-    std::cout << (negative_val >> 1) << std::endl; // rondt af naar beneden
-    std::cout << std::endl
-        << "finetunes: " << std::endl;
-    for ( int i = 0; i < 16; i++ ) {
-        std::cout << "Fine tune for i = " << std::setw(2) << i << ": " 
-            << std::setw( 2 )
-            << (int)((signed char)( i > 7 ? (i | 0xF0) : i )) << std::endl;
-    }
-    std::cout << std::endl;
-    _getch();
-    */
-
-    /*
-    {
-        unsigned test = 0xF1E2D3C4;
-        std::cout << std::hex << std::endl << "test = " << test << std::endl
-            << "MSB (F1) = " << ((test >> 24) & 0xFF) << std::endl
-            << "MSB (E2) = " << ((test >> 16) & 0xFF) << std::endl
-            << "MSB (D3) = " << ((test >> 8) & 0xFF) << std::endl
-            << "MSB (C4) = " << ((test >> 0) & 0xFF) << std::endl;
-
-        char *testp = (char *)(&test);
-        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
-            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
-            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
-            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
-            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl;
-    }
-    {
-        unsigned short test = 0xD3C4;
-        std::cout << std::hex << std::endl << "test = " << test << std::endl
-            << "MSB (D3) = " << ((test >> 8) & 0xFF) << std::endl
-            << "MSB (C4) = " << ((test >> 0) & 0xFF) << std::endl;
-
-        char *testp = (char *)(&test);
-        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
-            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
-            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl;
-    }
-    {
-        unsigned long long test = 0xF1E2D3C4B5A69788;
-        std::cout << std::hex << std::endl << "test = " << test << std::endl
-            << "MSB (F1) = " << ((test >> 56) & 0xFF) << std::endl
-            << "MSB (E2) = " << ((test >> 48) & 0xFF) << std::endl
-            << "MSB (D3) = " << ((test >> 40) & 0xFF) << std::endl
-            << "MSB (C4) = " << ((test >> 32) & 0xFF) << std::endl
-            << "MSB (B5) = " << ((test >> 24) & 0xFF) << std::endl
-            << "MSB (A6) = " << ((test >> 16) & 0xFF) << std::endl
-            << "MSB (97) = " << ((test >> 8) & 0xFF) << std::endl
-            << "MSB (88) = " << ((test >> 0) & 0xFF) << std::endl;
-
-        char *testp = (char *)(&test);
-        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
-            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
-            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
-            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
-            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl
-            << "testp[4] = " << (unsigned)((unsigned char)(testp[4])) << std::endl
-            << "testp[5] = " << (unsigned)((unsigned char)(testp[5])) << std::endl
-            << "testp[6] = " << (unsigned)((unsigned char)(testp[6])) << std::endl
-            << "testp[7] = " << (unsigned)((unsigned char)(testp[7])) << std::endl;
-    }
-
-    {
-        struct TEST { 
-            unsigned short a;
-            unsigned short b;
-        } test;
-
-        test.a = 0xF1E2;
-        test.b = 0xD3C4;
-
-        char *testp = (char *)(&test);
-        std::cout << std::hex << std::endl << "test ptr contents = " << std::endl
-            << "testp[0] = " << (unsigned)((unsigned char)(testp[0])) << std::endl
-            << "testp[1] = " << (unsigned)((unsigned char)(testp[1])) << std::endl
-            << "testp[2] = " << (unsigned)((unsigned char)(testp[2])) << std::endl
-            << "testp[3] = " << (unsigned)((unsigned char)(testp[3])) << std::endl;
-    }
-    */
-
-    /*
-    VirtualFile vf( std::string( "D:\\MODS\\M2W_BUGTEST\\Creagaia.it" ) );
-    const int num = 8;
-    char buf[num];
-    memset( buf,0,num );
-    vf.read( buf,num );
-    for ( int i = 0; i < num; i++ )
-    {
-        std::cout << std::setw( 4 ) << buf[i];
-    }
-    std::cout << std::endl << std::hex;
-    for ( int i = 0; i < num; i++ )
-    {
-        std::cout << std::setw( 4 ) << (unsigned)((unsigned char)(buf[i]));
-    }
-    std::cout << std::endl;
-
-
-    unsigned dst;
-    vf.absSeek( 0 );
-    vf.resetBitRead();
-
-    //vf.bitRead( dst,16 );
-    //std::cout << std::setw( 4 ) << dst;
-    
-    for ( int i = 0; i < num; i++ )
-    {
-        vf.bitRead( dst,4 );
-        std::cout << std::setw( 3 ) << dst;
-        vf.bitRead( dst,4 );
-        std::cout << dst;
-    }
-    
-    std::cout << std::endl;
-
-    _getch();
-    */
-
 
     if (argc > 1) {
         for ( int i = 1; i < argc; i++ ) filePaths.push_back( argv[i] );
-    } else {
-        if ((!strcmp(argv[0], 
+    } 
+    else {
+        if ( (!strcmp(argv[0], 
             "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2015\\Projects\\Mod_to_WAV\\Debug\\Mod_to_WAV.exe")) ||
             (!strcmp(argv[0], 
             "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2015\\Projects\\Mod_to_WAV\\Release\\Mod_to_WAV.exe")) ||
             (!strcmp(argv[0], 
             "C:\\Dev-Cpp\\Projects\\Mod2Wav.exe"))) {                                                    
-            for ( int i = 0; modPaths[i] !=nullptr; i++ ) filePaths.push_back( modPaths[i] );
-        } else {
-            unsigned    slen = strlen(argv[0]);
-            char        *exeName = (argv[0] + slen - 1);
+            for ( int i = 0; modPaths[i] !=nullptr; i++ ) 
+                filePaths.push_back( modPaths[i] );
+        } 
+        else {
+            unsigned    slen = strlen( argv[0] );
+            char        *exeName = ( argv[0] + slen - 1 );
 
-            while (slen && (*exeName != '\\')) { slen--; exeName--; }
+            while ( slen && (*exeName != '\\') ) { 
+                slen--; 
+                exeName--; 
+            }
             exeName++;
             std::cout << "\n\nUsage: ";
             std::cout << exeName << " + <modfile.mod>\n\n";
@@ -3198,25 +3185,23 @@ int main(int argc, char *argv[])
         sourceFile.loadFile( filePaths[i] );
 
         std::cout << "\n\nLoading " << filePaths[i].c_str() //moduleFilename
-                  << ": " << (sourceFile.isLoaded() ? "Success." : "Error!") << std::endl;
+                  << ": " << (sourceFile.isLoaded() ? "Success." : "Error!\n");
 
         if ( sourceFile.isLoaded () ) {
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
                       << sourceFile.getSongTitle().c_str()  
                       << "\" into " << (s / 60) << "m "
-                      << (s % 60) << "s of 16 bit WAVE data"  << std::endl 
-                      << "Hit any key to start mixing." << std::endl;
+                      << (s % 60) << "s of 16 bit WAVE data\n" 
+                      << "Hit any key to start mixing.\n";
 
             // show instruments
-            for ( unsigned i = 1; i <= sourceFile.getnInstruments(); i++ )
-            {
+            for ( unsigned i = 1; i <= sourceFile.getnInstruments(); i++ ) {
                 std::cout 
                     << i << ":" 
                     << sourceFile.getInstrument( i )->getName().c_str() 
-                    << std::endl;
+                    << "\n";
             }
-
             _getch();
             mixer.initialise( &sourceFile );          
             double benchTime = 0.0L;
@@ -3224,12 +3209,18 @@ int main(int argc, char *argv[])
 
             mixer.startReplay();          
 
-            std::cout << "A " << sourceFile.getnChannels() << " channel module was rendered to " 
-                      << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " << benchTime << " seconds." << std::endl
-                      << "Estimated realtime cpu charge is " 
-                      << (benchTime * 100) / (BUFFER_LENGTH_IN_MINUTES * 60) << " percent." << std::endl
-                      << "On average " << (benchTime * 1000.0 / sourceFile.getnChannels()) / BUFFER_LENGTH_IN_MINUTES << " milliseconds per channel per minute." << std::endl
-                      << "\nPlaying... Hit any key to stop.";
+            std::cout 
+                << "A " << sourceFile.getnChannels() 
+                << " channel module was rendered to " 
+                << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " 
+                << benchTime << " seconds."
+                << "\nEstimated realtime cpu charge is " 
+                << (benchTime * 100) / (BUFFER_LENGTH_IN_MINUTES * 60) 
+                << " percent.\nOn average " 
+                << (benchTime * 1000.0 / sourceFile.getnChannels()) 
+                    / BUFFER_LENGTH_IN_MINUTES 
+                << " milliseconds per channel per minute."
+                << "\n\nPlaying... Hit any key to stop.";
             _getch();  
             mixer.stopReplay();
         }
@@ -3246,9 +3237,8 @@ int main(int argc, char *argv[])
         std::cout << "\nisLoaded = " << ((sourceFile.isLoaded ()) ? "Yes" : "No");
         std::cout << ", for the " << (i + 1) << "th time";
     }
+    */
     std::cout << "\nHit any key to exit program.";
-    _getch();
-/**/
     _getch();
 	return 0;
 }
