@@ -105,7 +105,7 @@ Fixed / cleared up:
 
 #define LINEAR_INTERPOLATION  // TEMP
 
-#define MIXRATE                 44100
+#define MIXRATE                    44100
 #define BUFFER_SIZE     (MIXRATE * 2 * 60 * BUFFER_LENGTH_IN_MINUTES) // 0x4000 // temp bloated buf for easy progging
 #define FILTER_SQUARE   0
 #define FILTER_LINEAR   1
@@ -113,8 +113,8 @@ Fixed / cleared up:
 #define FILTER          FILTER_CUBIC   // not used
 
 #define MIXER_MAX_CHANNELS      256
-#define WAVE_BUFFER_NO          1 // temp, should be at least 4
-#define VOLUME_RAMP_SPEED       44     // 1 millisecond at mixrate of 44kHz
+#define WAVE_BUFFER_NO          1      // temp, should be at least 4
+#define VOLUME_RAMP_SPEED       44     // 1 millisecond at mixrate of 44kHz, max. = 127
 #define VOLUME_RAMPING_UP       1
 #define VOLUME_RAMPING_DOWN     -1
 
@@ -130,6 +130,7 @@ union INT_UNION {
 
 class Channel {
 public:
+
     bool            isMuted;
     Instrument      *pInstrument;
     Sample          *pSample;
@@ -185,10 +186,7 @@ public:
     unsigned        lastTremor;
     unsigned        lastExtraFinePortamentoUp;
     unsigned        lastExtraFinePortamentoDown;
-
-    // active mixer channels for this logical channel:
-    //unsigned        mixerChannelsTable[MAX_NOTES_PER_CHANNEL]; // -> mag weg, zie hieronder (iPrimary)
-    unsigned        mixerChannelNr; // 
+    unsigned        mixerChannelNr;
 public:
     void            init() 
     { 
@@ -206,7 +204,6 @@ public:
     unsigned        age;
     bool            isActive;          // if not, mixer skips it
     bool            isMaster;          // false if it is a virtual channel
-//    bool            isFadingOut; // prolly not needed
     Sample          *sample;
     unsigned        sampleOffset;      // samples can be up to 4 GB in theory
     unsigned        sampleOffsetFrac;
@@ -291,16 +288,13 @@ private: // debug
 public:
     Mixer ();
     ~Mixer();
-    int             initialise (Module *m);
-    int             doMixBuffer (SHORT *buffer);
+    int             initialize( Module *m );
+    int             doMixBuffer( SHORT *buffer );
     int             doMixSixteenbitStereo(unsigned nSamples);
-    //int             startReplay ();
     void            startReplay();
-    int             stopReplay ();
-    int             setGlobalPanning(unsigned panning); // range: 0..255 (extreme stereo... extreme reversed stereo)
-//    int             setGlobalVolume (unsigned volume);  // range: 0..64
-    int             setGlobalBalance(int balance); // range: -100...0...+100
-    //unsigned        getnActiveChannels;    // make these into functions
+    int             stopReplay();
+    int             setGlobalPanning( unsigned panning ); // range: 0..255 (extreme stereo... extreme reversed stereo)
+    int             setGlobalBalance( int balance ); // range: -100...0...+100
     void            resetSong();
 };
 
@@ -351,6 +345,9 @@ Mixer::Mixer()
 
     for ( unsigned i = 0; i < WAVE_BUFFER_NO; i++ ) {
         waveHeaders[i].dwBufferLength = sizeof( SHORT[BUFFER_SIZE] );
+        std::cout
+            << "\ndwBufferLength initialized as " 
+            << waveHeaders[i].dwBufferLength << "\n";
         waveHeaders[i].lpData = (LPSTR) bufData;
         // waveHeaders[i].dwFlags = 0; // is done with memset() earlier
         waveBuffers[i] = (SHORT *) waveHeaders[i].lpData;
@@ -376,7 +373,7 @@ Mixer::~Mixer()
     return;
 }
 
-int Mixer::initialise( Module *m ) 
+int Mixer::initialize( Module *m ) 
 {
     if ( !m )              
         return 0;
@@ -514,193 +511,129 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
             mChn.age++;
 
-            /*
-            if ( (mChn.volumeRampDelta == -1) && 
-                 (mChn.age > VOLUME_RAMP_SPEED)
-                )
+            // only works if age of channel is reset at start of downwards volume ramp:
+            if ( (!mChn.isMaster) && 
+                 (mChn.age > VOLUME_RAMP_SPEED) &&
+                 (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) )
                 std::cout
                 << "\nFailed to stop channel " << i << "!\n"
                 << "\nvolumeRampCounter: " << (unsigned)mChn.volumeRampCounter
                 << "\nvolumeRampDelta  : " << (int)mChn.volumeRampDelta
                 << "\nvolumeRampStart  : " << (int)mChn.volumeRampStart << "\n";
-            */
-
-
-
 
             nActiveMixChannels++;
-
-            { 
-
-            //if ( !mChn.isVolumeRampActive )  //     && (i == 16) 
                                  
-                MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
-                int chnInc = mChn.sampleIncrement;
-                for ( unsigned j = 0; j < nSamples; ) {
-                    // mChn.sampleIncrement is never greater dan 2 ^ 17
-                    if ( !mChn.isPlayingBackwards ) {
-                        unsigned nrSamplesLeft = sample.getRepeatEnd() - mChn.sampleOffset;
-                        if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
+            MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
+            int chnInc = mChn.sampleIncrement;
+            for ( unsigned j = 0; j < nSamples; ) {
+                // mChn.sampleIncrement is never greater dan 2 ^ 17
+                if ( !mChn.isPlayingBackwards ) {
+                    unsigned nrSamplesLeft = sample.getRepeatEnd() - mChn.sampleOffset;
+                    if ( nrSamplesLeft > 8191 ) nrSamplesLeft = 8191;
 
-                        //unsigned nrLoops = ((((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
-                        //    - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
-                        unsigned nrLoops = ((((nrSamplesLeft << 15) + mChn.sampleIncrement - 1)
-                            - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
+                    //unsigned nrLoops = ((((nrSamplesLeft << 16) + mChn.sampleIncrement - 1)
+                    //    - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
+                    unsigned nrLoops = ((((nrSamplesLeft << 15) + mChn.sampleIncrement - 1)
+                        - mChn.sampleOffsetFrac) / mChn.sampleIncrement);                        
 
-                        if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;                        
+                    if ( nrLoops >= nSamples - j ) nrLoops = nSamples - j;                        
 
-                        /*
-                        // original rolled code:   // 32 bit
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
-                        for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
-                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
-                            int s2 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16) + 1];
-                            int xd = (mChn.sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
-                            int yd = s2 - s1;                                // sample delta
-                            s1 += (xd * yd) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            mChn.sampleOffsetFrac += mChn.sampleIncrement;
-                        }
-                        */
+                    /*
+                    // original rolled code:   // 32 bit
+                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
+                        int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
+                        int s2 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16) + 1];
+                        int xd = (mChn.sampleOffsetFrac & 0xFFFF) >> 1;  // time delta
+                        int yd = s2 - s1;                                // sample delta
+                        s1 += (xd * yd) >> 15;
+                        *mixBufferPTR++ += (s1 * leftGain);
+                        *mixBufferPTR++ += (s1 * rightGain);
+                        mChn.sampleOffsetFrac += mChn.sampleIncrement;
+                    }
+                    */
                         
 
-                        // ********************
-                        // Start of loop unroll
-                        // ********************
+                    // ********************
+                    // Start of loop unroll
+                    // ********************
 
-                        /*
-                        // 32 bit frequency index:
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
-                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;                        
+                    /*
+                    // 32 bit frequency index:
+                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;                        
                         
-                        for ( int ofsFrac = mChn.sampleOffsetFrac; 
-                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
-                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 16)));
-                            int s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                          // sample delta 
-                            int xd = (ofsFrac & 0xFFFF) >> 1;  // time delta
-                            s1 += (xd * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                        }
-                        mChn.sampleOffsetFrac = loopEnd;
-                        */
+                    for ( int ofsFrac = mChn.sampleOffsetFrac; 
+                        ofsFrac < loopEnd; ofsFrac += chnInc ) {
+                        int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 16)));
+                        int s1 = (SHORT)s2;
+                        s2 >>= 16;
+                        s2 -= s1;                          // sample delta 
+                        int xd = (ofsFrac & 0xFFFF) >> 1;  // time delta
+                        s1 += (xd * s2) >> 15;
+                        *mixBufferPTR++ += (s1 * leftGain);
+                        *mixBufferPTR++ += (s1 * rightGain);
+                    }
+                    mChn.sampleOffsetFrac = loopEnd;
+                    */
 
-                        /*
-                        // lineaire interpolatie:
-                        // 31 bit frequency index:
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
-                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+                    /*
+                    // lineaire interpolatie:
+                    // 31 bit frequency index:
+                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
 
-                        for ( int ofsFrac = mChn.sampleOffsetFrac;
-                            ofsFrac < loopEnd; ofsFrac += chnInc ) {
-                            int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                            int s1 = (SHORT)s2;
-                            s2 >>= 16;
-                            s2 -= s1;                             // sample delta 
-                            int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
-                            s1 += (xd * s2) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);    // this is faster
-                            *mixBufferPTR++ += (s1 * rightGain);
-                        }
-                        mChn.sampleOffsetFrac = loopEnd; 
-                        */ 
+                    for ( int ofsFrac = mChn.sampleOffsetFrac;
+                        ofsFrac < loopEnd; ofsFrac += chnInc ) {
+                        int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
+                        int s1 = (SHORT)s2;
+                        s2 >>= 16;
+                        s2 -= s1;                             // sample delta 
+                        int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
+                        s1 += (xd * s2) >> 15;
+                        *mixBufferPTR++ += (s1 * leftGain);    // this is faster
+                        *mixBufferPTR++ += (s1 * rightGain);
+                    }
+                    mChn.sampleOffsetFrac = loopEnd; 
+                    */ 
 
-                        // cubic interpolation:
-                        // 31 bit frequency index:                        
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    // cubic interpolation:
+                    // 31 bit frequency index:                        
+                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
 
-                        // *********************
-                        // added for volume ramp
-                        // *********************
-                        /*
-                        if ( mChn.volumeRampCounter ) {
-                            int loopEnd;
-                            if ( mChn.volumeRampCounter < nrLoops ) {
-                                loopEnd = mChn.volumeRampCounter
-                                        * mChn.sampleIncrement
-                                        + mChn.sampleOffsetFrac;
-                                nrLoops -= mChn.volumeRampCounter;
-                                mChn.volumeRampCounter = 0;
-                            } 
-                            else { 
-                                loopEnd = nrLoops
-                                        * mChn.sampleIncrement
-                                        + mChn.sampleOffsetFrac;
-                                mChn.volumeRampCounter -= nrLoops;
-                                nrLoops = 0;
-                            }                            
-
-                            for ( int ofsFrac = mChn.sampleOffsetFrac;
-                                ofsFrac < loopEnd; ofsFrac += chnInc ) {
-
-                                int idx = ofsFrac >> 15;
-                                int p0 = SampleDataPTR[idx - 1];
-                                int p1 = SampleDataPTR[idx];
-                                int p2 = SampleDataPTR[idx + 1];
-                                int p3 = SampleDataPTR[idx + 2];
-#define FRAC_RES_SHIFT  7
-#define SAR             (15 - FRAC_RES_SHIFT)
-
-                                int fract = (ofsFrac & 0x7FFF) >> SAR;
-                                int t = p1 - p2;
-                                int a = ((t << 1) + t - p0 + p3) >> 1;
-                                int b = (p2 << 1) + p0 - (((p1 << 2) + p1 + p3) >> 1);
-                                int c = (p2 - p0) >> 1;
-
-                                int f2 = ((
-                                    ((((((a  * fract) >> FRAC_RES_SHIFT)
-                                        + b) * fract) >> FRAC_RES_SHIFT)
-                                        + c) * fract) >> FRAC_RES_SHIFT)
-                                    + p1;
-
-                                //f2 = p1; // disable interpolation for testing
-                               
-                                int lG = (leftGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
-                                int rG = (rightGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
-                                mChn.volumeRampStart += mChn.volumeRampDelta;
-                                
-                                //if ( mChn.volumeRampDelta < 0 )
-                                //    std::cout 
-                                //    << std::setw( 4 ) << (int)mChn.masterChannel
-                                //    << std::setw( 4 ) << (int)mChn.volumeRampStart;
-
-                                *mixBufferPTR++ += (f2 * lG);
-                                *mixBufferPTR++ += (f2 * rG);
-                            }
-                            mChn.sampleOffsetFrac = loopEnd;
-
-                            if ( (mChn.volumeRampStart <= 0) &&
-                                (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) ) {
-                                mChn.isActive = false;
-                                //channels[mChn.masterChannel].mixerChannelNr = 0; // NO! chn is virtual!
-                                j = nSamples;
-                                nrLoops = 0;
-                                //std::cout << std::setw( 3 ) << (int)mChn.masterChannel << ":X ";
-                                //std::cout << "\nstopped mChn " << i;
-                            }
-
-                        }
-                        */
-                        // **************************
-                        // added for volume ramp: end
-                        // **************************
-
-                        int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
+                    // *********************
+                    // added for volume ramp
+                    // *********************
+                    /* following code overflows mixbuffer and corrupts wave format ex header! */
+                    int loopsLeft = nrLoops;
+                    if ( mChn.volumeRampCounter ) {
+                        int loopEnd;
+                        if ( mChn.volumeRampCounter <= nrLoops ) {
+                            loopEnd = mChn.volumeRampCounter
+                                    * mChn.sampleIncrement
+                                    + mChn.sampleOffsetFrac;
+                            loopsLeft -= mChn.volumeRampCounter;
+                            mChn.volumeRampCounter = 0;
+                        } 
+                        else { 
+                            loopEnd = nrLoops
+                                    * mChn.sampleIncrement
+                                    + mChn.sampleOffsetFrac;
+                            mChn.volumeRampCounter -= loopsLeft;
+                            loopsLeft = 0;
+                        }                            
 
                         for ( int ofsFrac = mChn.sampleOffsetFrac;
                             ofsFrac < loopEnd; ofsFrac += chnInc ) {
 
                             int idx = ofsFrac >> 15;
                             int p0 = SampleDataPTR[idx - 1];
-                            int p1 = SampleDataPTR[idx    ];
+                            int p1 = SampleDataPTR[idx];
                             int p2 = SampleDataPTR[idx + 1];
                             int p3 = SampleDataPTR[idx + 2];
 #define FRAC_RES_SHIFT  7
 #define SAR             (15 - FRAC_RES_SHIFT)
-                            
+
                             int fract = (ofsFrac & 0x7FFF) >> SAR;
                             int t = p1 - p2;
                             int a = ((t << 1) + t - p0 + p3) >> 1;
@@ -708,126 +641,172 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                             int c = (p2 - p0) >> 1;
 
                             int f2 = ((
-                                ((((((a  * fract) >> FRAC_RES_SHIFT) 
+                                ((((((a  * fract) >> FRAC_RES_SHIFT)
                                     + b) * fract) >> FRAC_RES_SHIFT)
-                                    + c) * fract) >> FRAC_RES_SHIFT) 
-                                    + p1;
+                                    + c) * fract) >> FRAC_RES_SHIFT)
+                                + p1;
 
-                            //f2 = p1; // disable interpolation for testing
-                            
-                            *mixBufferPTR++ += (f2 * leftGain);    
-                            *mixBufferPTR++ += (f2 * rightGain);
+                            int lG = (leftGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+                            int rG = (rightGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
+
+                            *mixBufferPTR++ += f2 * lG;
+                            *mixBufferPTR++ += f2 * rG;
+                            mChn.volumeRampStart += mChn.volumeRampDelta;
                         }
                         mChn.sampleOffsetFrac = loopEnd;
 
-                        // ********************
-                        // End of loop unroll
-                        // ********************
-
-
-                        mixOffset += nrLoops << 1;
-                        j += nrLoops;
-                        //mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
-                        //mChn.sampleOffsetFrac &= 0xFFFF;
-                        mChn.sampleOffset += mChn.sampleOffsetFrac >> 15;
-                        mChn.sampleOffsetFrac &= 0x7FFF;
-                        if( mChn.sampleOffset >= sample.getRepeatEnd() ) {
-                            if ( sample.isRepeatSample() ) {
-                                if ( !sample.isPingpongSample() ) {
-                                    mChn.sampleOffset = sample.getRepeatOffset();  // ?
-                                } 
-                                else {
-                                    mChn.sampleOffset = sample.getRepeatEnd() - 1; // ?
-                                    mChn.isPlayingBackwards = true;
-                                }
-                            } 
-                            else {
-                                mChn.isActive = false;
-                                mChn.isMaster = false;
-                                channels[mChn.masterChannel].mixerChannelNr = 0; // TEMP DEBUG
-
-                                /*
-                                // remove reference to this mixer channel in the channels mixer channels table
-                                unsigned k;
-                                for ( k = 0; k < MAX_NOTES_PER_CHANNEL; k++ ) {
-                                    if ( channels[mChn.masterChannel].mixerChannelsTable[k] == i )
-                                        break;
-                                }
-                                channels[mChn.fromChannel].mixerChannelsTable[k] = 0;
-                                */
-
-                                // quit loop, we're done here
-                                j = nSamples; 
-                            }
+                        if ( (mChn.volumeRampStart <= 0) &&
+                            (mChn.volumeRampDelta == VOLUME_RAMPING_DOWN) ) {
+                            mChn.isActive = false;
+                            j = nSamples;
+                            loopsLeft = 0;
                         }
 
-                    // ********************************************************
-                    // ********************************************************
-                    // *********** Backwards playing code *********************
-                    // ********************************************************
-                    // ********************************************************
-                    } 
-                    else { 
-                        // max sample length: 2 GB :)
-                        int nrSamplesLeft = mChn.sampleOffset - sample.getRepeatOffset();
-                        if ( nrSamplesLeft > 8191 ) 
-                            nrSamplesLeft = 8191;
-                        int nrLoops = 
-                        //    ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
-                            ((nrSamplesLeft << 15) + (int)mChn.sampleIncrement - 1
-                            - (int)mChn.sampleOffsetFrac) / (int)mChn.sampleIncrement;
-                        if ( nrLoops >= (int)(nSamples - j) ) 
-                            nrLoops = (int)(nSamples - j);
-                        if ( nrLoops < 0 ) 
-                            nrLoops = 0;
+                    }
+                    /* */
+                    // **************************
+                    // added for volume ramp: end
+                    // **************************
+                        
+                    //int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac; // orig
+                    int loopEnd = loopsLeft * mChn.sampleIncrement + mChn.sampleOffsetFrac;
 
-                        mChn.sampleOffsetFrac = (int)mChn.sampleOffsetFrac + nrLoops * (int)mChn.sampleIncrement;
-                        //int smpDataShift = mChn.sampleOffsetFrac >> 16;
-                        int smpDataShift = mChn.sampleOffsetFrac >> 15;
-                        if ( (int)mChn.sampleOffset < smpDataShift ) { // for bluishbg2.xm
-                            mChn.sampleOffset = 0;
-                            //std::cout << "underrun!" << std::endl;
+                    for ( int ofsFrac = mChn.sampleOffsetFrac;
+                        ofsFrac < loopEnd; ofsFrac += chnInc ) {
+
+                        int idx = ofsFrac >> 15;
+                        int p0 = SampleDataPTR[idx - 1];
+                        int p1 = SampleDataPTR[idx    ];
+                        int p2 = SampleDataPTR[idx + 1];
+                        int p3 = SampleDataPTR[idx + 2];
+#define FRAC_RES_SHIFT  7
+#define SAR             (15 - FRAC_RES_SHIFT)
+                            
+                        int fract = (ofsFrac & 0x7FFF) >> SAR;
+                        int t = p1 - p2;
+                        int a = ((t << 1) + t - p0 + p3) >> 1;
+                        int b = (p2 << 1) + p0 - (((p1 << 2) + p1 + p3) >> 1);
+                        int c = (p2 - p0) >> 1;
+
+                        int f2 = ((
+                            ((((((a  * fract) >> FRAC_RES_SHIFT) 
+                                + b) * fract) >> FRAC_RES_SHIFT)
+                                + c) * fract) >> FRAC_RES_SHIFT) 
+                                + p1;
+
+                        //f2 = p1; // disable interpolation for testing
+                            
+                        *mixBufferPTR++ += (f2 * leftGain);    
+                        *mixBufferPTR++ += (f2 * rightGain);
+                    }
+                    mChn.sampleOffsetFrac = loopEnd;
+
+                    // ********************
+                    // End of loop unroll
+                    // ********************
+
+
+                    mixOffset += nrLoops << 1;
+                    j += nrLoops;
+                    //mChn.sampleOffset += mChn.sampleOffsetFrac >> 16;
+                    //mChn.sampleOffsetFrac &= 0xFFFF;
+                    mChn.sampleOffset += mChn.sampleOffsetFrac >> 15;
+                    mChn.sampleOffsetFrac &= 0x7FFF;
+                    if( mChn.sampleOffset >= sample.getRepeatEnd() ) {
+                        if ( sample.isRepeatSample() ) {
+                            if ( !sample.isPingpongSample() ) {
+                                mChn.sampleOffset = sample.getRepeatOffset();  // ?
+                            } 
+                            else {
+                                mChn.sampleOffset = sample.getRepeatEnd() - 1; // ?
+                                mChn.isPlayingBackwards = true;
+                            }
                         } 
-                        else mChn.sampleOffset -= smpDataShift;
-                        SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                        else {
+                            mChn.isActive = false;
+                            mChn.isMaster = false;
+                            channels[mChn.masterChannel].mixerChannelNr = 0; 
 
-                        for ( int j2 = 0; j2 < nrLoops; j2++ ) {
-                            //int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];
-                            //int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 16) - 1];
-                            int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 15)];
-                            int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 15) - 1];
-                            //int xd = (0x10000 - (mChn.sampleOffsetFrac & 0xFFFF)) >> 1;  // time delta
-                            int xd = (0x8000 - (mChn.sampleOffsetFrac & 0x7FFF));       // time delta
-                            int yd = s2 - s1;                                            // sample delta
-                            s1 += (xd * yd) >> 15;
-                            *mixBufferPTR++ += (s1 * leftGain);
-                            *mixBufferPTR++ += (s1 * rightGain);
-                            mChn.sampleOffsetFrac -= mChn.sampleIncrement;
+                            // quit loop, we're done here
+                            j = nSamples; 
                         }
-                        mixOffset += nrLoops << 1;
-                        j += nrLoops;
+                    }
+
+                // ********************************************************
+                // ********************************************************
+                // *********** Backwards playing code *********************
+                // ********************************************************
+                // ********************************************************
+                } 
+                else { 
+                    // max sample length: 2 GB :)
+                    int nrSamplesLeft = mChn.sampleOffset - sample.getRepeatOffset();
+                    if ( nrSamplesLeft > 8191 ) 
+                        nrSamplesLeft = 8191;
+                    int nrLoops = 
+                    //    ((nrSamplesLeft << 16) + (int)mChn.sampleIncrement - 1 
+                        ((nrSamplesLeft << 15) + (int)mChn.sampleIncrement - 1
+                        - (int)mChn.sampleOffsetFrac) / (int)mChn.sampleIncrement;
+                    if ( nrLoops >= (int)(nSamples - j) ) 
+                        nrLoops = (int)(nSamples - j);
+                    if ( nrLoops < 0 ) 
+                        nrLoops = 0;
+
+                    mChn.sampleOffsetFrac = (int)mChn.sampleOffsetFrac + nrLoops * (int)mChn.sampleIncrement;
+                    //int smpDataShift = mChn.sampleOffsetFrac >> 16;
+                    int smpDataShift = mChn.sampleOffsetFrac >> 15;
+                    if ( (int)mChn.sampleOffset < smpDataShift ) { // for bluishbg2.xm
+                        mChn.sampleOffset = 0;
+                        //std::cout << "underrun!" << std::endl;
+                    } 
+                    else mChn.sampleOffset -= smpDataShift;
+                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+
+                    for ( int j2 = 0; j2 < nrLoops; j2++ ) {
+                        //int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];
+                        //int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 16) - 1];
+                        int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 15)];
+                        int s2 = SampleDataPTR[(int)(mChn.sampleOffsetFrac >> 15) - 1];
+                        //int xd = (0x10000 - (mChn.sampleOffsetFrac & 0xFFFF)) >> 1;  // time delta
+                        int xd = (0x8000 - (mChn.sampleOffsetFrac & 0x7FFF));       // time delta
+                        int yd = s2 - s1;                                            // sample delta
+                        s1 += (xd * yd) >> 15;
+                        *mixBufferPTR++ += (s1 * leftGain);
+                        *mixBufferPTR++ += (s1 * rightGain);
+                        mChn.sampleOffsetFrac -= mChn.sampleIncrement;
+                    }
+                    mixOffset += nrLoops << 1;
+                    j += nrLoops;
                        
-                        if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
-                            if ( sample.isRepeatSample() ) {
-                                mChn.sampleOffset = sample.getRepeatOffset();
-                                mChn.isPlayingBackwards = false;
-                            } 
-                            else {
-                                mChn.isActive = false;
-                                mChn.isMaster = false;
-                                channels[mChn.masterChannel].mixerChannelNr = 0; 
-                                // quit loop, we're done here
-                                j = nSamples; 
-                            }
+                    if ( mChn.sampleOffset <= sample.getRepeatOffset() ) {
+                        if ( sample.isRepeatSample() ) {
+                            mChn.sampleOffset = sample.getRepeatOffset();
+                            mChn.isPlayingBackwards = false;
+                        } 
+                        else {
+                            mChn.isActive = false;
+                            mChn.isMaster = false;
+                            channels[mChn.masterChannel].mixerChannelNr = 0; 
+                            // quit loop, we're done here
+                            j = nSamples; 
                         }
                     }
                 }
             }
+            
         }
     }
     mixIndex += (nSamples << 1); // *2 for stereo
     //std::cout << "# active chn = " << nActiveMixChannels << std::endl;
 
+    /*
+    if ( waveHeaders[0].dwBufferLength != 21168000 ) {
+        std::cout
+            << "\nData corruption! dwBufferLength = "
+            << waveHeaders[0].dwBufferLength << "\n";
+        _getch();
+    }
+    */
     return 0;
 }
 
@@ -855,6 +834,17 @@ static void CALLBACK waveOutProc(
 void Mixer::startReplay() 
 {
     MMRESULT mmResult;
+    std::cout 
+        << "\nTrying to play with parameters: "
+        << hWaveOut
+        << "\ndwBufferLength    : " << waveHeaders[0].dwBufferLength
+        << "\ndwBytesRecorded   : " << waveHeaders[0].dwBytesRecorded
+        << "\ndwFlags           : " << waveHeaders[0].dwFlags
+        << "\ndwLoops           : " << waveHeaders[0].dwLoops
+        << "\nlpData            : " << (unsigned)waveHeaders[0].lpData
+        << "\nlpNext            : " << (unsigned)waveHeaders[0].lpNext;
+
+
     mmResult = waveOutOpen( &hWaveOut, 
                             WAVE_MAPPER, 
                             &waveFormatEx, 
@@ -866,39 +856,53 @@ void Mixer::startReplay()
 
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout << "\nError preparing wave mapper header!";
-        switch (mmResult) {
+        std::cout 
+            << "\nError opening wave mapper!"
+            << "\ndwBufferLength    : " << waveHeaders[0].dwBufferLength
+            << "\ndwBytesRecorded   : " << waveHeaders[0].dwBytesRecorded
+            << "\ndwFlags           : " << waveHeaders[0].dwFlags
+            << "\ndwLoops           : " << waveHeaders[0].dwLoops
+            << "\nlpData            : " << (unsigned)waveHeaders[0].lpData
+            << "\nlpNext            : " << (unsigned)waveHeaders[0].lpNext;
+        switch ( mmResult ) {
             case MMSYSERR_INVALHANDLE : 
-                {
-                    std::cout << "\nSpecified device handle is invalid.";
-                    break;
-                }
+            {
+                std::cout << "\nSpecified device handle is invalid.";
+                break;
+            }
             case MMSYSERR_NODRIVER    : 
-                {
-                    std::cout << "\nNo device driver is present.";
-                    break;
-                }
+            {
+                std::cout << "\nNo device driver is present.";
+                break;
+            }
             case MMSYSERR_NOMEM       : 
-                {
-                    std::cout << "\nUnable to allocate or lock memory.";
-                    break;
-                }
+            {
+                std::cout << "\nUnable to allocate or lock memory.";
+                break;
+            }
             case WAVERR_UNPREPARED    : 
-                {
-                    std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
-                    break;
-                }
+            {
+                std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
+                break;
+            }
              default:
-                {
-                    std::cout << "\nOther unknown error " << mmResult;
-                }
+            {
+                std::cout << "\nOther unknown error " << mmResult;
+            }
         }
     }
 #endif 
     mmResult = waveOutPrepareHeader( hWaveOut, &(waveHeaders[0]), sizeof( WAVEHDR ) );
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout << "\nError preparing wave mapper header!";
+        std::cout 
+            << "\nError preparing wave mapper header!"
+            << "\ndwBufferLength    : " << waveHeaders[0].dwBufferLength
+            << "\ndwBytesRecorded   : " << waveHeaders[0].dwBytesRecorded
+            << "\ndwFlags           : " << waveHeaders[0].dwFlags
+            << "\ndwLoops           : " << waveHeaders[0].dwLoops
+            << "\nlpData            : " << (unsigned)waveHeaders[0].lpData
+            << "\nlpNext            : " << (unsigned)waveHeaders[0].lpNext;
         switch (mmResult) {
             case MMSYSERR_INVALHANDLE : 
                 {
@@ -930,8 +934,15 @@ void Mixer::startReplay()
     mmResult = waveOutWrite( hWaveOut, &(waveHeaders[0]), sizeof( WAVEHDR ) );
 #ifdef debug_mixer
     if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout << "\nError preparing wave mapper header!";
-        switch (mmResult) {
+        std::cout
+            << "\nError writing wave mapper header!"
+            << "\ndwBufferLength    : " << waveHeaders[0].dwBufferLength
+            << "\ndwBytesRecorded   : " << waveHeaders[0].dwBytesRecorded
+            << "\ndwFlags           : " << waveHeaders[0].dwFlags
+            << "\ndwLoops           : " << waveHeaders[0].dwLoops
+            << "\nlpData            : " << (unsigned)waveHeaders[0].lpData
+            << "\nlpNext            : " << (unsigned)waveHeaders[0].lpNext;
+            switch (mmResult) {
             case MMSYSERR_INVALHANDLE : 
                 {
                     std::cout << "\nSpecified device handle is invalid.";
@@ -1135,6 +1146,7 @@ int Mixer::playSample (
       "Master" Channel
 
 */
+    
     // cut previous note if it is still playing:
     stopChannelPrimary( fromChannel );
 
@@ -1145,7 +1157,7 @@ int Mixer::playSample (
         (newMc < MIXER_MAX_CHANNELS) && mixerChannels[newMc].isActive; 
         newMc++ );
     */
-    for ( newMc = 1; (newMc < MIXER_MAX_CHANNELS); newMc++ )
+    for ( newMc = 1; newMc < MIXER_MAX_CHANNELS; newMc++ )
         if ( !mixerChannels[newMc].isActive )
             break;
 
@@ -1168,8 +1180,6 @@ int Mixer::playSample (
     mixerChannels[newMc].volumeRampStart = 0;
     mixerChannels[newMc].sampleOffset = sampleOffset;
     channels[fromChannel].mixerChannelNr = newMc;
-
-    //std::cout << std::setw( 4 ) << newMc;// << ":" << std::setw( 3 ) << mc; // DEBUG
     return 0;
 }
 
@@ -1179,7 +1189,7 @@ int Mixer::stopChannelPrimary( unsigned fromChannel )
     if ( ((pmc.masterChannel == fromChannel) && pmc.isMaster) 
          // || (channels[fromChannel].mixerChannelNr == 0)
         ) {
-        pmc.isActive = false;//debug: no vol ramping
+        //pmc.isActive = false;//debug: no vol ramping
         pmc.isMaster = false;
         pmc.age = 0; // TEMP DEBUG!!!
         channels[fromChannel].mixerChannelNr = 0;
@@ -2040,16 +2050,6 @@ int Mixer::updateNotes () {
             //setVolume(iChannel, channel->volume);    // temp
         }
 #ifdef debug_mixer
-        #define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED)
-        #define FOREGROUND_WHITE        (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY )
-        #define FOREGROUND_BROWN        (FOREGROUND_GREEN | FOREGROUND_RED )
-        #define FOREGROUND_YELLOW       (FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY)
-        #define FOREGROUND_LIGHTCYAN    (FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY)
-        #define FOREGROUND_LIGHTMAGENTA (FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY)
-        #define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE | FOREGROUND_INTENSITY)
-        #define BACKGROUND_BROWN        (BACKGROUND_RED | BACKGROUND_GREEN)
-        #define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE | BACKGROUND_INTENSITY )
-        #define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN | BACKGROUND_INTENSITY )
         if ( iChannel < 6 )
         {            
             // **************************************************
@@ -2996,7 +2996,7 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        
+        "D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
@@ -3007,8 +3007,8 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
-        //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
+        "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
+        "D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
         //"D:\\MODS\\M2W_BUGTEST\\2nd_pm-porta.s3m",
@@ -3181,13 +3181,20 @@ int main( int argc, char *argv[] )
         Module      sourceFile;
         Mixer       mixer;
 
-        sourceFile.enableDebugMode();
+        //sourceFile.enableDebugMode();
         sourceFile.loadFile( filePaths[i] );
 
         std::cout << "\n\nLoading " << filePaths[i].c_str() //moduleFilename
                   << ": " << (sourceFile.isLoaded() ? "Success." : "Error!\n");
 
         if ( sourceFile.isLoaded () ) {
+
+            /*
+            std::cout
+                << "\nAfter loading module: dwBufferLength = "
+                << mixer.waveHeaders[0].dwBufferLength << "\n";
+            */
+
             unsigned s = BUFFER_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
                       << sourceFile.getSongTitle().c_str()  
@@ -3203,14 +3210,25 @@ int main( int argc, char *argv[] )
                     << "\n";
             }
             _getch();
-            mixer.initialise( &sourceFile );          
+            mixer.initialize( &sourceFile );  
+
+            /*
+            std::cout
+                << "\nAfter initializing mixer: dwBufferLength = "
+                << mixer.waveHeaders[0].dwBufferLength << "\n";   // still ok
+            */
+
             double benchTime = 0.0L;
             benchTime = DoBench( mixer ) / BENCHMARK_REPEAT_ACTION; // only for staging
-
+            /*
+            std::cout
+                << "\nRight before replay: dwBufferLength = "
+                << mixer.waveHeaders[0].dwBufferLength << "\n";
+            */
             mixer.startReplay();          
 
             std::cout 
-                << "A " << sourceFile.getnChannels() 
+                << "\nA " << sourceFile.getnChannels() 
                 << " channel module was rendered to " 
                 << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " 
                 << benchTime << " seconds."
