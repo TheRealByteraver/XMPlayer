@@ -156,7 +156,8 @@ int Module::loadS3mFile() {
             << "\nSCRM tag not found or file is too small, exiting.";
         return 0;
     }
-    s3mFileHeader.id = '\0'; // use the DOS EOF marker as end of cstring marker    
+    // use the DOS EOF marker as end of cstring marker
+    s3mFileHeader.id = '\0'; 
     if ( showDebugInfo_ )
         S3mDebugShow::fileHeader( s3mFileHeader );
 
@@ -240,6 +241,10 @@ int Module::loadS3mFile() {
         std::cout
             << "\nSong length (corr.): " << songLength_
             << "\nNr of patterns     : " << nPatterns_;
+    // fix for empty patterns that are not present in the file, not even
+    // with a header saying they're 0 bytes big:
+    if ( nPatterns_ > s3mFileHeader.nPatterns )
+        nPatterns_ = s3mFileHeader.nPatterns;
 
     unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
     unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
@@ -304,7 +309,7 @@ int Module::loadS3mFile() {
 
     // read instruments here
     nSamples_ = 0;
-    int smpDataPtrs[S3M_MAX_INSTRUMENTS];
+    unsigned smpDataPtrs[S3M_MAX_INSTRUMENTS];
     if ( s3mFileHeader.nInstruments > S3M_MAX_INSTRUMENTS )
         s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
 
@@ -347,21 +352,6 @@ int Module::loadS3mFile() {
             instrument.sampleForNote[i].sampleNr = nInst;
         }
         sample.length = s3mInstHeader.length;
-        sample.repeatOffset = s3mInstHeader.loopStart;
-        sample.volume = (int)s3mInstHeader.volume;
-        //sample.c4Speed = instHeader.c4Speed;
-        // safety checks:
-        if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
-            sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart;
-        else 
-            sample.repeatLength = sample.length;
-        if ( sample.volume > S3M_MAX_VOLUME ) 
-            sample.volume = S3M_MAX_VOLUME;
-        if ( sample.repeatOffset >= sample.length ) 
-            sample.repeatOffset = 0;
-        if ( sample.repeatOffset + sample.repeatLength > sample.length )
-            sample.repeatLength = sample.length - sample.repeatOffset;
-        sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
 
         if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
             (smpDataPtrs[nInst - 1] != 0)) {
@@ -369,21 +359,52 @@ int Module::loadS3mFile() {
             s3mFile.absSeek( smpDataPtrs[nInst - 1] );
             sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
 
-            // temp DEBUG:
+            // missing sample data, see if we can salvage something ;)
             if ( sample.data == nullptr ) {
+                int smpSize;
+                if ( smpDataPtrs[nInst - 1] >= s3mFile.fileSize() )
+                    smpSize = 0;
+                else
+                    smpSize = s3mFile.dataLeft();
+                sample.length = smpSize;
+                if ( sample.length )
+                    sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
+
                 if ( showDebugInfo_ ) 
                     std::cout << std::dec
-                        << "\nMissing sample data while reading file, exiting!"
+                        << "\nMissing sample data for sample nr "
+                        << (nInst - 1)
+                        << "! Shortening sample."
                         << "\nsample.data:   " << (unsigned)sample.data
                         << "\nsample.length: " << sample.length
                         << "\ndata + length: " << (unsigned)(sample.data + sample.length)
                         << "\nfilesize:      " << fileSize
-                        << "\novershoot:     "
-                        << "\nNOT AVAILABLE  "
-                        //<< (unsigned)((char *)(sample.data + sample.length) - (buf + (unsigned)fileSize))
+                        << "\novershoot:     " << (s3mInstHeader.length - sample.length)
                         << "\n";
-                return 0;
             }
+            // skip to next instrument if there is no sample data:
+            if ( !sample.length ) {
+                //sample.repeatOffset = 0;
+                continue;
+            }
+
+            sample.repeatOffset = s3mInstHeader.loopStart;
+            sample.volume = (int)s3mInstHeader.volume;
+            //sample.c4Speed = instHeader.c4Speed;
+            // safety checks:
+            if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
+                sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart;
+            else
+                sample.repeatLength = sample.length;
+            if ( sample.volume > S3M_MAX_VOLUME )
+                sample.volume = S3M_MAX_VOLUME;
+            if ( sample.repeatOffset >= sample.length )
+                sample.repeatOffset = 0;
+            if ( sample.repeatOffset + sample.repeatLength > sample.length )
+                sample.repeatLength = sample.length - sample.repeatOffset;
+            sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
+
+
 
             // convert sample data from unsigned to signed:
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;

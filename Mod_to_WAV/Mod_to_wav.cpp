@@ -831,7 +831,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
     }
     mixIndex += (nSamples << 1); // *2 for stereo
     //std::cout << "\nNr of active chn = " << nActiveMixChannels;
-    std::cout << std::setw( 4 ) << nActiveMixChannels;
+    //std::cout << std::setw( 4 ) << nActiveMixChannels;
 
     /*
     if ( waveHeaders[0].dwBufferLength != 21168000 ) {
@@ -868,6 +868,7 @@ static void CALLBACK waveOutProc(
 void Mixer::startReplay() 
 {
     MMRESULT mmResult;
+    /*
     std::cout 
         << "\nTrying to play with parameters: "
         << "\n" << hWaveOut
@@ -877,7 +878,7 @@ void Mixer::startReplay()
         << "\ndwLoops           : " << waveHeaders[0].dwLoops
         << "\nlpData            : " << (unsigned)waveHeaders[0].lpData
         << "\nlpNext            : " << (unsigned)waveHeaders[0].lpNext;
-
+    */
 
     mmResult = waveOutOpen( &hWaveOut, 
                             WAVE_MAPPER, 
@@ -1194,7 +1195,6 @@ int Mixer::playSample (
     for ( newMc = 1; newMc < MIXER_MAX_CHANNELS; newMc++ )
         if ( !mixerChannels[newMc].isActive )
             break;
-
 
     // "no free channel found" logic here
     // find oldest channel logic and use that instead
@@ -3030,7 +3030,7 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\MODS\\dosprog\\MYRIEH.XM",
+        //"D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
@@ -3041,6 +3041,8 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
+        "D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\k_hippo.s3m",
         "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         "D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
@@ -3215,7 +3217,7 @@ int main( int argc, char *argv[] )
         Module      sourceFile;
         Mixer       mixer;
 
-        //sourceFile.enableDebugMode();
+        sourceFile.enableDebugMode();
         sourceFile.loadFile( filePaths[i] );
 
         std::cout << "\n\nLoading " << filePaths[i].c_str() //moduleFilename
@@ -3243,7 +3245,7 @@ int main( int argc, char *argv[] )
                     << sourceFile.getInstrument( i )->getName().c_str() 
                     << "\n";
             }
-            _getch();
+            //_getch();
             mixer.initialize( &sourceFile );  
 
             /*

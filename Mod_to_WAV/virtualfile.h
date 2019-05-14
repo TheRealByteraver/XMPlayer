@@ -94,8 +94,7 @@ public:
             std::ios::binary | 
             std::ios::ate 
         );
-        if ( !file.is_open() )
-        {
+        if ( !file.is_open() ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return;
         }
@@ -171,27 +170,25 @@ public:
     }
     IOError     relSeek( int position )
     {
-        if ( data_ == nullptr )
-        {
+        if ( data_ == nullptr ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return ioError_;
         }
         ioError_ = VIRTFILE_NO_ERROR;
         if ( (position < 0) &&
-            ( (- position) > (int)filePos_ ) ) filePos_ = 0;
-        else filePos_ += position;
-        if ( filePos_ < data_ )
-        {
+            ( (- position) > (int)filePos_ ) ) 
+            filePos_ = 0;
+        else 
+            filePos_ += position;
+        if ( filePos_ < data_ ) {
             filePos_ = data_;
             ioError_ = VIRTFILE_BUFFER_UNDERRUN;
         } 
-        else if ( filePos_ > fileEOF_ )
-        {
+        else if ( filePos_ > fileEOF_ ) {
             filePos_ = fileEOF_;
             ioError_ = VIRTFILE_BUFFER_OVERRUN;
         } 
-        else if ( filePos_ == fileEOF_ )
-        { 
+        else if ( filePos_ == fileEOF_ ) { 
             ioError_ = VIRTFILE_EOF;
         }
         return ioError_;
@@ -200,16 +197,25 @@ public:
     {
         filePos_ = data_ + position;
         ioError_ = VIRTFILE_NO_ERROR;
-        if ( filePos_ > fileEOF_ )
-        {
+        if ( filePos_ > fileEOF_ ) {
             filePos_ = fileEOF_;
             ioError_ = VIRTFILE_BUFFER_OVERRUN;
         } 
-        else if ( filePos_ == fileEOF_ )
-        {
+        else if ( filePos_ == fileEOF_ ) {
             ioError_ = VIRTFILE_EOF;
         }        
         return ioError_;
+    }
+    unsigned    getCurPos()
+    {
+        if ( filePos_ > data_ ) {
+            if ( filePos_ > fileEOF_ )
+                return fileEOF_ - data_;
+            else 
+                return filePos_ - data_;
+        }
+        else
+            return 0;
     }
     unsigned    fileSize()
     {
@@ -250,12 +256,11 @@ public:
     //const void * const getSafePointer( unsigned byteSize )
     void       *getSafePointer( unsigned byteSize )
     {
-        if ( filePos_ + byteSize <= fileEOF_ )
-        {
+        if ( filePos_ + byteSize <= fileEOF_ ) {
             ioError_ = VIRTFILE_NO_ERROR;
             return filePos_;
-        } else
-        {
+        } 
+        else {
             ioError_ = VIRTFILE_EOF;
             return nullptr;
         }
