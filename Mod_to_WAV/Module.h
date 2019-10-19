@@ -118,6 +118,7 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define MAX_PATTERNS                        256
 #define MAX_INSTRUMENTS                     256
 #define MAX_SAMPLES                         (128 * 16) // FT2
+#define SAMPLEDATA_EXTENSION                256 // add 256 samples to the data for noise reduction
 #define SAMPLEDATA_TYPE_UNKNOWN             0
 #define SAMPLEDATA_SIGNED_8BIT              1
 #define SAMPLEDATA_SIGNED_16BIT             2
@@ -126,10 +127,11 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #define MAXIMUM_NOTES                       (11 * 12)
 #define PLAYER_MAX_CHANNELS                 32
 #define PANNING_FULL_LEFT                   0
-#define PANNING_CENTER                      127
-#define PANNING_FULL_RIGHT                  255
-#define PANNING_MAX_STEPS                   256  // must be power of two
-#define PANNING_SHIFT                       8    // divide by 256 <=> SHR 8
+#define PANNING_MAX_STEPS                   256  // must be a power of two
+#define PANNING_SHIFT                       8   // divide by 256 <=> SHR 8
+#define PANNING_CENTER                      (PANNING_MAX_STEPS / 2)
+#define PANNING_FULL_RIGHT                  (PANNING_MAX_STEPS - 1)
+
 #define FORWARD                             false
 #define BACKWARD                            true
 

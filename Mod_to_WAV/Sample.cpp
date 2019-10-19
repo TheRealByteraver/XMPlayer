@@ -24,12 +24,12 @@ bool Sample::load(const SampleHeader &sampleHeader)
         //c4Speed_          = sampleHeader.c4Speed;
         
         // allocate memory for 16 bit version of sample + some spare space
-        unsigned k = length_ + 2 * INTERPOLATION_SPACER;
+        unsigned k = length_ + 2 * INTERPOLATION_SPACER + SAMPLEDATA_EXTENSION;
         k += 16;
         k &= 0xFFFFFFF0; 
         data_ = new SHORT[k]; 
 
-        switch (sampleHeader.dataType) {
+        switch ( sampleHeader.dataType ) {
             case SAMPLEDATA_SIGNED_16BIT:
             {
                 SHORT  *ps = (SHORT *) sampleHeader.data;
@@ -67,12 +67,24 @@ bool Sample::load(const SampleHeader &sampleHeader)
             for ( unsigned iSamples = 0; iSamples < INTERPOLATION_SPACER; iSamples++ ) {
                 if ( sampleHeader.isRepeatSample ) {
                     iData[repeatEnd_ + iSamples] = iData[repeatOffset_ + iSamples];
-                } else {
+                }  /*
+                else {
                     iData[length_ + iSamples] = 
                         iData[length_ - 1] - iData[length_ - 1 - iSamples];
-                }
+                }    */
             }
         }
+        if ( !sampleHeader.isRepeatSample ) {
+            SHORT   *iData = data_ + INTERPOLATION_SPACER;
+            for ( int i = 0; i < SAMPLEDATA_EXTENSION; i++ ) {
+                int s = iData[length_ - 1 + i];
+                s *= SAMPLEDATA_EXTENSION - 1 - i;
+                s /= SAMPLEDATA_EXTENSION;
+                iData[length_ + i] = (s < 256 ? 0 : s);
+            }
+            length_ += SAMPLEDATA_EXTENSION;
+        }
+
         return true;
     } 
     return false;

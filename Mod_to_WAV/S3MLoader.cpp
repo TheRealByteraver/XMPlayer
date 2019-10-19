@@ -404,8 +404,6 @@ int Module::loadS3mFile() {
                 sample.repeatLength = sample.length - sample.repeatOffset;
             sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
 
-
-
             // convert sample data from unsigned to signed:
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
             if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
