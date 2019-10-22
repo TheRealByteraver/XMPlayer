@@ -96,30 +96,30 @@ Fixed / cleared up:
 #include "VirtualFile.h" // debug
 
 //#define debug_mixer
+//#define BUFFER_LENGTH_IN_MINUTES   16
 
-
-
-
-#define BUFFER_LENGTH_IN_MINUTES   16
 #define BENCHMARK_REPEAT_ACTION    1
 
 #define LINEAR_INTERPOLATION  // TEMP
 
-#define MIXRATE                    44100
-#define BLOCK_SIZE      0x4000   // (MIXRATE * 2 * 60 * BUFFER_LENGTH_IN_MINUTES) // 0x4000 // temp bloated buf for easy progging
-#define FILTER_SQUARE   0
-#define FILTER_LINEAR   1
-#define FILTER_CUBIC    2
-#define FILTER          FILTER_CUBIC   // not used
+#define MIXRATE                 44100    // in Hz
+#define BLOCK_SIZE              0x4000   // Pref. bigger than 44100 * 4 / 60 ?
+#define SAMPLES_PER_BLOCK       (BLOCK_SIZE / 2) // 16bit == 2 bytes / sample
+
+// these are not used for now:
+#define FILTER_SQUARE           0
+#define FILTER_LINEAR           1
+#define FILTER_CUBIC            2
+#define FILTER                  FILTER_CUBIC   
 
 #define MIXER_MAX_CHANNELS      256
-#define BLOCK_COUNT          20 //1      // temp, should be at least 4
-#define VOLUME_RAMP_SPEED       44     // 1 millisecond at mixrate of 44kHz, max. = 127
+#define BLOCK_COUNT             20      // should be at least 4
+#define VOLUME_RAMP_SPEED       44      // 1 ms at mixrate of 44kHz, max. = 127
 #define VOLUME_RAMPING_UP       1
 #define VOLUME_RAMPING_DOWN     -1
 
 
-typedef int MixBufferType;
+typedef int MixBufferType;      // for internal mixing, 32 bit will do for now
 
 union INT_UNION {
     struct {
@@ -261,10 +261,10 @@ public: // debug
     Pattern         *pattern;
     Note            *iNote;
 
-static CRITICAL_SECTION     waveCriticalSection;
-static WAVEHDR              *waveBlocks;
-static volatile int         waveFreeBlockCount;
-static int                  waveCurrentBlock;
+    static CRITICAL_SECTION     waveCriticalSection;
+    static WAVEHDR              *waveBlocks;
+    static volatile int         waveFreeBlockCount;
+    static int                  waveCurrentBlock;
 
     HWAVEOUT        hWaveOut;
     WAVEFORMATEX    waveFormatEx;
@@ -292,61 +292,36 @@ private: // debug
 public:
     Mixer ();
     ~Mixer();
-static void CALLBACK Mixer::waveOutProc(
+    static void CALLBACK waveOutProc(
         HWAVEOUT hWaveOut,
         UINT uMsg,
         DWORD dwInstance,
         DWORD dwParam1,
         DWORD dwParam2 );
-    int             initialize( Module *m );
-    int             doMixBuffer( SHORT *buffer );
-    int             doMixSixteenbitStereo(unsigned nSamples);
     void            startReplay();
     int             stopReplay();
+    void     updateWaveBuffers();
+    int             initialize( Module *m );
+
+    int      doMixBuffer( SHORT *buffer );
+    int             doMixSixteenbitStereo(unsigned nSamples);
     int             setGlobalPanning( unsigned panning ); // range: 0..255 (extreme stereo... extreme reversed stereo)
     int             setGlobalBalance( int balance ); // range: -100...0...+100
     void            resetSong();
 };
 
-// define static variables:
+// define static variables from the Mixer class:
 CRITICAL_SECTION     Mixer::waveCriticalSection;
 WAVEHDR              *Mixer::waveBlocks;
 volatile int         Mixer::waveFreeBlockCount;
 int                  Mixer::waveCurrentBlock;
-
-
-void Mixer::resetSong()
-{
-    //mixCount = 0; // added for debugging!!!    should NOT be here
-    mixIndex = 0;
-    for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ ) 
-        mixerChannels[i].init();
-
-    for ( unsigned i = 0; i < nChannels; i++ ) {
-        channels[i].init();
-        channels[i].panning = module->getDefaultPanPosition( i );
-    }
-    globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
-    globalVolume_ = 64;
-    gain = 64;//128; // max = 256
-
-    tempo = module->getDefaultTempo();
-    bpm = module->getDefaultBpm();
-    setBpm();
-
-    patternDelay_ = 0;
-    patternRow = 0;
-    iPatternTable = 0;
-    pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
-    iNote = pattern->getRow( 0 );
-}
 
 Mixer::Mixer() 
 {
     /*
         Allocate memory for the buffer used by the mixing routine:
     */
-    mixBuffer = new MixBufferType[BLOCK_SIZE];
+    mixBuffer = new MixBufferType[SAMPLES_PER_BLOCK];
 
     /*
         Allocate memory for the <BLOCK_COUNT> amount of WAVE buffers:
@@ -372,35 +347,13 @@ Mixer::Mixer()
         waveBlocks[i].dwBufferLength = BLOCK_SIZE;
         waveBlocks[i].lpData = (LPSTR)buffer;
         buffer += BLOCK_SIZE;
-
-        std::cout
-            << "\nBuffer nr " << std::dec << i
-            << "\ndwBufferLength    " << waveBlocks[i].dwBufferLength
-            << "\ndwBytesRecorded   " << waveBlocks[i].dwBytesRecorded << std::hex
-            << "\ndwFlags           " << waveBlocks[i].dwFlags
-            << "\ndwLoops           " << waveBlocks[i].dwLoops
-            << "\ndwUser            " << (void *)waveBlocks[i].dwUser
-            << "\nlpData            " << (void *)waveBlocks[i].lpData
-            << "\nlpNext            " << (void *)waveBlocks[i].lpNext
-            << "\nreserved          " << (void *)waveBlocks[i].reserved
-            << "\n---------------------------------------------------------";
-
     }
-    for ( int i = 0; i < BLOCK_SIZE; i++ )
-        waveBlocks[BLOCK_COUNT - 1].lpData[i] = rand();
-
-    /*
-        Initialize block counter & block index:
-    */
-    waveFreeBlockCount = BLOCK_COUNT;
-    waveCurrentBlock = 0;
-    InitializeCriticalSection( &waveCriticalSection );
 
     /*
         prepare the header for the windows WAVE functions
     */
     waveFormatEx.wFormatTag      = WAVE_FORMAT_PCM;
-    waveFormatEx.nChannels       = 2; // stereo
+    waveFormatEx.nChannels       = 2;               // stereo
     waveFormatEx.nSamplesPerSec  = MIXRATE; 
     waveFormatEx.wBitsPerSample  = 16;
     waveFormatEx.nBlockAlign     = waveFormatEx.nChannels * 
@@ -408,6 +361,51 @@ Mixer::Mixer()
     waveFormatEx.nAvgBytesPerSec = waveFormatEx.nSamplesPerSec * 
                                    waveFormatEx.nBlockAlign;
     waveFormatEx.cbSize          = 0;
+}
+
+Mixer::~Mixer()
+{
+    /*
+        Free the WAVEHDR blocks that were allocated in the constructor:
+    */
+    HeapFree( GetProcessHeap(),0,waveBlocks );
+    delete[] mixBuffer;
+    return;
+}
+
+void CALLBACK Mixer::waveOutProc(
+                                HWAVEOUT hWaveOut, 
+                                UINT uMsg, 
+                                DWORD dwInstance, 
+                                DWORD dwParam1,
+                                DWORD dwParam2 ) 
+{
+
+    // pointer to free block counter
+    int *freeBlockCounter = (int *)dwInstance;
+    
+    // ignore calls that occur due to openining and closing the device.
+    if( uMsg != WOM_DONE ) 
+        return;
+    EnterCriticalSection( &waveCriticalSection );
+    ( *freeBlockCounter )++;
+    LeaveCriticalSection( &waveCriticalSection );
+    //updateWaveBuffers();
+}
+
+void Mixer::startReplay() 
+{
+    /*
+        Initialize mixCount index:
+    */
+    mixCount = 0;
+
+    /*
+        Initialize block counter & block index:
+    */
+    waveFreeBlockCount = BLOCK_COUNT;
+    waveCurrentBlock = 0;
+    InitializeCriticalSection( &waveCriticalSection );
 
     /*
         try to open the default wave device. WAVE_MAPPER is
@@ -423,48 +421,83 @@ Mixer::Mixer()
         (DWORD_PTR)&waveFreeBlockCount,
         CALLBACK_FUNCTION
     ) != MMSYSERR_NOERROR ) {
-        std::cout << "Unable to open wave mapper device\n";
+        std::cout << "\nUnable to open wave mapper device";
         ExitProcess( 1 );
     }
-
-    /*
-        Initialize mixCount index:
-    */
-    mixCount = 0;
-    return;
 }
 
-Mixer::~Mixer()
+int Mixer::stopReplay () 
 {
     /*
-        Free the WAVEHDR blocks that were allocated in the constructor:
+        wait for all blocks to complete
     */
-    HeapFree( GetProcessHeap(),0,waveBlocks );
-    delete[] mixBuffer;
-    return;
-}
+    //while ( waveFreeBlockCount < BLOCK_COUNT )
+    //    Sleep( 10 );
 
-void CALLBACK Mixer::waveOutProc(
-    HWAVEOUT hWaveOut,
-    UINT uMsg,
-    DWORD dwInstance,
-    DWORD dwParam1,
-    DWORD dwParam2
-)
-{
-    int* freeBlockCounter = (int*)dwInstance;
     /*
-    * ignore calls that occur due to opening and closing the
-    * device.
+        unprepare any blocks that are still prepared
     */
-    if ( uMsg != WOM_DONE )
-        return;
+    for ( int i = 0; i < waveFreeBlockCount; i++ )
+        if ( waveBlocks[i].dwFlags & WHDR_PREPARED )
+            waveOutUnprepareHeader( hWaveOut,&waveBlocks[i],sizeof( WAVEHDR ) );
 
-    EnterCriticalSection( &waveCriticalSection );
-    (*freeBlockCounter)++;
-    LeaveCriticalSection( &waveCriticalSection );
+    waveOutReset( hWaveOut ); // not necessary?
+    waveOutClose( hWaveOut );
+    DeleteCriticalSection( &waveCriticalSection );
+    return 0;
 }
 
+void Mixer::updateWaveBuffers() {
+    while ( waveFreeBlockCount ) {
+        WAVEHDR* current = &(waveBlocks[waveCurrentBlock]);
+
+        /*
+            first make sure the header we're going to use is unprepared
+        */
+        if ( current->dwFlags & WHDR_PREPARED )
+            waveOutUnprepareHeader( hWaveOut,current,sizeof( WAVEHDR ) );
+
+        doMixBuffer( (SHORT *)(current->lpData) );
+
+        waveOutPrepareHeader( hWaveOut,current,sizeof( WAVEHDR ) );
+        waveOutWrite( hWaveOut,current,sizeof( WAVEHDR ) );
+
+        EnterCriticalSection( &(waveCriticalSection) );
+        waveFreeBlockCount--;
+        LeaveCriticalSection( &(waveCriticalSection) );
+
+        /*
+            point to the next block
+        */
+        waveCurrentBlock++;
+        waveCurrentBlock %= BLOCK_COUNT;
+    }
+}
+
+void Mixer::resetSong()
+{
+    mixIndex = 0;
+    for ( unsigned i = 0; i < MIXER_MAX_CHANNELS; i++ )
+        mixerChannels[i].init();
+
+    for ( unsigned i = 0; i < nChannels; i++ ) {
+        channels[i].init();
+        channels[i].panning = module->getDefaultPanPosition( i );
+    }
+    globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
+    globalVolume_ = 64;
+    gain = 64;              // max = 256
+
+    tempo = module->getDefaultTempo();
+    bpm = module->getDefaultBpm();
+    setBpm();
+
+    patternDelay_ = 0;
+    patternRow = 0;
+    iPatternTable = 0;
+    pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+    iNote = pattern->getRow( 0 );
+}
 
 int Mixer::initialize( Module *m ) 
 {
@@ -524,7 +557,9 @@ int Mixer::initialize( Module *m )
 
 int Mixer::doMixBuffer( SHORT *buffer ) 
 {
-    memset( mixBuffer, 0, BLOCK_SIZE * sizeof( MixBufferType ) );
+    //memset( mixBuffer, 0, BLOCK_SIZE * sizeof( MixBufferType ) );
+    memset( mixBuffer,0,SAMPLES_PER_BLOCK * sizeof( MixBufferType ) );
+    
     mixIndex = 0;  
     unsigned x = callBpm - mixCount;
     //unsigned y = BLOCK_SIZE / waveFormatEx.nChannels;// waveFormatEx.nBlockAlign;
@@ -555,7 +590,7 @@ int Mixer::doMixBuffer( SHORT *buffer )
     saturation = 0;
     MixBufferType *src = mixBuffer;
     SHORT *dst = buffer;
-    for ( unsigned i = 0; i < (BLOCK_SIZE / sizeof(SHORT)); i++ ) {    
+    for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
         MixBufferType tmp = src[i] >> 8;
         if ( tmp < -32768 ) { 
             tmp = -32768; 
@@ -567,7 +602,7 @@ int Mixer::doMixBuffer( SHORT *buffer )
         }
         dst[i] = (SHORT)tmp;
     }
-    std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
+//    std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
     return 0;
 }
 
@@ -931,209 +966,6 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
     return 0;
 }
 
-static CRITICAL_SECTION waveCriticalSection;
-static volatile int waveFreeBlockCount;
-static void CALLBACK waveOutProc(
-                                HWAVEOUT hWaveOut, 
-                                UINT uMsg, 
-                                DWORD dwInstance, 
-                                DWORD dwParam1,
-                                DWORD dwParam2 ) 
-{
-
-    // pointer to free block counter
-    int *freeBlockCounter = (int *)dwInstance;
-    
-    // ignore calls that occur due to openining and closing the device.
-    if( uMsg != WOM_DONE ) 
-        return;
-    EnterCriticalSection( &waveCriticalSection );
-    ( *freeBlockCounter )++;
-    LeaveCriticalSection( &waveCriticalSection );
-}
-
-void Mixer::startReplay() 
-{
-    // All done in constructor
-    MMRESULT mmResult;
-    /*
-    std::cout 
-        << "\nTrying to play with parameters: "
-        << "\n" << hWaveOut
-        << "\ndwBufferLength    : " << waveBlocks[0].dwBufferLength
-        << "\ndwBytesRecorded   : " << waveBlocks[0].dwBytesRecorded
-        << "\ndwFlags           : " << waveBlocks[0].dwFlags
-        << "\ndwLoops           : " << waveBlocks[0].dwLoops
-        << "\nlpData            : " << (unsigned)waveBlocks[0].lpData
-        << "\nlpNext            : " << (unsigned)waveBlocks[0].lpNext;
-    */
-
-
-    /*
-    mmResult = waveOutOpen( &hWaveOut, 
-                            WAVE_MAPPER, 
-                            &waveFormatEx, 
-                            (DWORD_PTR)waveOutProc, 
-                            (DWORD_PTR)&waveFreeBlockCount, 
-                            // CALLBACK_NULL 
-                            CALLBACK_FUNCTION );
-    */
-    /*
-    if ( waveOutOpen(
-        &hWaveOut,
-        WAVE_MAPPER,
-        &waveFormatEx,
-        (DWORD_PTR)waveOutProc,
-        (DWORD_PTR)&waveFreeBlockCount,
-        CALLBACK_FUNCTION
-    ) != MMSYSERR_NOERROR ) {
-        std::cout << "Unable to open wave mapper device\n";
-        ExitProcess( 1 );
-    }
-    */ 
-    //doMixBuffer (waveBuffers[0]);   // moved to main program for benchmarking
-
-
-
-#ifdef debug_mixer
-    if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout 
-            << "\nError opening wave mapper!"
-            << "\ndwBufferLength    : " << waveBlocks[0].dwBufferLength
-            << "\ndwBytesRecorded   : " << waveBlocks[0].dwBytesRecorded
-            << "\ndwFlags           : " << waveBlocks[0].dwFlags
-            << "\ndwLoops           : " << waveBlocks[0].dwLoops
-            << "\nlpData            : " << (unsigned)waveBlocks[0].lpData
-            << "\nlpNext            : " << (unsigned)waveBlocks[0].lpNext;
-        switch ( mmResult ) {
-            case MMSYSERR_INVALHANDLE : 
-            {
-                std::cout << "\nSpecified device handle is invalid.";
-                break;
-            }
-            case MMSYSERR_NODRIVER    : 
-            {
-                std::cout << "\nNo device driver is present.";
-                break;
-            }
-            case MMSYSERR_NOMEM       : 
-            {
-                std::cout << "\nUnable to allocate or lock memory.";
-                break;
-            }
-            case WAVERR_UNPREPARED    : 
-            {
-                std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
-                break;
-            }
-             default:
-            {
-                std::cout << "\nOther unknown error " << mmResult;
-            }
-        }
-    }
-#endif 
-    mmResult = waveOutPrepareHeader( hWaveOut, &(waveBlocks[0]), sizeof( WAVEHDR ) );
-#ifdef debug_mixer
-    if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout 
-            << "\nError preparing wave mapper header!"
-            << "\ndwBufferLength    : " << waveBlocks[0].dwBufferLength
-            << "\ndwBytesRecorded   : " << waveBlocks[0].dwBytesRecorded
-            << "\ndwFlags           : " << waveBlocks[0].dwFlags
-            << "\ndwLoops           : " << waveBlocks[0].dwLoops
-            << "\nlpData            : " << (unsigned)waveBlocks[0].lpData
-            << "\nlpNext            : " << (unsigned)waveBlocks[0].lpNext;
-        switch (mmResult) {
-            case MMSYSERR_INVALHANDLE : 
-                {
-                    std::cout << "\nSpecified device handle is invalid.";
-                    break;
-                }
-            case MMSYSERR_NODRIVER    : 
-                {
-                    std::cout << "\nNo device driver is present.";
-                    break;
-                }
-            case MMSYSERR_NOMEM       : 
-                {
-                    std::cout << "\nUnable to allocate or lock memory.";
-                    break;
-                }
-            case WAVERR_UNPREPARED    : 
-                {
-                    std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
-                    break;
-                }
-             default:
-                {
-                    std::cout << "\nOther unknown error " << mmResult;
-                }
-        }
-    }
-#endif 
-    mmResult = waveOutWrite( hWaveOut, &(waveBlocks[0]), sizeof( WAVEHDR ) );
-#ifdef debug_mixer
-    if (mmResult != MMSYSERR_NOERROR) { 
-        std::cout
-            << "\nError writing wave mapper header!"
-            << "\ndwBufferLength    : " << waveBlocks[0].dwBufferLength
-            << "\ndwBytesRecorded   : " << waveBlocks[0].dwBytesRecorded
-            << "\ndwFlags           : " << waveBlocks[0].dwFlags
-            << "\ndwLoops           : " << waveBlocks[0].dwLoops
-            << "\nlpData            : " << (unsigned)waveBlocks[0].lpData
-            << "\nlpNext            : " << (unsigned)waveBlocks[0].lpNext;
-            switch (mmResult) {
-            case MMSYSERR_INVALHANDLE : 
-                {
-                    std::cout << "\nSpecified device handle is invalid.";
-                    break;
-                }
-            case MMSYSERR_NODRIVER    : 
-                {
-                    std::cout << "\nNo device driver is present.";
-                    break;
-                }
-            case MMSYSERR_NOMEM       : 
-                {
-                    std::cout << "\nUnable to allocate or lock memory.";
-                    break;
-                }
-            case WAVERR_UNPREPARED    : 
-                {
-                    std::cout << "\nThe data block pointed to by the pwh parameter hasn't been prepared.";
-                    break;
-                }
-             default:
-                {
-                    std::cout << "\nOther unknown error " << mmResult;
-                }
-        }
-    }
-#endif 
-    //return 0;
-}
-
-int Mixer::stopReplay () 
-{
-    /*
-        wait for all blocks to complete
-    */
-    while ( waveFreeBlockCount < BLOCK_COUNT )
-        Sleep( 10 );
-
-    /*
-        unprepare any blocks that are still prepared
-    */
-    for ( int i = 0; i < waveFreeBlockCount; i++ )
-        if ( waveBlocks[i].dwFlags & WHDR_PREPARED )
-            waveOutUnprepareHeader( hWaveOut,&waveBlocks[i],sizeof( WAVEHDR ) );
-
-    DeleteCriticalSection( &waveCriticalSection );      // !!!!! can't be here, must be in destructor!!!
-    waveOutReset( hWaveOut ); // not necessary?
-    waveOutClose( hWaveOut );
-    return 0;
-}
 
 /*
 
@@ -3355,113 +3187,30 @@ int main( int argc, char *argv[] )
                   << ": " << (sourceFile.isLoaded() ? "Success." : "Error!\n");
 
         if ( sourceFile.isLoaded () ) {
-
             /*
-            std::cout
-                << "\nAfter loading module: dwBufferLength = "
-                << mixer.waveBlocks[0].dwBufferLength << "\n";
-            */
-
             unsigned s = BLOCK_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
                       << sourceFile.getSongTitle().c_str()  
                       << "\" into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data\n" 
                       << "Hit any key to start mixing.\n";
-
+            */      
             // show instruments
             for ( unsigned i = 1; i <= sourceFile.getnInstruments(); i++ ) {
                 std::cout 
-                    << i << ":" 
-                    << sourceFile.getInstrument( i )->getName().c_str() 
-                    << "\n";
+                    << "\n" << i << ":" 
+                    << sourceFile.getInstrument( i )->getName().c_str();
             }
-            //_getch();
-            mixer.initialize( &sourceFile );   // WAVDEBUG
-
-            /*
-            std::cout
-                << "\nAfter initializing mixer: dwBufferLength = "
-                << mixer.waveBlocks[0].dwBufferLength << "\n";   // still ok
-            */
-
-            //double benchTime = 0.0L;
-            //benchTime = DoBench( mixer ) / BENCHMARK_REPEAT_ACTION; // only for staging
-            /*
-            std::cout
-                << "\nRight before replay: dwBufferLength = "
-                << mixer.waveBlocks[0].dwBufferLength << "\n";
-            */
-            //mixer.startReplay(); 
-
-            // *******************************************************************
-            // *******************************************************************
-            // *******************************************************************
-
-            WAVEHDR* current;
-            current = &(mixer.waveBlocks[mixer.waveCurrentBlock]);
+            std::cout << "\n";
+            mixer.initialize( &sourceFile );  
+            mixer.startReplay();
 
             while ( !_kbhit() ) {
-                // calling here the function:
-                // writeAudio( HWAVEOUT hWaveOut,LPSTR data,int size )
-                // data = source buffer
-                // size = amount of bytes to move to WAVE_MAPPER buffers
-                
-                /*
-                std::cout
-                    << "\ndwBufferLength    " << current->dwBufferLength
-                    << "\ndwBytesRecorded   " << current->dwBytesRecorded << std::hex
-                    << "\ndwFlags           " << current->dwFlags
-                    << "\ndwLoops           " << current->dwLoops
-                    << "\ndwUser            " << (void *)current->dwUser
-                    << "\nlpData            " << (void *)current->lpData
-                    << "\nlpNext            " << (void *)current->lpNext
-                    << "\nreserved          " << (void *)current->reserved;
-                */
-                // start of writeAudio
-                /*
-                    first make sure the header we're going to use is unprepared
-                */
-                if ( current->dwFlags & WHDR_PREPARED )
-                    waveOutUnprepareHeader( mixer.hWaveOut,current,sizeof( WAVEHDR ) );
-
-                /*
-                std::cout
-                    << "\nMixing Block nr "
-                    << (unsigned)((void *)(current->lpData - mixer.waveBlocks[0].lpData)) / BLOCK_SIZE
-                    << "\nmixer.waveCurrentBlock = " << mixer.waveCurrentBlock;
-                */
-                mixer.doMixBuffer( (SHORT *)(current->lpData) );
-
-                waveOutPrepareHeader( mixer.hWaveOut,current,sizeof( WAVEHDR ) );
-                waveOutWrite( mixer.hWaveOut,current,sizeof( WAVEHDR ) );
-
-                EnterCriticalSection( &(Mixer::waveCriticalSection) );
-                mixer.waveFreeBlockCount--;
-                LeaveCriticalSection( &(Mixer::waveCriticalSection) );
-
-                /*
-                    wait for a block to become free
-                */
-                //std::cout << "\nwaveFreeBlockCount = " << mixer.waveFreeBlockCount;
-                while ( !mixer.waveFreeBlockCount ) {
-                    Sleep( 10 );
-                }
-
-                /*
-                    point to the next block
-                */
-                mixer.waveCurrentBlock++;
-                mixer.waveCurrentBlock %= BLOCK_COUNT;
-
-                current = &(mixer.waveBlocks[mixer.waveCurrentBlock]);
-                current->dwUser = 0;
+                mixer.updateWaveBuffers();
+                Sleep( 10 ); // give time slices back to windows
             }
+            _getch();
             mixer.stopReplay();
-
-            // *******************************************************************
-            // *******************************************************************
-            // *******************************************************************
 
             /*
             std::cout 
