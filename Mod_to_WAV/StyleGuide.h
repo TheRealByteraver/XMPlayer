@@ -57,7 +57,7 @@ void MyClass::privateFunction()
 
     if ( true ) { // accolade on the same line but not the statement
         ; // statement
-    } 
+    }      // else is not after the closing accolade
     else { // accolade on the same line but not the statement 
         ; // else statement
     }

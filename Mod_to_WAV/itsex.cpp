@@ -65,7 +65,7 @@ unsigned ItSex::readbits( unsigned char n )
 //                            returns: status                     )    
 int ItSex::decompress8( VirtualFile& module,void *dst,int len )
 {
-    char*           destbuf;   // the destination buffer which will be returned 
+    char*           destbuf;    // the destination buffer which will be returned 
     unsigned short  blklen;     // length of compressed data block in samples 
     unsigned short  blkpos;		// position in block 
     unsigned char   width;		// actual "bit width" 

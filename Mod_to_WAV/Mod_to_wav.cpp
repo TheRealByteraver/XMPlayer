@@ -2983,8 +2983,9 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        ".\\global trash 3 v2.mod",
-        
+        //".\\global trash 3 v2.mod",
+		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
+		"D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
         //"D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
@@ -3147,9 +3148,9 @@ int main( int argc, char *argv[] )
     else {
         /*
         if ( (!strcmp(argv[0], 
-            "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2015\\Projects\\Mod_to_WAV\\Debug\\Mod_to_WAV.exe")) ||
+            "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2019\\Projects\\Mod_to_WAV\\Debug\\Mod_to_WAV.exe")) ||
             (!strcmp(argv[0], 
-            "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2015\\Projects\\Mod_to_WAV\\Release\\Mod_to_WAV.exe")) ||
+            "C:\\Users\\Erland-i5\\Documents\\Visual Studio 2019\\Projects\\Mod_to_WAV\\Release\\Mod_to_WAV.exe")) ||
             (!strcmp(argv[0], 
             "C:\\Dev-Cpp\\Projects\\Mod2Wav.exe"))) 
         */
@@ -3176,14 +3177,14 @@ int main( int argc, char *argv[] )
         }
     }
 
+	Mixer       mixer;
     for (unsigned i = 0; i < filePaths.size(); i++) {
         Module      sourceFile;
-        Mixer       mixer;
 
         sourceFile.enableDebugMode();
         sourceFile.loadFile( filePaths[i] );
 
-        std::cout << "\n\nLoading " << filePaths[i].c_str() //moduleFilename
+        std::cout << "\n\nLoading " << filePaths[i].c_str() // moduleFilename
                   << ": " << (sourceFile.isLoaded() ? "Success." : "Error!\n");
 
         if ( sourceFile.isLoaded () ) {

@@ -405,10 +405,19 @@ int Module::loadS3mFile() {
             sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
 
             // convert sample data from unsigned to signed:
-            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+            //sample.dataType = SAMPLEDATA_SIGNED_8BIT; // done later
+            bool is16BitSample = (s3mInstHeader.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
             if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
-                unsigned char *s = (unsigned char *)sample.data;
-                for ( unsigned i = 0; i < sample.length; i++ ) *s++ ^= 128;
+                if ( !is16BitSample ) {
+                    unsigned char* s = (unsigned char*)sample.data;
+                    for ( unsigned i = 0; i < sample.length; i++ ) 
+                        *s++ ^= 0x80;
+                }
+                else {
+                    unsigned short* s = (unsigned short*)sample.data;
+                    for ( unsigned i = 0; i < sample.length; i++ ) 
+                        *s++ ^= 0x8000;
+                }
             }            
             // finetune + relative note recalc
             unsigned int s3mPeriod = 
@@ -436,7 +445,10 @@ int Module::loadS3mFile() {
             
             if ( sample.length ) {
                 samples_[nInst] = new Sample;
-                sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+                if ( is16BitSample )
+                    sample.dataType = SAMPLEDATA_SIGNED_16BIT;
+                else
+                    sample.dataType = SAMPLEDATA_SIGNED_8BIT;
                 samples_[nInst]->load( sample );
             }
         }
