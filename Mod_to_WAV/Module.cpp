@@ -59,7 +59,7 @@ Module::Module()
     // create an empty pattern of PLAYER_MAX_CHANNELS channels, 64 rows
     {
         Note *patternData = new Note[PLAYER_MAX_CHANNELS * 64];
-        emptyPattern_.initialise( PLAYER_MAX_CHANNELS,64,patternData );
+        //emptyPattern_.initialise( PLAYER_MAX_CHANNELS,64,patternData );
         for ( int i = 0; i < MAX_PATTERNS; i++ )
         {
             patterns_[i] = nullptr; 
@@ -246,18 +246,25 @@ void Module::playSampleNr( int sampleNr )
 
 int Module::loadFile() {
     int result = -1;
-    if ( !isLoaded() ) result = loadS3mFile();
-    if ( !isLoaded() ) result = loadXmFile();
-    if ( !isLoaded() ) result = loadItFile();
-    if ( !isLoaded() ) result = loadModFile();
+    if ( !isLoaded() ) 
+        result = loadS3mFile();
+    if ( !isLoaded() ) 
+        result = loadXmFile();
+    if ( !isLoaded() ) 
+        result = loadItFile();
+    if ( !isLoaded() ) 
+        result = loadModFile();
     return result;
 }
 
 Module::~Module()
 {
     //    cout << "\nDefault Module destructor called.";
-    for ( int i = 0; i < MAX_SAMPLES; i++ ) delete samples_[i];
-    for ( int i = 0; i < MAX_INSTRUMENTS; i++ ) delete instruments_[i];
-    for ( int i = 0; i < MAX_PATTERNS; i++ ) delete patterns_[i];
+    for ( int i = 0; i < MAX_SAMPLES; i++ ) 
+        delete samples_[i];
+    for ( int i = 0; i < MAX_INSTRUMENTS; i++ ) 
+        delete instruments_[i];
+    for ( int i = 0; i < MAX_PATTERNS; i++ ) 
+        delete patterns_[i];
     return;
 }

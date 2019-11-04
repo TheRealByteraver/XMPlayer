@@ -171,8 +171,11 @@
     <ClCompile Include="xm_loader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Constants.h" />
     <ClInclude Include="itsex.h" />
     <ClInclude Include="Module.h" />
+    <ClInclude Include="Pattern.h" />
+    <ClInclude Include="Sample.h" />
     <ClInclude Include="StyleGuide.h" />
     <ClInclude Include="thanks.h" />
     <ClInclude Include="virtualfile.h" />

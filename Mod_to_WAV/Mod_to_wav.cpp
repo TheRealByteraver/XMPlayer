@@ -93,6 +93,8 @@ Fixed / cleared up:
 
 #include "time.h"
 #include "Module.h"
+#include "Sample.h"
+#include "Pattern.h"
 #include "VirtualFile.h" // debug
 
 //#define debug_mixer
@@ -259,7 +261,10 @@ public: // debug
     unsigned        patternLoopStartRow_;
     bool            patternLoopFlag_;
     Pattern         *pattern;
-    Note            *iNote;
+
+    //Note            *iNote;
+    //std::vector<Note>::const_iterator iNote;
+    const Note*     iNote;
 
     static CRITICAL_SECTION     waveCriticalSection;
     static WAVEHDR              *waveBlocks;
@@ -1358,8 +1363,8 @@ int Mixer::updateNotes () {
 
 
 
-            unsigned& effect = iNote->effects[fxloop].effect;
-            unsigned& argument = iNote->effects[fxloop].argument;
+            const unsigned char& effect = iNote->effects[fxloop].effect;
+            const unsigned char& argument = iNote->effects[fxloop].argument;
             if ( (effect == TONE_PORTAMENTO) ||
                 (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) ) {
 
@@ -2983,10 +2988,10 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        "D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
-		"D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
-        //"D:\\MODS\\dosprog\\MYRIEH.XM",
+        "D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\menutune3.s3m",
@@ -2997,10 +3002,10 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
-        "D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\k_hippo.s3m",
-        "D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
-        "D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\k_hippo.s3m",
+        //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
+        //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.S3M",
         //"D:\\MODS\\M2W_BUGTEST\\WORLD-vals.xm",
         //"D:\\MODS\\M2W_BUGTEST\\2nd_pm-porta.s3m",
@@ -3035,7 +3040,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\Crea.it",         // impulse tracker v2.0+
         //"D:\\MODS\\M2W_BUGTEST\\WOMEN.xm",
         //"D:\\MODS\\M2W_BUGTEST\\module1.mptm",
-        //"D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
+        "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
         //"D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
 
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
@@ -3067,55 +3072,54 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\againstr.mod",
         //"D:\\MODS\\dosprog\\mods\\bluishbg2.xm",
         //"D:\\MODS\\dosprog\\mods\\un-land2.s3m",
-        "D:\\MODS\\dosprog\\mods\\un-land.s3m",
-        "D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
-        "D:\\MODS\\dosprog\\mods\\un-worm.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-land.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
+        //"D:\\MODS\\dosprog\\mods\\un-worm.s3m",
         "D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\mods\\theend.mod",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
         //"D:\\MODS\\dosprog\\music\\xm\\united_7.xm",
         //"D:\\MODS\\dosprog\\ctstoast.xm",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\mech8.s3m",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\Tubelectric.S3M",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jazz1\\bonus.S3M",        
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\Silverball\\fantasy.s3m",
         //"D:\\MODS\\dosprog\\women.xm",
         
-        "D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        "D:\\MODS\\dosprog\\mods\\track1.s3m",
-        "D:\\MODS\\dosprog\\mods\\track2.s3m",
-        "D:\\MODS\\dosprog\\mods\\track3.s3m",
-        "D:\\MODS\\dosprog\\mods\\track4.s3m",
-        "D:\\MODS\\dosprog\\mods\\track5.s3m",
-        "D:\\MODS\\dosprog\\mods\\track6.s3m",
-        "D:\\MODS\\dosprog\\mods\\track7.s3m",
-        "D:\\MODS\\dosprog\\mods\\track8.s3m",
-        "D:\\MODS\\dosprog\\mods\\track9.s3m",
+        //"D:\\MODS\\dosprog\\mods\\menutune.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track1.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track2.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track3.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track4.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track5.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track6.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track7.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track8.s3m",
+        //"D:\\MODS\\dosprog\\mods\\track9.s3m",
         
         //"D:\\MODS\\dosprog\\mods\\ssi.s3m",
         //"D:\\MODS\\dosprog\\mods\\ssi.xm",
-        "D:\\MODS\\dosprog\\mods\\pori.s3m",
-        "D:\\MODS\\dosprog\\mods\\tearhate.s3m",
-        "D:\\MODS\\dosprog\\mods\\starsmuz.s3m",
+        //"D:\\MODS\\dosprog\\mods\\pori.s3m",
+        //"D:\\MODS\\dosprog\\mods\\tearhate.s3m",
+        //"D:\\MODS\\dosprog\\mods\\starsmuz.s3m",
         
         "D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
-        "D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
+        //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
         "D:\\MODS\\dosprog\\mods\\baska.mod",
         "D:\\MODS\\dosprog\\chipmod\\mental.mod",
-        "D:\\MODS\\dosprog\\dope.mod",
         "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
 //        "D:\\MODS\\dosprog\\audiopls\\crmx-trm.mod",
-        "D:\\MODS\\dosprog\\ctstoast.xm",
+        //"D:\\MODS\\dosprog\\ctstoast.xm",
         "D:\\MODS\\dosprog\\dope.mod",
 //        "D:\\MODS\\dosprog\\smokeoutstripped.xm",
-        "D:\\MODS\\dosprog\\smokeout.xm",
-        "D:\\MODS\\dosprog\\KNGDMSKY.XM",
-        "D:\\MODS\\dosprog\\KNGDMSKY-mpt.XM",
-        "D:\\MODS\\dosprog\\myrieh.xm",
+        //"D:\\MODS\\dosprog\\smokeout.xm",
+        //"D:\\MODS\\dosprog\\KNGDMSKY.XM",
+        //"D:\\MODS\\dosprog\\KNGDMSKY-mpt.XM",
+        //"D:\\MODS\\dosprog\\myrieh.xm",
         "D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\chipmod\\crain.mod",
         "D:\\MODS\\dosprog\\chipmod\\toybox.mod",

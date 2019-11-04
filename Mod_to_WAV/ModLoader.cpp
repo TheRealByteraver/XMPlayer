@@ -16,6 +16,9 @@
 #include <fstream>
 #include <bitset>
 #include <iomanip>
+#include <vector>
+#include <iterator>
+#include <iterator>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -446,13 +449,17 @@ int convertFlt8Pattern( VirtualFile& modFile )
 
 int Module::loadModPattern( VirtualFile& modFile,int patternNr )
 {
-    Note        *iNote,*patternData;
+    std::vector<Note> patternData( nChannels_ * MOD_ROWS );
+    //Note        *iNote,*patternData;   // old
     unsigned char j1,j2,j3,j4;
 
-    patterns_[patternNr] = new Pattern;
-    patternData = new Note[nChannels_ * MOD_ROWS];
-    patterns_[patternNr]->initialise( nChannels_,MOD_ROWS,patternData );
-    iNote = patternData;
+    std::vector<Note>::iterator iNote = patternData.begin();
+
+    //patterns_[patternNr] = new Pattern;              
+    //patternData = new Note[nChannels_ * MOD_ROWS];   // old
+    //patterns_[patternNr]->initialise( nChannels_,MOD_ROWS,patternData ); // old
+    //iNote = patternData; // old
+
     for ( unsigned n = 0; n < (nChannels_ * MOD_ROWS); n++ ) {
         modFile.read( &j1,sizeof( unsigned char ) );
         modFile.read( &j2,sizeof( unsigned char ) );
@@ -473,7 +480,6 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
         // convert period to note:
         iNote->note = 0;
         if ( period ) {
-
             unsigned j;
             for ( j = 0; j < (MAXIMUM_NOTES); j++ )
                 if ( period >= periods[j] )
@@ -522,6 +528,8 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
 #endif
         iNote++;
     }
+    //patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,std::move( pattern ) );
+    patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,patternData );
     return 0;
 }
 
@@ -548,7 +556,7 @@ void remapModEffects( Effect& remapFx )
         }
         case VOLUME_SLIDE:
         {
-            unsigned& argument = remapFx.argument;
+            unsigned char& argument = remapFx.argument;
             if ( !argument )
                 remapFx.effect = NO_EFFECT;
             else {
@@ -562,7 +570,7 @@ void remapModEffects( Effect& remapFx )
         }
         case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
         {
-            unsigned& argument = remapFx.argument;
+            unsigned char& argument = remapFx.argument;
             if ( !argument )
                 remapFx.effect = TONE_PORTAMENTO;
             else {
@@ -576,7 +584,7 @@ void remapModEffects( Effect& remapFx )
         }
         case VIBRATO_AND_VOLUME_SLIDE:
         {
-            unsigned& argument = remapFx.argument;
+            unsigned char& argument = remapFx.argument;
             if ( !argument )
                 remapFx.effect = VIBRATO;
             else {
@@ -621,7 +629,8 @@ int nBadComment( char *comment )
         "abcdefghijklmnopqrstuvwxyz{|}~";
     int r = 0;
     for ( int i = 0; i < MAX_SAMPLENAME_LENGTH; i++ )
-        if ( !strchr( allowed,tolower( comment[i] ) ) ) r++;
+        if ( !strchr( allowed,tolower( comment[i] ) ) ) 
+            r++;
     return r;
 }
 

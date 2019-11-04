@@ -14,6 +14,8 @@ Thanks must go to:
 #include <fstream>
 #include <bitset>
 #include <iomanip>
+#include <vector>
+#include <iterator>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -550,12 +552,10 @@ int Module::loadS3mFile() {
 #endif
         }
         // read the pattern into the internal format:
-        Note        *iNote,*patternData;
         S3mUnpackedNote* unPackedNote = unPackedPtn;
-        patterns_[iPtn] = new Pattern;
-        patternData = new Note[nChannels_ * S3M_ROWS_PER_PATTERN];
-        patterns_[iPtn]->initialise( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
-        iNote = patternData;
+        std::vector<Note> patternData( nChannels_* S3M_ROWS_PER_PATTERN );
+        std::vector<Note>::iterator iNote = patternData.begin();
+
         for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
@@ -581,7 +581,6 @@ int Module::loadS3mFile() {
                 S3M effect A = 1, B = 2, etc
                 do some error checking & effect remapping:
             */
-
             iNote->effects[1].effect = unPackedNote->fx;
             iNote->effects[1].argument = unPackedNote->fxp;
 
@@ -591,6 +590,7 @@ int Module::loadS3mFile() {
             iNote++;
             unPackedNote++;
         }
+        patterns_[iPtn] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
     }
     delete[] unPackedPtn;
     isLoaded_ = true;

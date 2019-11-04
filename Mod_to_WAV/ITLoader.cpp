@@ -14,6 +14,8 @@ Thanks must go to:
 #pragma comment (lib, "winmm.lib") 
 #include <iostream>
 #include <fstream>
+#include <vector>
+#include <iterator>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -901,10 +903,10 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
     unsigned char   masks[IT_MAX_CHANNELS];
     Note            prevRow[IT_MAX_CHANNELS];
     unsigned char   prevVolc[IT_MAX_CHANNELS];
-    Note            *iNote,*patternData;
+    //Note            *iNote,*patternData;
     ItPatternHeader itPatternHeader;
-    patterns_[patternNr] = new Pattern;
 
+    //patterns_[patternNr] = new Pattern;
     memset( &channelIsUsed,false,sizeof( channelIsUsed ) );
     memset( &masks,0,sizeof( masks ) );
     memset( &prevRow,0,sizeof( prevRow ) );
@@ -921,14 +923,16 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
                 << "! Exiting.\n";
         return -1;
     }
+    std::vector<Note> patternData( nChannels_ * itPatternHeader.nRows );
+    std::vector<Note>::iterator iNote = patternData.begin();
 
-    patternData = new Note[nChannels_ * itPatternHeader.nRows];
-    patterns_[patternNr]->initialise( 
-        nChannels_,
-        itPatternHeader.nRows,
-        patternData 
-    );
-    iNote = patternData;
+    //patternData = new Note[nChannels_ * itPatternHeader.nRows];
+    //patterns_[patternNr]->initialise( 
+    //    nChannels_,
+    //    itPatternHeader.nRows,
+    //    patternData 
+    //);
+    //iNote = patternData;
 
     // start decoding:
     unsigned char *source = (unsigned char *)itFile.getSafePointer( itPatternHeader.dataSize );
@@ -1029,6 +1033,7 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         ItDebugShow::pattern( *(patterns_[patternNr]) );
 #endif
     }
+    patterns_[patternNr] = new Pattern( nChannels_,itPatternHeader.nRows,patternData );
     return 0;
 }
 

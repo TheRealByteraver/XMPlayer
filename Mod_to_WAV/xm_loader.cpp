@@ -11,6 +11,8 @@
 #include <fstream>
 #include <bitset>
 #include <iomanip>
+#include <vector>
+#include <iterator>
 
 #include "module.h"
 #include "virtualfile.h"
@@ -587,7 +589,7 @@ void remapXmEffects( Effect& remapFx )
         {
             // in .mod & .xm files volume slide up has
             // priority over volume slide down
-            unsigned& argument = remapFx.argument;
+            unsigned char& argument = remapFx.argument;
             unsigned volUp = argument & 0xF0;
             unsigned volDn = argument & 0x0F;
             if ( volUp && volDn )
@@ -615,7 +617,7 @@ void remapXmEffects( Effect& remapFx )
 
 int Module::loadXmPattern( VirtualFile & xmFile,int patternNr )
 {
-    Note           *iNote,*patternData;
+    //Note           *iNote,*patternData;
     XmPatternHeader xmPatternHeader;
 
     xmFile.read( &xmPatternHeader,sizeof( XmPatternHeader ) );
@@ -627,10 +629,13 @@ int Module::loadXmPattern( VirtualFile & xmFile,int patternNr )
     
     if ( xmPatternHeader.nRows > XM_MAX_PATTERN_ROWS )
         return  -1;
-    patterns_[patternNr] = new Pattern;
-    patternData = new Note[nChannels_ * xmPatternHeader.nRows];
-    patterns_[patternNr]->initialise( nChannels_,xmPatternHeader.nRows,patternData );
-    iNote = patternData;
+
+    //patterns_[patternNr] = new Pattern;
+    //patternData = new Note[nChannels_ * xmPatternHeader.nRows];
+    //patterns_[patternNr]->initialise( nChannels_,xmPatternHeader.nRows,patternData );
+    //iNote = patternData;
+    std::vector<Note> patternData( nChannels_ * xmPatternHeader.nRows );
+    std::vector<Note>::iterator iNote = patternData.begin();
 
     // empty patterns are not stored
     if ( !xmPatternHeader.patternSize ) 
@@ -718,6 +723,7 @@ int Module::loadXmPattern( VirtualFile & xmFile,int patternNr )
         remapXmEffects( iNote->effects[1] );
         iNote++;
     }
+    patterns_[patternNr] = new Pattern( nChannels_,xmPatternHeader.nRows,patternData );
     return 0;
 }
 
@@ -848,7 +854,7 @@ void XmDebugShow::patternHeader( int patternNr,XmPatternHeader& xmPatternHeader 
 void XmDebugShow::pattern( Pattern& pattern,int nChannels )
 {
     for ( unsigned row = 0; row < pattern.getnRows(); row++ ) {                     
-        Note *iNote = pattern.getRow( row );
+        const Note *iNote = pattern.getRow( row );
         for ( int chn = 0; chn < nChannels; chn++ ) {
             if ( chn == 0 ) {
                 std::cout
