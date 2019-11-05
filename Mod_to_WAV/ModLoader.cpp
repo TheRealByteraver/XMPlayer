@@ -361,13 +361,12 @@ int Module::loadModFile()
             if ( sample.data == nullptr )
                 return 0;            // temp DEBUG:
 
-            samples_[iSample] = new Sample;
             sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-            samples_[iSample]->load( sample );
+            samples_[iSample] = std::make_unique<Sample>( sample );
+
         }   
         fileOffset += sample.length; // ??
-        instruments_[iSample] = new Instrument;
-        instruments_[iSample]->load( instrument );
+        instruments_[iSample] = std::make_unique <Instrument>( instrument );
 
 #ifdef debug_mod_play_samples
         if ( showDebugInfo_ )
@@ -529,7 +528,9 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
         iNote++;
     }
     //patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,std::move( pattern ) );
-    patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,patternData );
+    //patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,patternData );
+    patterns_[patternNr] = std::make_unique < Pattern >
+        ( nChannels_,MOD_ROWS,patternData );
     return 0;
 }
 

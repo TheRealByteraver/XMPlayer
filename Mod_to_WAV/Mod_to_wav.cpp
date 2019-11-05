@@ -102,7 +102,7 @@ Fixed / cleared up:
 
 #define BENCHMARK_REPEAT_ACTION    1
 
-#define LINEAR_INTERPOLATION  // TEMP
+#define LINEAR_INTERPOLATION  // this constant is not used
 
 #define MIXRATE                 44100    // in Hz
 #define BLOCK_SIZE              0x4000   // Pref. bigger than 44100 * 4 / 60 ?
@@ -133,7 +133,6 @@ union INT_UNION {
 
 class Channel {
 public:
-
     bool            isMuted;
     Instrument      *pInstrument;
     Sample          *pSample;
@@ -239,7 +238,8 @@ public: // debug
     bool            ft2StyleEffects_;
     bool            pt35StyleEffects_;
     Module          *module;
-    MixBufferType   *mixBuffer;
+    //MixBufferType   *mixBuffer;
+    std::unique_ptr < MixBufferType[] > mixBuffer;
     Channel         channels[PLAYER_MAX_CHANNELS];
     MixerChannel    mixerChannels[MIXER_MAX_CHANNELS]; // not a pointer, too slow
     unsigned        nActiveMixChannels; 
@@ -326,7 +326,8 @@ Mixer::Mixer()
     /*
         Allocate memory for the buffer used by the mixing routine:
     */
-    mixBuffer = new MixBufferType[SAMPLES_PER_BLOCK];
+    //mixBuffer = new MixBufferType[SAMPLES_PER_BLOCK];
+    mixBuffer = std::make_unique < MixBufferType[] >( SAMPLES_PER_BLOCK );
 
     /*
         Allocate memory for the <BLOCK_COUNT> amount of WAVE buffers:
@@ -374,7 +375,6 @@ Mixer::~Mixer()
         Free the WAVEHDR blocks that were allocated in the constructor:
     */
     HeapFree( GetProcessHeap(),0,waveBlocks );
-    delete[] mixBuffer;
     return;
 }
 
@@ -500,7 +500,7 @@ void Mixer::resetSong()
     patternDelay_ = 0;
     patternRow = 0;
     iPatternTable = 0;
-    pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+    pattern = &(module->getPattern( module->getPatternTable( iPatternTable ) ));
     iNote = pattern->getRow( 0 );
 }
 
@@ -563,7 +563,7 @@ int Mixer::initialize( Module *m )
 int Mixer::doMixBuffer( SHORT *buffer ) 
 {
     //memset( mixBuffer, 0, BLOCK_SIZE * sizeof( MixBufferType ) );
-    memset( mixBuffer,0,SAMPLES_PER_BLOCK * sizeof( MixBufferType ) );
+    memset( mixBuffer.get(),0,SAMPLES_PER_BLOCK * sizeof( MixBufferType ) );
     
     mixIndex = 0;  
     unsigned x = callBpm - mixCount;
@@ -593,7 +593,7 @@ int Mixer::doMixBuffer( SHORT *buffer )
         into 16 bit buffer:
     */
     saturation = 0;
-    MixBufferType *src = mixBuffer;
+    MixBufferType *src = mixBuffer.get();
     SHORT *dst = buffer;
     for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
         MixBufferType tmp = src[i] >> 8;
@@ -665,7 +665,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
             nActiveMixChannels++;
                                  
-            MixBufferType *mixBufferPTR = mixBuffer + mixIndex;
+            MixBufferType *mixBufferPTR = mixBuffer.get() + mixIndex;
             int chnInc = mChn.sampleIncrement;
             for ( unsigned j = 0; j < nSamples; ) {
                 // mChn.sampleIncrement is never greater dan 2 ^ 17
@@ -1274,7 +1274,7 @@ int Mixer::updateNotes () {
         if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
-            channel.pInstrument = module->getInstrument( instrument ); 
+            channel.pInstrument = &(module->getInstrument( instrument )); 
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
@@ -1282,7 +1282,7 @@ int Mixer::updateNotes () {
                     // std::cout << std::setw( 4 ) << sample; // DEBUG
                     channel.pSample = 
                         //channel.pInstrument->getSample( sample );
-                        module->getSample( sample );
+                        &(module->getSample( sample ));
 
                 }
                 if ( channel.pSample ) {
@@ -1319,7 +1319,7 @@ int Mixer::updateNotes () {
         else {
             isNewInstrument = false;
             channel.pInstrument = 
-                module->getInstrument( oldInstrument );
+                &(module->getInstrument( oldInstrument ));
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {               
                     sample = channel.pInstrument->getSampleForNote
@@ -1327,7 +1327,7 @@ int Mixer::updateNotes () {
                     //std::cout << std::setw( 4 ) << sample; // DEBUG
                     channel.pSample = 
                         //channel.pInstrument->getSample( sample ); 
-                        module->getSample( sample );
+                        &(module->getSample( sample ));
                 }
             }
         }
@@ -2201,7 +2201,7 @@ loop, making the infinite loop impossible.
             );
         }
 
-        pattern = module->getPattern( module->getPatternTable( iPatternTable ) );
+        pattern = &(module->getPattern( module->getPatternTable( iPatternTable ) ));
         if( patternRow >= pattern->getnRows() ) 
             patternRow = 0;
         iNote = pattern->getRow( patternRow );
@@ -2988,7 +2988,7 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\MODS\\dosprog\\dope.mod",
+        //"D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
         "D:\\MODS\\dosprog\\MYRIEH.XM",
@@ -3002,7 +3002,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.MOD",
         //"D:\\MODS\\M2W_BUGTEST\\againstptnloop.xm",
         //"D:\\MODS\\MOD\\hoffman_and_daytripper_-_professional_tracker.mod",
-        //"D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\4wd.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\k_hippo.s3m",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         //"D:\\MODS\\S3M\\Purple Motion\\inside.s3m",
@@ -3030,11 +3030,11 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
+        "D:\\MODS\\M2W_BUGTEST\\menuralli.it",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\M2W_BUGTEST\\womeni.it",
-        //"D:\\MODS\\dosprog\\backward.s3m",
+        "D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
         //"D:\\MODS\\M2W_BUGTEST\\Crea.it",         // impulse tracker v2.0+
@@ -3058,7 +3058,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         //"D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         //"D:\\MODS\\dosprog\\mods\\women.s3m",
@@ -3183,31 +3183,31 @@ int main( int argc, char *argv[] )
 
 	Mixer       mixer;
     for (unsigned i = 0; i < filePaths.size(); i++) {
-        Module      sourceFile;
+        Module      moduleFile;
 
-        sourceFile.enableDebugMode();
-        sourceFile.loadFile( filePaths[i] );
+        moduleFile.enableDebugMode();
+        moduleFile.loadFile( filePaths[i] );
 
         std::cout << "\n\nLoading " << filePaths[i].c_str() // moduleFilename
-                  << ": " << (sourceFile.isLoaded() ? "Success." : "Error!\n");
+                  << ": " << (moduleFile.isLoaded() ? "Success." : "Error!\n");
 
-        if ( sourceFile.isLoaded () ) {
+        if ( moduleFile.isLoaded () ) {
             /*
             unsigned s = BLOCK_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
-                      << sourceFile.getSongTitle().c_str()  
+                      << moduleFile.getSongTitle().c_str()  
                       << "\" into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data\n" 
                       << "Hit any key to start mixing.\n";
             */      
             // show instruments
-            for ( unsigned i = 1; i <= sourceFile.getnInstruments(); i++ ) {
+            for ( unsigned i = 1; i <= moduleFile.getnInstruments(); i++ ) {
                 std::cout 
                     << "\n" << i << ":" 
-                    << sourceFile.getInstrument( i )->getName().c_str();
+                    << moduleFile.getInstrument( i ).getName().c_str();
             }
             std::cout << "\n";
-            mixer.initialize( &sourceFile );  
+            mixer.initialize( &moduleFile );  
             mixer.startReplay();
 
             while ( !_kbhit() ) {
@@ -3219,14 +3219,14 @@ int main( int argc, char *argv[] )
 
             /*
             std::cout 
-                << "\nA " << sourceFile.getnChannels() 
+                << "\nA " << moduleFile.getnChannels() 
                 << " channel module was rendered to " 
                 << BUFFER_LENGTH_IN_MINUTES << " min of wave data in " 
                 << benchTime << " seconds."
                 << "\nEstimated realtime cpu charge is " 
                 << (benchTime * 100) / (BUFFER_LENGTH_IN_MINUTES * 60) 
                 << " percent.\nOn average " 
-                << (benchTime * 1000.0 / sourceFile.getnChannels()) 
+                << (benchTime * 1000.0 / moduleFile.getnChannels()) 
                     / BUFFER_LENGTH_IN_MINUTES 
                 << " milliseconds per channel per minute."
                 << "\n\nPlaying... Hit any key to stop.\n";
@@ -3249,10 +3249,10 @@ int main( int argc, char *argv[] )
     std::cout << "\nHit any key to start memory leak test.";
     _getch();
     for (int i = 0; i < 40; i++) { 
-        Module sourceFile;
-        sourceFile.setFileName(modPaths[3]);
-        sourceFile.loadFile();
-        std::cout << "\nisLoaded = " << ((sourceFile.isLoaded ()) ? "Yes" : "No");
+        Module moduleFile;
+        moduleFile.setFileName(modPaths[3]);
+        moduleFile.loadFile();
+        std::cout << "\nisLoaded = " << ((moduleFile.isLoaded ()) ? "Yes" : "No");
         std::cout << ", for the " << (i + 1) << "th time";
     }
     */

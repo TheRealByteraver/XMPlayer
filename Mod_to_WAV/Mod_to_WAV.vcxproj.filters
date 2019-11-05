@@ -68,5 +68,8 @@
     <ClInclude Include="Pattern.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Instrument.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

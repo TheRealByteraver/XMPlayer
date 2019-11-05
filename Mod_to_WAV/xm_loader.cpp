@@ -435,8 +435,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             }
         }
     }
-    instruments_[instrumentNr] = new Instrument;
-    instruments_[instrumentNr]->load( instrument );
+    instruments_[instrumentNr] = std::make_unique < Instrument >( instrument );
     return 0;
 }
 
@@ -469,7 +468,8 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& sampleH
             *pd++ = newSample16;
             oldSample16 = newSample16;
         }
-    } else {
+    } 
+    else {
         signed char *ps = (signed char *)(sampleHeader.data);
         signed char *pd = ps;
         for ( unsigned iData = 0; iData < sampleHeader.length; iData++ ) {
@@ -478,8 +478,7 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& sampleH
             oldSample8 = newSample8;
         }
     }
-    samples_[sampleNr] = new Sample;
-    samples_[sampleNr]->load( sampleHeader );
+    samples_[sampleNr] = std::make_unique<Sample>( sampleHeader );
     return 0;
 }
 
@@ -723,7 +722,9 @@ int Module::loadXmPattern( VirtualFile & xmFile,int patternNr )
         remapXmEffects( iNote->effects[1] );
         iNote++;
     }
-    patterns_[patternNr] = new Pattern( nChannels_,xmPatternHeader.nRows,patternData );
+    //patterns_[patternNr] = new Pattern( nChannels_,xmPatternHeader.nRows,patternData );
+    patterns_[patternNr] = std::make_unique < Pattern >
+        ( nChannels_,xmPatternHeader.nRows,patternData );
     return 0;
 }
 

@@ -1,13 +1,10 @@
 #include <iostream>
 #include <cstring>
-#include "Module.h"
 
-Instrument::~Instrument () {
-//    std::cout << "\nInst destructor called";
-    //for (int i = 0; i < MAX_SAMPLES; i++) delete samples_[i];
-}
+#include "constants.h"
+#include "instrument.h"
 
-void Instrument::load( const InstrumentHeader &instrumentHeader ) {
+Instrument::Instrument( const InstrumentHeader &instrumentHeader ) {
     name_ = instrumentHeader.name;
     for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
         sampleForNote_[i] = instrumentHeader.sampleForNote[i];
@@ -18,11 +15,7 @@ void Instrument::load( const InstrumentHeader &instrumentHeader ) {
         volumeEnvelope_ [i].y = instrumentHeader.volumeEnvelope [i].y;
         panningEnvelope_[i].y = instrumentHeader.panningEnvelope[i].y;
     }
-    /*
-    for (int i = 0; i < MAX_SAMPLES; i++) {       // NEED COPY CONSTRUCTOR?
-        samples_[i] = instrumentHeader.samples[i];// DANGER PTR 2 OBJECT
-    }
-    */
+
     nSamples_           = instrumentHeader.nSamples;
     nVolumePoints_      = instrumentHeader.nVolumePoints;
     volumeSustain_      = instrumentHeader.volumeSustain;

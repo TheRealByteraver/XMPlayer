@@ -11,13 +11,14 @@ int ItSex::readblock( VirtualFile& file )
     file.read( &size,sizeof( unsigned short ) );
     if ( !size ) 
         return 0;
-    sourcebuffer = new unsigned char[size];
-    if ( file.read( sourcebuffer,size ) ) {
-        delete[] sourcebuffer;
-        sourcebuffer = nullptr;
+    //sourcebuffer = new unsigned char[size];
+    sourcebuffer = std::make_unique < unsigned char[] >( size );
+    if ( file.read( sourcebuffer.get(),size ) ) {
+        //delete[] sourcebuffer;
+        //sourcebuffer = nullptr;
         return 0;
     }
-    ibuf = sourcebuffer;
+    ibuf = sourcebuffer.get();
     bitnum = 8;
     bitlen = size;
     return 1;
@@ -26,8 +27,8 @@ int ItSex::readblock( VirtualFile& file )
 // frees that block again
 int ItSex::freeblock() 
 {
-    delete[] sourcebuffer;
-    sourcebuffer = nullptr;
+    //delete[] sourcebuffer;
+    //sourcebuffer = nullptr;
     return 1;
 }
 
@@ -198,7 +199,7 @@ int ItSex::decompress16( VirtualFile& module,void *dst,int len )
                     continue;	                                    // ... and next value 
                 }
             } 
-            else {	                                         // illegal width, abort 
+            else {	                                                // illegal width, abort 
                 freeblock();
                 return 0;
             }            

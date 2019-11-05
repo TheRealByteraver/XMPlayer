@@ -16,6 +16,7 @@ Thanks must go to:
 #include <fstream>
 #include <vector>
 #include <iterator>
+#include <memory>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -367,7 +368,8 @@ int Module::loadItFile()
     // load samples
     nSamples_ = itFileHeader.nSamples;
     bool convertToInstrument = !(itFileHeader.flags & IT_INSTRUMENT_MODE);
-    if ( convertToInstrument ) nInstruments_ = nSamples_;
+    if ( convertToInstrument )
+        nInstruments_ = nSamples_;
     for ( unsigned sampleNr = 1; sampleNr <= nSamples_; sampleNr++ ) {
         itFile.absSeek( smpHdrPtrs[sampleNr - 1] );
         int result = loadItSample(
@@ -479,8 +481,9 @@ int Module::loadItInstrument(
 
         // ...
 
-        instruments_[instrumentNr] = new Instrument;
-        instruments_[instrumentNr]->load( instrumentHeader );
+        instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
+
+
     } 
     else {
         ItNewInstHeader itInstHeader;
@@ -509,8 +512,7 @@ int Module::loadItInstrument(
 
         // ...
 
-        instruments_[instrumentNr] = new Instrument;
-        instruments_[instrumentNr]->load( instrumentHeader );
+        instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
     }
     return 0;
 }
@@ -545,7 +547,7 @@ int Module::loadItSample(
         return -1;
     }
     SampleHeader sample;
-    samples_[sampleNr] = new Sample;
+    //samples_[sampleNr] = new Sample;
     sample.name.append( itSampleHeader.name,IT_SMP_NAME_LENGTH );
     sample.length = itSampleHeader.length;
     sample.repeatOffset = itSampleHeader.loopStart;
@@ -624,20 +626,21 @@ int Module::loadItSample(
         sample.dataType = SAMPLEDATA_SIGNED_8BIT;
     }
     itFile.absSeek( itSampleHeader.samplePointer );
-    unsigned char *buffer = new unsigned char[dataLength];
+    //unsigned char *buffer = new unsigned char[dataLength];
+    std::unique_ptr<unsigned char[]> buffer = std::make_unique<unsigned char[]>( dataLength );
 
     if ( !isCompressed ) {
-        if ( itFile.read( buffer,dataLength ) ) return 0;
+        if ( itFile.read( buffer.get(),dataLength ) ) return 0;
     } 
     else {
         // decompress sample here
         ItSex itSex( isIt215Compression );
         if ( is16bitData )
-            itSex.decompress16( itFile,buffer,sample.length );
+            itSex.decompress16( itFile,buffer.get(),sample.length );
         else
-            itSex.decompress8( itFile,buffer,sample.length );
+            itSex.decompress8( itFile,buffer.get(),sample.length );
     }
-    sample.data = (SHORT *)buffer;
+    sample.data = (SHORT *)buffer.get();
 
     // convert unsigned to signed sample data:
     if ( (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0 ) {
@@ -650,21 +653,19 @@ int Module::loadItSample(
             for ( unsigned i = 0; i < sample.length; i++ ) data[i] ^= 0x80;
         }
     }
-
-    samples_[sampleNr]->load( sample );
-    delete[] buffer;
+    samples_[sampleNr] = std::make_unique<Sample>( sample );
 
     // if the file is in sample mode, convert it to instrument mode
     // and create an instrument for each sample:
     if ( convertToInstrument ) {
-        instruments_[sampleNr] = new Instrument;
         InstrumentHeader    instrumentHeader;
         for ( int n = 0; n < MAXIMUM_NOTES; n++ ) {
             instrumentHeader.sampleForNote[n].note = n;
             instrumentHeader.sampleForNote[n].sampleNr = sampleNr;
         }
         instrumentHeader.name = sample.name;
-        instruments_[sampleNr]->load( instrumentHeader );
+        instruments_[sampleNr] = std::make_unique <Instrument>( instrumentHeader );
+
     }
     if ( showDebugInfo_ && !isStereoSample ) {
 #ifdef debug_it_play_samples
@@ -1033,7 +1034,9 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         ItDebugShow::pattern( *(patterns_[patternNr]) );
 #endif
     }
-    patterns_[patternNr] = new Pattern( nChannels_,itPatternHeader.nRows,patternData );
+    //patterns_[patternNr] = new Pattern( nChannels_,itPatternHeader.nRows,patternData );
+    patterns_[patternNr] = std::make_unique < Pattern >
+        ( nChannels_,itPatternHeader.nRows,patternData );
     return 0;
 }
 

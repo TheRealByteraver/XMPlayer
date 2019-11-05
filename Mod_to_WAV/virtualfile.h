@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <memory>
 
 #include "assert.h"
 
@@ -82,7 +83,7 @@ private:
 
 class VirtualFile {
 public:
-    explicit VirtualFile( std::string &fileName ) :
+    explicit VirtualFile( std::string& fileName ) :
         fileName_( fileName )
     {
         fileSize_ = 0;
@@ -90,48 +91,47 @@ public:
         filePos_ = nullptr;
         fileEOF_ = nullptr;
         std::ifstream   file(
-            fileName_,std::ios::in | 
-            std::ios::binary | 
-            std::ios::ate 
+            fileName_,std::ios::in |
+            std::ios::binary |
+            std::ios::ate
         );
         if ( !file.is_open() ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return;
         }
         fileSize_ = file.tellg();
-        data_ = new char[(int)fileSize_];
-        filePos_ = data_;
-        fileEOF_ = data_ + (int)fileSize_;
+        //data_ = new char[(int)fileSize_];
+        data_ = std::make_unique < char[] > ( (int)fileSize_ );
+        filePos_ = data_.get();
+        fileEOF_ = data_.get() + (int)fileSize_;
         file.seekg( 0,std::ios::beg );
-        file.read( data_,fileSize_ );
+        file.read( data_.get(),fileSize_ );
         file.close();
         ioError_ = VIRTFILE_NO_ERROR;
     }
-    VirtualFile( const VirtualFile& virtualFile )
-    {
-        // copying this object is not allowed
-        exit( -1 );
-    }
-    ~VirtualFile()
-    {
-        delete[] data_;
-    }
+    VirtualFile( const VirtualFile& virtualFile ) = delete;
+    //{
+    //    // copying this object is not allowed
+    //    exit( -1 );
+    //}
+    //~VirtualFile()
+    //{
+    //    delete[] data_;
+    //}
     IOError     getIOError()
     {
         IOError ioError = ioError_;
         ioError_ = VIRTFILE_NO_ERROR;
         return ioError;
     }
-    IOError     read( void *dest,int quantity ) 
+    IOError     read( void* dest,int quantity )
     {
-        if ( filePos_ + quantity <= fileEOF_ )
-        {
+        if ( filePos_ + quantity <= fileEOF_ ) {
             memcpy( dest,filePos_,quantity );
             filePos_ += quantity;
             ioError_ = VIRTFILE_NO_ERROR;
-        } 
-        else 
-        {
+        }
+        else {
             memset( dest,0,quantity );
             memcpy( dest,filePos_,fileEOF_ - filePos_ );
             filePos_ = fileEOF_;
@@ -145,13 +145,12 @@ public:
         lastBitContainer_ = 0;
         return read( &lastBitContainer_,sizeof( unsigned char ) );
     }
-    IOError     bitRead( unsigned& dest, unsigned char quantity )
+    IOError     bitRead( unsigned& dest,unsigned char quantity )
     {
         assert( quantity <= sizeof( unsigned ) << 3 ); // read max 32 bits
         dest = 0;
         int offset = 0;
-        for ( ;quantity; )
-        {
+        for ( ; quantity; ) {
             int m = quantity;
             if ( m > bitsLeft_ )
                 m = bitsLeft_;
@@ -159,8 +158,7 @@ public:
             lastBitContainer_ >>= m;
             quantity -= m;
             offset += m;
-            if ( !(bitsLeft_ -= m) )
-            {
+            if ( !(bitsLeft_ -= m) ) {
                 IOError ioError = read( &lastBitContainer_,sizeof( unsigned char ) );
                 if ( ioError ) return ioError;
                 bitsLeft_ = 8;
@@ -176,43 +174,43 @@ public:
         }
         ioError_ = VIRTFILE_NO_ERROR;
         if ( (position < 0) &&
-            ( (- position) > (int)filePos_ ) ) 
+            ((-position) > ( int )filePos_) )
             filePos_ = 0;
-        else 
+        else
             filePos_ += position;
-        if ( filePos_ < data_ ) {
-            filePos_ = data_;
+        if ( filePos_ < data_.get() ) {
+            filePos_ = data_.get();
             ioError_ = VIRTFILE_BUFFER_UNDERRUN;
-        } 
+        }
         else if ( filePos_ > fileEOF_ ) {
             filePos_ = fileEOF_;
             ioError_ = VIRTFILE_BUFFER_OVERRUN;
-        } 
-        else if ( filePos_ == fileEOF_ ) { 
+        }
+        else if ( filePos_ == fileEOF_ ) {
             ioError_ = VIRTFILE_EOF;
         }
         return ioError_;
     }
     IOError     absSeek( unsigned position )
     {
-        filePos_ = data_ + position;
+        filePos_ = data_.get() + position;
         ioError_ = VIRTFILE_NO_ERROR;
         if ( filePos_ > fileEOF_ ) {
             filePos_ = fileEOF_;
             ioError_ = VIRTFILE_BUFFER_OVERRUN;
-        } 
+        }
         else if ( filePos_ == fileEOF_ ) {
             ioError_ = VIRTFILE_EOF;
-        }        
+        }
         return ioError_;
     }
     unsigned    getCurPos()
     {
-        if ( filePos_ > data_ ) {
+        if ( filePos_ > data_.get() ) {
             if ( filePos_ > fileEOF_ )
-                return fileEOF_ - data_;
-            else 
-                return filePos_ - data_;
+                return fileEOF_ - data_.get();
+            else
+                return filePos_ - data_.get();
         }
         else
             return 0;
@@ -220,8 +218,7 @@ public:
     unsigned    fileSize()
     {
         ioError_ = VIRTFILE_NO_ERROR;
-        if ( data_ == nullptr )
-        {
+        if ( data_ == nullptr ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return 0;
         }
@@ -230,8 +227,7 @@ public:
     unsigned    dataLeft()
     {
         ioError_ = VIRTFILE_NO_ERROR;
-        if ( data_ == nullptr )
-        {
+        if ( data_ == nullptr ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return 0;
         }
@@ -240,26 +236,24 @@ public:
     template<class PTR> MemoryBlock<PTR> getPointer( unsigned nElements )
     {
         unsigned byteSize = nElements * sizeof( *PTR );
-        if ( filePos_ + byteSize <= fileEOF_ )
-        {
+        if ( filePos_ + byteSize <= fileEOF_ ) {
             ioError_ = VIRTFILE_NO_ERROR;
-            MemoryBlock<PTR> memoryBlock( (PTR *)filePos_,nElements );
+            MemoryBlock<PTR> memoryBlock( (PTR*)filePos_,nElements );
             return memoryBlock;
-        } 
-        else
-        {
+        }
+        else {
             ioError_ = VIRTFILE_EOF;
             MemoryBlock<PTR> memoryBlock( nullptr,0 );
             return memoryBlock;
         }
     }
     //const void * const getSafePointer( unsigned byteSize )
-    void       *getSafePointer( unsigned byteSize )
+    void* getSafePointer( unsigned byteSize )
     {
         if ( filePos_ + byteSize <= fileEOF_ ) {
             ioError_ = VIRTFILE_NO_ERROR;
             return filePos_;
-        } 
+        }
         else {
             ioError_ = VIRTFILE_EOF;
             return nullptr;
@@ -269,9 +263,9 @@ public:
 private:
     std::string     fileName_;
     IOError         ioError_ = VIRTFILE_READ_ERROR;
-    char            *data_;
-    char            *filePos_;
-    char            *fileEOF_;
+    std::unique_ptr < char[] > data_;
+    char* filePos_;
+    char* fileEOF_;
     std::ifstream::pos_type  fileSize_;
     unsigned char   bitsLeft_;
     unsigned char   lastBitContainer_; // last byte read with leftover bits 

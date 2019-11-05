@@ -7,7 +7,7 @@
 #include "constants.h"
 
 /*
-    ideas:
+    todo:
     - compress the pattern for smaller memory footprint   
 */
 

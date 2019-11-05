@@ -72,203 +72,41 @@ EEx extra-finely increases note pitch by applying with 4 times the precision of 
 #include "constants.h"
 #include "pattern.h"
 #include "sample.h"
+#include "instrument.h"
 #include "virtualfile.h"
-
-class EnvelopePoint {
-public:
-    unsigned        x;
-    unsigned        y;
-};
-
-struct NoteSampleMap {
-    unsigned        note;
-    unsigned        sampleNr;
-};
-
-class InstrumentHeader {
-public:
-    InstrumentHeader()  
-    { 
-        name.clear();
-        nSamples = 0;
-        for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
-            sampleForNote[i].note = i;
-            sampleForNote[i].sampleNr = 0;
-        }
-        for ( int i = 0; i < 12; i++ )  // only 12 envelope points?
-        {
-            volumeEnvelope[i].x = 0;
-            volumeEnvelope[i].y = 0;
-            panningEnvelope[i].x = 0;
-            panningEnvelope[i].y = 0;
-        }
-        nVolumePoints = 0;
-        volumeSustain = 0;
-        volumeLoopStart = 0;
-        volumeLoopEnd = 0;
-        volumeType = 0;
-        volumeFadeOut = 0;
-                            
-        nPanningPoints = 0;
-        panningSustain = 0;
-        panningLoopStart = 0;
-        panningLoopEnd = 0;
-        panningType = 0;
-        vibratoType = 0;
-        vibratoSweep = 0;
-        vibratoDepth = 0;
-        vibratoRate = 0;
-    }
-    std::string     name;
-    unsigned        nSamples;
-    NoteSampleMap   sampleForNote[MAXIMUM_NOTES];
-    EnvelopePoint   volumeEnvelope[12];
-    unsigned        nVolumePoints;
-    unsigned        volumeSustain;
-    unsigned        volumeLoopStart;
-    unsigned        volumeLoopEnd;
-    unsigned        volumeType;
-    unsigned        volumeFadeOut;
-    EnvelopePoint   panningEnvelope[12];
-    unsigned        nPanningPoints;
-    unsigned        panningSustain;
-    unsigned        panningLoopStart;
-    unsigned        panningLoopEnd;
-    unsigned        panningType;
-    unsigned        vibratoType;
-    unsigned        vibratoSweep;
-    unsigned        vibratoDepth;
-    unsigned        vibratoRate;
-};
-
-class Instrument {
-public:
-    Instrument()
-    {
-        name_.clear();
-        nSamples_ = 1;
-
-        for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
-            sampleForNote_[i].note = i;
-            sampleForNote_[i].sampleNr = 0;
-        }
-
-        for ( int i = 0; i < 12; i++ ) { // only 12 envelope points?
-            volumeEnvelope_[i].x = 0;
-            volumeEnvelope_[i].y = 0;
-            panningEnvelope_[i].x = 0;
-            panningEnvelope_[i].y = 0;
-        }
-        nVolumePoints_ = 0;
-        volumeSustain_ = 0;
-        volumeLoopStart_ = 0;
-        volumeLoopEnd_ = 0;
-        volumeType_ = 0;
-        volumeFadeOut_ = 0;
-        nPanningPoints_ = 0;
-        panningSustain_ = 0;
-        panningLoopStart_ = 0;
-        panningLoopEnd_ = 0;
-        panningType_ = 0;
-        vibratoType_ = 0;
-        vibratoSweep_ = 0;
-        vibratoDepth_ = 0;
-        vibratoRate_ = 0;
-    }
-    ~Instrument ();
-    void            load( const InstrumentHeader &instrumentHeader );
-    std::string     getName() { return name_; }
-    unsigned        getnSamples ()                  { return nSamples_;           }
-    unsigned        getNoteForNote( unsigned n )
-    { 
-        assert ( n < MAXIMUM_NOTES );  // has no effect
-        if ( n >= MAXIMUM_NOTES ) return 0;
-        return sampleForNote_[n].note;
-    }
-    unsigned        getSampleForNote( unsigned n )
-    {
-        assert( n < MAXIMUM_NOTES );  // has no effect
-        if ( n >= MAXIMUM_NOTES ) return 0;
-        return sampleForNote_[n].sampleNr;
-    }
-
-    EnvelopePoint   getVolumeEnvelope( unsigned p ) { return volumeEnvelope_[p];  }
-    unsigned        getnVolumePoints()              { return nVolumePoints_;      }
-    unsigned        getVolumeSustain()              { return volumeSustain_;      }
-    unsigned        getVolumeLoopStart()            { return volumeLoopStart_;    }
-    unsigned        getVolumeLoopEnd()              { return volumeLoopEnd_;      }
-    unsigned        getVolumeType()                 { return volumeType_;         }
-    unsigned        getVolumeFadeOut()              { return volumeFadeOut_;      }
-    EnvelopePoint   getPanningEnvelope( unsigned p ){ return panningEnvelope_[p]; }
-    unsigned        getnPanningPoints()             { return nPanningPoints_;     }
-    unsigned        getPanningSustain()             { return panningSustain_;     }
-    unsigned        getPanningLoopStart()           { return panningLoopStart_;   }
-    unsigned        getPanningLoopEnd()             { return panningLoopEnd_;     }
-    unsigned        getPanningType()                { return panningType_;        }
-    unsigned        getVibratoType()                { return vibratoType_;        }
-    unsigned        getVibratoSweep()               { return vibratoSweep_;       }
-    unsigned        getVibratoDepth()               { return vibratoDepth_;       }
-    unsigned        getVibratoRate()                { return vibratoRate_;        }
-
-private:
-    std::string     name_;
-    unsigned        nSamples_;
-    //unsigned        sampleForNote_[MAXIMUM_NOTES];
-    NoteSampleMap   sampleForNote_[MAXIMUM_NOTES];
-    EnvelopePoint   volumeEnvelope_[12];
-    unsigned        nVolumePoints_;
-    unsigned        volumeSustain_;
-    unsigned        volumeLoopStart_;
-    unsigned        volumeLoopEnd_;
-    unsigned        volumeType_;
-    unsigned        volumeFadeOut_;
-    EnvelopePoint   panningEnvelope_[12];
-    unsigned        nPanningPoints_;
-    unsigned        panningSustain_;
-    unsigned        panningLoopStart_;
-    unsigned        panningLoopEnd_;
-    unsigned        panningType_;
-    unsigned        vibratoType_;
-    unsigned        vibratoSweep_;
-    unsigned        vibratoDepth_;
-    unsigned        vibratoRate_;
-};
 
 // forward declarations for linker:
 class Sample;
+class Instrument;
 
 class Module {
 public:
     Module();
-    Module( std::string &fileName ) : Module() 
-    { 
-        loadFile( fileName ); 
-    }
-    ~Module();
-    std::string     getFileName()                { return fileName_;             }
-    void            setFileName( std::string &fileName ) { fileName_ = fileName; }
-    int             loadFile();
+    Module( std::string& fileName ) : Module() { loadFile( fileName ); }
+
+    std::string     getFileName()         const { return fileName_;             }
+    void            setFileName( std::string& fileName ) { fileName_ = fileName; }
     int             loadFile( std::string &fileName )
                     { setFileName( fileName ); return loadFile(); }
-    bool            isLoaded()                  { return isLoaded_;             }
-    bool            getVerboseMode()            { return showDebugInfo_;        }
+    bool            isLoaded()            const { return isLoaded_;             }
+    bool            getVerboseMode()      const { return showDebugInfo_;        }
     void            enableDebugMode()           { showDebugInfo_ = true;        }
     void            disableDebugMode()          { showDebugInfo_ = false;       }
-    bool            useLinearFrequencies()      { return useLinearFrequencies_; }
-    bool            isCustomRepeat()            { return isCustomRepeat_;       }
-    unsigned        getTrackerType()            { return trackerType_;          }
-    unsigned        getMinPeriod()              { return minPeriod_;            }
-    unsigned        getMaxPeriod()              { return maxPeriod_;            }
-    unsigned        getPanningStyle()           { return panningStyle_;         }
-    unsigned        getnChannels()              { return nChannels_;            }
-    unsigned        getnInstruments()           { return nInstruments_;         }
-    unsigned        getnSamples()               { return nSamples_;             }
-    unsigned        getnPatterns()              { return nPatterns_;            }
-    unsigned        getDefaultTempo()           { return defaultTempo_;         }
-    unsigned        getDefaultBpm()             { return defaultBpm_;           }
-    unsigned        getSongLength()             { return songLength_;           }
-    unsigned        getSongRestartPosition()    { return songRestartPosition_;  }
-    std::string     getSongTitle()              { return songTitle_;            }
+    bool            useLinearFrequencies()const { return useLinearFrequencies_; }
+    bool            isCustomRepeat()      const { return isCustomRepeat_;       }
+    unsigned        getTrackerType()      const { return trackerType_;          }
+    unsigned        getMinPeriod()        const { return minPeriod_;            }
+    unsigned        getMaxPeriod()        const { return maxPeriod_;            }
+    unsigned        getPanningStyle()     const { return panningStyle_;         }
+    unsigned        getnChannels()        const { return nChannels_;            }
+    unsigned        getnInstruments()     const { return nInstruments_;         }
+    unsigned        getnSamples()         const { return nSamples_;             }
+    unsigned        getnPatterns()        const { return nPatterns_;            }
+    unsigned        getDefaultTempo()     const { return defaultTempo_;         }
+    unsigned        getDefaultBpm()       const { return defaultBpm_;           }
+    unsigned        getSongLength()       const { return songLength_;           }
+    unsigned        getSongRestartPosition()const { return songRestartPosition_; }
+    std::string     getSongTitle()        const { return songTitle_;            }
 
     unsigned        getDefaultPanPosition( unsigned i ) 
     { 
@@ -280,55 +118,61 @@ public:
         assert( i < MAX_PATTERNS );
         return patternTable_[i];   
     }
-    Sample          *getSample( unsigned sample )
+
+    Sample&         getSample( unsigned sample )
     {
-        assert( sample <= 99 /*MAX_SAMPLES*/ ); // !!!!
-        return samples_[sample] ? samples_[sample] : &emptySample_;
+        assert( sample <= MAX_SAMPLES ); // !!!!
+        return (samples_[sample] ? *(samples_[sample]) : *(samples_[0]));
     }
-    Instrument      *getInstrument( unsigned instrument )  
+    Instrument&     getInstrument( unsigned instrument )  
     { 
         assert( instrument <= MAX_INSTRUMENTS );
-        return instruments_[instrument] ? instruments_[instrument] : &emptyInstrument_;
+        return (instruments_[instrument] ? *(instruments_[instrument]) : *(instruments_[0]));
     }
-    Pattern         *getPattern( unsigned pattern ) 
+    Pattern&        getPattern( unsigned pattern ) 
     { 
         assert( pattern < MAX_PATTERN );
-        return patterns_[pattern] ? patterns_[pattern] : &emptyPattern_;
+        return (patterns_[pattern] ? *(patterns_[pattern]) : emptyPattern_);
     }
+
+private:
+    int             loadFile();
 
 private:
     std::string     fileName_;
     std::string     songTitle_;
     std::string     trackerTag_;
-    unsigned        trackerType_;
-    bool            showDebugInfo_;
-    bool            isLoaded_;
-    bool            useLinearFrequencies_;
-    bool            isCustomRepeat_;
-    unsigned        minPeriod_;
-    unsigned        maxPeriod_;
-    unsigned        panningStyle_;
-    unsigned        nChannels_;
-    unsigned        nInstruments_;
-    unsigned        nSamples_;
-    unsigned        nPatterns_;
-    unsigned        defaultTempo_;
-    unsigned        defaultBpm_;
-    unsigned        songLength_;
-    unsigned        songRestartPosition_;
+    unsigned        trackerType_ = TRACKER_IT;
+    bool            showDebugInfo_ = false;
+    bool            isLoaded_ = false;
+    bool            useLinearFrequencies_ = true;
+    bool            isCustomRepeat_ = false;
+    unsigned        minPeriod_ = 14;
+    unsigned        maxPeriod_ = 27392;
+    unsigned        panningStyle_ = PANNING_STYLE_IT;
+    unsigned        nChannels_ = 0;
+    unsigned        nInstruments_ = 1;
+    unsigned        nSamples_ = 1;
+    unsigned        nPatterns_ = 1;
+    unsigned        defaultTempo_ = 6;
+    unsigned        defaultBpm_ = 125;
+    unsigned        songLength_ = 1;
+    unsigned        songRestartPosition_ = 0;
     unsigned char   defaultPanPositions_[PLAYER_MAX_CHANNELS];
     unsigned        patternTable_[MAX_PATTERNS];
-    Sample          *samples_[MAX_SAMPLES];
-    Instrument      *instruments_[MAX_INSTRUMENTS];
-    Pattern         *patterns_[MAX_PATTERNS];
+
+
+    std::unique_ptr < Sample >      samples_[MAX_SAMPLES];
+    std::unique_ptr < Instrument >  instruments_[MAX_INSTRUMENTS];
+    std::unique_ptr < Pattern >     patterns_[MAX_PATTERNS];
+
     Pattern         emptyPattern_ = 
         Pattern( 
             PLAYER_MAX_CHANNELS,
             64,
             std::vector<Note>( PLAYER_MAX_CHANNELS * 64 ) 
         );
-    Sample          emptySample_;
-    Instrument      emptyInstrument_;
+    Instrument      emptyInstrument_ = Instrument( InstrumentHeader() );
 
     int             loadItFile();
     int             loadXmFile();
@@ -345,7 +189,6 @@ private:
 
     int             loadModPattern( VirtualFile & modFile,int patternNr );
 
-    void            playSampleNr( int sampleNr ); // for debugging purposes
+    // for debugging purposes:
+    void            playSampleNr( int sampleNr ); 
 };
-
-//#endif // MODULE_H

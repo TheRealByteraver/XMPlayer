@@ -172,6 +172,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Constants.h" />
+    <ClInclude Include="Instrument.h" />
     <ClInclude Include="itsex.h" />
     <ClInclude Include="Module.h" />
     <ClInclude Include="Pattern.h" />

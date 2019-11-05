@@ -446,16 +446,14 @@ int Module::loadS3mFile() {
                     << "\nFinetune          : " << sample.finetune;
             
             if ( sample.length ) {
-                samples_[nInst] = new Sample;
                 if ( is16BitSample )
                     sample.dataType = SAMPLEDATA_SIGNED_16BIT;
                 else
                     sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-                samples_[nInst]->load( sample );
+                samples_[nInst] = std::make_unique<Sample>( sample );
             }
         }
-        instruments_[nInst] = new Instrument;
-        instruments_[nInst]->load( instrument );
+        instruments_[nInst] = std::make_unique <Instrument>( instrument );
 
         if ( showDebugInfo_ ) {
 #ifdef debug_s3m_play_samples
@@ -468,11 +466,13 @@ int Module::loadS3mFile() {
     }
 
     // Now load the patterns:
-    S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
+    //S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
+    std::unique_ptr < S3mUnpackedNote[] > unPackedPtn  = 
+        std::make_unique < S3mUnpackedNote[] > ( S3M_ROWS_PER_PATTERN * nChannels_ );
 
     for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ ) {
 
-        memset( unPackedPtn,0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
+        memset( unPackedPtn.get(),0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
 
         // empty patterns are not stored
         if ( ptnParaPtrs[iPtn] ) { 
@@ -482,7 +482,6 @@ int Module::loadS3mFile() {
 
             // temp DEBUG:
             if ( s3mPtn == nullptr ) {
-                delete[] unPackedPtn;
                 return 0;
             }
 
@@ -492,7 +491,6 @@ int Module::loadS3mFile() {
                     std::cout
                         << "\nMissing pattern data while reading file"
                         << ", exiting!\n";
-                delete[] unPackedPtn;
                 return 0;
             }
 
@@ -552,7 +550,7 @@ int Module::loadS3mFile() {
 #endif
         }
         // read the pattern into the internal format:
-        S3mUnpackedNote* unPackedNote = unPackedPtn;
+        S3mUnpackedNote* unPackedNote = unPackedPtn.get();
         std::vector<Note> patternData( nChannels_* S3M_ROWS_PER_PATTERN );
         std::vector<Note>::iterator iNote = patternData.begin();
 
@@ -590,9 +588,10 @@ int Module::loadS3mFile() {
             iNote++;
             unPackedNote++;
         }
-        patterns_[iPtn] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
+        //patterns_[iPtn] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
+        patterns_[iPtn] = std::make_unique < Pattern >
+            ( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
     }
-    delete[] unPackedPtn;
     isLoaded_ = true;
     return 0;
 }

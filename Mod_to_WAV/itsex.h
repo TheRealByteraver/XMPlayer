@@ -137,6 +137,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "virtualFile.h"
 
 class ItSex {
@@ -155,7 +157,8 @@ private:
     int freeblock();
     unsigned readbits( unsigned char n );
 
-    unsigned char*   sourcebuffer;
+    //unsigned char*   sourcebuffer;
+    std::unique_ptr < unsigned char[] > sourcebuffer;
     unsigned char*   ibuf;
     unsigned         bitlen;
     unsigned char    bitnum;
