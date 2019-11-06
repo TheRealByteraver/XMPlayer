@@ -1,4 +1,12 @@
 /*
+    Loader variable name conventions (should be same among all loaders):
+    - Index in instrument loop: instrumentNr
+    - Index in sample loop: sampleNr
+    - Index in pattern loop: patternNr
+    - short name for instrumentHeader: instHdr
+    - short name for sampleHeader: smpHdr
+
+
     Supported:
     Taketracker 1..3 channel, 5 / 7 / 9 / 11 / 13 / 15 channel modules
     Fasttracker 2..32 channel modules
@@ -7,6 +15,9 @@
     .WOW (mod's grave) files
     15 instrument Noisetracker files
     31 instrument modules with unknown tag & unknown nr of channels
+
+    Not Supported:
+    PP20 compressed mod's, or other variants of compression
 */
 #include <conio.h>
 #include <windows.h>
@@ -26,17 +37,17 @@
 //#define debug_mod_show_patterns
 //#define debug_mod_play_samples
 
-#define MOD_DEBUG_SHOW_PATTERN_NO           8 // pattern to be shown
+constexpr auto MOD_DEBUG_SHOW_PATTERN_NO = 8; // pattern to be shown
 
 // Constants for the .MOD Format:
-#define MOD_LIMIT                           8    // nr of illegal chars permitted in smp names
-#define MOD_ROWS                            64   // always 64 rows in a MOD pattern
-#define MOD_MAX_SONGNAME_LENGTH             20
-#define MOD_MAX_PATTERNS                    128
-#define MOD_MAX_CHANNELS                    32
-#define MOD_DEFAULT_BPM                     125
-#define MOD_DEFAULT_TEMPO                   6
-#define MOD_MAX_PERIOD                      7248 // chosen a bit arbitrarily!
+constexpr auto MOD_LIMIT = 8;    // nr of illegal chars permitted in smp names
+constexpr auto MOD_ROWS = 64;   // always 64 rows in a MOD pattern
+constexpr auto MOD_MAX_SONGNAME_LENGTH = 20;
+constexpr auto MOD_MAX_PATTERNS = 128;
+constexpr auto MOD_MAX_CHANNELS = 32;
+constexpr auto MOD_DEFAULT_BPM = 125;
+constexpr auto MOD_DEFAULT_TEMPO = 6;
+constexpr auto MOD_MAX_PERIOD = 7248; // chosen a bit arbitrarily!;
 
 
 // =============================================================================
@@ -81,34 +92,60 @@ inline AMIGAWORD SwapW( AMIGAWORD d ) {
     return (d >> 8) | (d << 8);
 }
 
-// forward declarations for little helper procedures
-int     nBadComment( char *comment );
-int     tagID( std::string tagID,bool &flt8Err,unsigned& trackerType );
-bool    isWowFile( std::string fileName );
-int     convertFlt8Pattern( VirtualFile& modFile );
-void    remapModEffects( Effect& remapFx );
+class ModHelperFn {
+public:
+    static int      nBadComment( const char* comment );
+    static int      getNrSamples( const HeaderMK& headerMK );
+    static int      tagID( const std::string& tagID,bool& flt8Err,unsigned& trackerType );
+    static bool     isWowFile( std::string fileName );
+    static int      convertFlt8Pattern( VirtualFile& modFile );
+    static void     remapEffects( Effect& remapFx );
+};
+
+// read sample names, this is how we differentiate a 31 instruments file 
+// from an old format 15 instruments file
+// if there is no tag then this is probably not a MOD file!
+int ModHelperFn::getNrSamples( const HeaderMK& headerMK )
+{
+    int count = 0;
+    for ( int i = 0; i < 15; i++ )
+        count += ModHelperFn::nBadComment( headerMK.samples[i].name );
+
+    // this is not a MOD file
+    if ( count > MOD_LIMIT )
+        return 0;
+
+    // no tag could mean this is an old NST - MOD file
+    count = 0;
+    for ( int i = 15; i < 31; i++ )
+        count += ModHelperFn::nBadComment( headerMK.samples[i].name );
+
+    // this is an NST MOD file
+    if ( count > MOD_LIMIT )
+        return 15;
+    // this is a normal MOD file
+    else
+        return 31;
+}
 
 
 int Module::loadModFile() 
 {
     bool        smpErr   = false;   // if first 15 smp names are garbage
-    bool        nstErr   = false;   // if next  16 smp names are garbage
+    bool        nstErr   = false;   // if next  16 smp names are garbage (NST file)
     bool        ptnErr   = false;   // if there seem to be an invalid nr of ptns
     bool        tagErr   = false;   // true if no valid tag was found
     bool        flt8Err  = false;   // if FLT8 pattern conversion will be needed
     bool        wowFile  = false;   // if the file extension was .WOW rather than .MOD
-    bool        nstFile  = false;   // if it is an NST file (15 instruments)
-    unsigned    patternHeader;
-    unsigned    patternCalc;
+    unsigned    patternDataSize;
     unsigned    patternDivideRest;
-    unsigned    k;
     unsigned    sampleDataSize;
     unsigned    sampleDataOffset;
     unsigned    patternDataOffset;
     unsigned    fileOffset;
     unsigned    fileSize;
 
-    isLoaded_ = false;
+    isLoaded_ = false;  // redundant
 
     VirtualFile modFile( fileName_ );
     if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) 
@@ -128,47 +165,29 @@ int Module::loadModFile()
         return 0;
 
     // check extension for the wow factor ;)
-    wowFile = isWowFile(fileName_);
+    wowFile = ModHelperFn::isWowFile( fileName_ );
 
-    // check if a valid tag is present
-    trackerTag_.clear();
-    trackerTag_.append( headerMK.tag,4 );
-    nChannels_ = tagID( trackerTag_,flt8Err,trackerType_ );
+    // check if a valid tag is present and get the MOD type
+    trackerTag_.assign( headerMK.tag,4 );
+    nChannels_ = ModHelperFn::tagID( trackerTag_,flt8Err,trackerType_ );
+    tagErr = nChannels_ == 0;
 
-    if ( !nChannels_ ) 
-        tagErr = true;
+    nInstruments_ = ModHelperFn::getNrSamples( headerMK );
+    nstErr = nInstruments_ == 15;
+    smpErr = nInstruments_ == 0;
 
-    // read sample names, this is how we differentiate a 31 instruments file 
-    // from an old format 15 instruments file
-    // if there is no tag then this is probably not a MOD file!
-    k = 0;
-    for ( int i = 0 ; i < 15; i++ ) 
-        k += nBadComment(headerMK.samples[i].name);
-    if(k > MOD_LIMIT ) 
-        smpErr = true;
-    // no tag could mean this is an old NST - MOD file!
-    k = 0;
-    for ( int i = 15; i < 31; i++ ) 
-        k += nBadComment(headerMK.samples[i].name);
-    if( k > MOD_LIMIT ) 
-        nstErr = true;
-    if ( tagErr && nstErr && (!smpErr) ) { 
-        nstFile = true; 
-        nChannels_ = 4; 
+    if ( tagErr && nstErr && (!smpErr) ) {
+        nChannels_ = 4;
         trackerTag_ = "NST";
     }
-    patternCalc = fileSize; 
-    if ( nstFile ) { 
-        nInstruments_ = 15; 
-        patternCalc -= sizeof( HeaderNST ); 
-    } 
-    else { 
-        nInstruments_ = 31; 
-        patternCalc -= sizeof( HeaderMK ); 
-    }
-    nSamples_ = 0;
+    else
+        nstErr = false;
 
+    patternDataSize = fileSize - (nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK ));
+    nSamples_ = 0;
     sampleDataSize = 0; 
+
+    // take care of the endianness and calculate total sample data size
     for( unsigned i = 0; i < nInstruments_; i++ ) {
         headerMK.samples[i].length       = 
             SwapW( headerMK.samples[i].length       );
@@ -178,20 +197,23 @@ int Module::loadModFile()
             SwapW( headerMK.samples[i].repeatLength );
         sampleDataSize += ((unsigned)headerMK.samples[i].length) << 1;
     }
-    patternCalc -= sampleDataSize;
+    
+    patternDataSize -= sampleDataSize;
+    unsigned calcPatternCnt = 0;
     if ( nChannels_ ) {
-        // pattern size = 64 rows * 4 b. per note * nChn = 256 * nChn
-        int i = ( nChannels_ << 8 );   
-        patternDivideRest = patternCalc % i;
-        patternCalc /= i;
+        // pattern size = 64 rows * 4 bytes/note * nrChannels 
+        //              = 256 * nrChannels
+        int patternSize = nChannels_ * MOD_ROWS * 4;   
+        patternDivideRest = patternDataSize % patternSize; // should be 0
+        calcPatternCnt = patternDataSize / patternSize;
     }
     // verify nr of patterns using pattern table
-    patternHeader = 0;
-    if ( nstFile ) {
+    unsigned hdrPatternCnt = 0;
+    if ( nstErr ) {
         for ( int i = 0; i < MOD_MAX_PATTERNS; i++ ) {
-            k = patternTable_[i] = headerNST.patternTable[i];
-            if ( k > patternHeader ) 
-                patternHeader = k;
+            unsigned idx = patternTable_[i] = headerNST.patternTable[i];
+            if ( idx > hdrPatternCnt )
+                hdrPatternCnt = idx;
         }
         songRestartPosition_ = headerNST.restartPosition;
         songLength_ = headerNST.songLength;
@@ -201,17 +223,17 @@ int Module::loadModFile()
             for ( int i = 0; i < MOD_MAX_PATTERNS; i++ ) 
                 headerMK.patternTable[i] >>= 1;
         for ( int i = 0; i < MOD_MAX_PATTERNS; i++ ) {
-            k = patternTable_[i] = headerMK.patternTable[i];
-            if ( k > patternHeader ) 
-                patternHeader = k;
+            unsigned idx = patternTable_[i] = headerMK.patternTable[i];
+            if ( idx > hdrPatternCnt )
+                hdrPatternCnt = idx;
         }
         songRestartPosition_ = headerMK.restartPosition;
         songLength_ = headerMK.songLength;
     }
 
     // patterns are numbered starting from zero
-    patternHeader++;
-    if ( patternHeader > MOD_MAX_PATTERNS ) {
+    hdrPatternCnt++;
+    if ( hdrPatternCnt > MOD_MAX_PATTERNS ) {
         if ( showDebugInfo_ )
             std::cout << "\nPattern table has illegal values, exiting.\n";
         return 0;
@@ -222,11 +244,13 @@ int Module::loadModFile()
     defaultBpm_   = MOD_DEFAULT_BPM;
     useLinearFrequencies_ = false;
 
-    if (patternHeader > MOD_MAX_PATTERNS) 
+    if ( hdrPatternCnt > MOD_MAX_PATTERNS ) 
         ptnErr = true;
+
     if ( (songRestartPosition_ > songLength_) ||
          (songRestartPosition_ == 127)) 
         songRestartPosition_ = 0;
+
     isCustomRepeat_ = songRestartPosition_ != 0;
 
     // now interpret the obtained info
@@ -235,16 +259,16 @@ int Module::loadModFile()
         return 0;
 
     // check file integrity, correct nr of channels if necessary
-    nPatterns_ = patternHeader;
+    nPatterns_ = hdrPatternCnt;
     if ( !tagErr ) {              // ptnCalc and chn were initialised
-        if (wowFile && ((patternHeader << 1) == patternCalc)) 
+        if (wowFile && ((hdrPatternCnt * 2) == calcPatternCnt)) 
             nChannels_ = 8;
     } 
     else {
-        if ( !nstFile ) {         // ptnCalc and chn were not initialised
-            patternDivideRest = patternCalc % (MOD_ROWS * 4);
-            patternCalc >>= 8;
-            nChannels_ = patternCalc / patternHeader; 
+        if ( !nstErr ) {         // ptnCalc and chn were not initialised
+            patternDivideRest = calcPatternCnt % (MOD_ROWS * 4);
+            calcPatternCnt >>= 8;
+            nChannels_ = calcPatternCnt / hdrPatternCnt; 
             if ( (nChannels_ > MOD_MAX_CHANNELS) || (!nChannels_) ) {
                 if ( showDebugInfo_ )
                     std::cout 
@@ -253,8 +277,8 @@ int Module::loadModFile()
             }
         }
     }
-    //if ((patternCalc < nPatterns_) && (!patternDivideRest)) nPatterns_ = patternCalc;
-    patternDataOffset = (nstFile ? sizeof( HeaderNST ) : sizeof( HeaderMK) );
+    //if ((calcPatternCnt < nPatterns_) && (!patternDivideRest)) nPatterns_ = calcPatternCnt;
+    patternDataOffset = nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK );
     sampleDataOffset = patternDataOffset 
         + nPatterns_ * nChannels_ * MOD_ROWS * 4;
     if ( (sampleDataOffset + sampleDataSize) > fileSize ) {
@@ -264,39 +288,41 @@ int Module::loadModFile()
             std::cout 
                 << "\nWarning! File misses Sample Data!\n"
                 << "\nnPatterns          = " << nPatterns_
-                << "\nPatternHeader      = " << patternHeader
-                << "\nPatternCalc        = " << patternCalc
+                << "\nPatternHeader      = " << hdrPatternCnt
+                << "\nPatternDataSize    = " << patternDataSize
+                << "\nCalcPatternCnt     = " << calcPatternCnt
                 << "\nSample Data Offset = " << sampleDataOffset
                 << "\nSample Data Size   = " << sampleDataSize
                 << "\nOffset + Data      = " 
                 << (sampleDataOffset + sampleDataSize)
                 << "\nFile Size          = " << fileSize
                 << "\nDifference         = " << missingData;
-        while ( missingData && lastInstrument ) {
-            ModSampleHeader *sample = &(headerMK.samples[lastInstrument - 1]);
-            unsigned length       = ((unsigned)sample->length      ) << 1;
-            unsigned repeatOffset = ((unsigned)sample->repeatOffset) << 1;
-            unsigned repeatLength = ((unsigned)sample->repeatLength) << 1;
+
+        for ( ; missingData && lastInstrument; ) {
+            ModSampleHeader* sample = &(headerMK.samples[lastInstrument - 1]);
+            unsigned length       = ((unsigned)sample->length      ) * 2;
+            unsigned repeatOffset = ((unsigned)sample->repeatOffset) * 2;
+            unsigned repeatLength = ((unsigned)sample->repeatLength) * 2;
 
             if ( missingData > length ) {
                 missingData -= length;
-                length       = 0;
+                length = 0;
                 repeatOffset = 0;
                 repeatLength = 0;
-            } 
+            }
             else {
                 length -= missingData;
                 missingData = 0;
                 if ( repeatOffset > length ) {
                     repeatOffset = 0;
                     repeatLength = 0;
-                } 
+                }
                 else {
-                    if ( (repeatOffset + repeatLength) > length ) 
+                    if ( (repeatOffset + repeatLength) > length )
                         repeatLength = length - repeatOffset;
                 }
             }
-            sample->length       = (unsigned)length       >> 1;
+            sample->length = (unsigned)length >> 1;
             sample->repeatOffset = (unsigned)repeatOffset >> 1;
             sample->repeatLength = (unsigned)repeatLength >> 1;
             lastInstrument--;
@@ -315,62 +341,67 @@ int Module::loadModFile()
         else
             defaultPanPositions_[i] = PANNING_FULL_RIGHT;
 
+    // *******************************
+    //
     // Now start with copying the data
+    //
+    // *******************************
+
     // we start with the song title :)
-    songTitle_.clear();
-    songTitle_.append( headerMK.songTitle,MOD_MAX_SONGNAME_LENGTH );
+    songTitle_.assign( headerMK.songTitle,MOD_MAX_SONGNAME_LENGTH );
+    
     // now, the sample headers & sample data.
     fileOffset = sampleDataOffset;
-    for ( unsigned iSample = 1; iSample <= nInstruments_; iSample++ ) {
-        InstrumentHeader    instrument;
-        SampleHeader        sample;
+    for ( unsigned sampleNr = 1; sampleNr <= nInstruments_; sampleNr++ ) {
+        InstrumentHeader    instHdr;
+        SampleHeader        smpHdr;
 
-        sample.name.clear();        
-        sample.name.append( 
-            headerMK.samples[iSample - 1].name,
+        smpHdr.name.clear();        
+        smpHdr.name.append( 
+            headerMK.samples[sampleNr - 1].name,
             MAX_SAMPLENAME_LENGTH );
-        instrument.name = sample.name;
+        instHdr.name = smpHdr.name;
         //instrument.nSamples = 1; // redundant?
         for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
-            instrument.sampleForNote[i].note = i;
-            instrument.sampleForNote[i].sampleNr = iSample;
+            instHdr.sampleForNote[i].note = i;
+            instHdr.sampleForNote[i].sampleNr = sampleNr;
         }
-        sample.length       = 
-            ((unsigned)headerMK.samples[iSample - 1].length)       << 1;
-        sample.repeatOffset = 
-            ((unsigned)headerMK.samples[iSample - 1].repeatOffset) << 1;
-        sample.repeatLength = 
-            ((unsigned)headerMK.samples[iSample - 1].repeatLength) << 1;
-        sample.volume       = headerMK.samples[iSample - 1].linearVolume;
-        if ( sample.volume > MAX_VOLUME ) 
-            sample.volume = MAX_VOLUME;
-        if ( sample.repeatOffset > sample.length ) 
-            sample.repeatOffset = 3;
-        sample.isRepeatSample = (sample.repeatLength > 2);
-        if ( (sample.repeatOffset + sample.repeatLength) > sample.length )
-            sample.repeatLength = sample.length - sample.repeatOffset;
+        smpHdr.length       = 
+            ((unsigned)headerMK.samples[sampleNr - 1].length)       << 1;
+        smpHdr.repeatOffset = 
+            ((unsigned)headerMK.samples[sampleNr - 1].repeatOffset) << 1;
+        smpHdr.repeatLength = 
+            ((unsigned)headerMK.samples[sampleNr - 1].repeatLength) << 1;
+        smpHdr.volume       = headerMK.samples[sampleNr - 1].linearVolume;
+        if ( smpHdr.volume > MAX_VOLUME ) 
+            smpHdr.volume = MAX_VOLUME;
+        if ( smpHdr.repeatOffset > smpHdr.length ) 
+            smpHdr.repeatOffset = 3;
+        smpHdr.isRepeatSample = (smpHdr.repeatLength > 2);
+        if ( (smpHdr.repeatOffset + smpHdr.repeatLength) > smpHdr.length )
+            smpHdr.repeatLength = smpHdr.length - smpHdr.repeatOffset;
 
         // convert signed nibble to int and scale it up
-        sample.finetune = 
-            (signed char)(headerMK.samples[iSample - 1].finetune << 4);
+        smpHdr.finetune = 
+            (signed char)(headerMK.samples[sampleNr - 1].finetune << 4);
 
-        if ( sample.length > 2 ) {
+        if ( smpHdr.length > 2 ) {
             nSamples_++;
             modFile.absSeek( fileOffset );
-            sample.data = (SHORT *)modFile.getSafePointer( sample.length );
-            if ( sample.data == nullptr )
-                return 0;            // temp DEBUG:
+            smpHdr.data = (SHORT *)modFile.getSafePointer( smpHdr.length );
+            if ( smpHdr.data == nullptr )
+                return 0;            // temp DEBUG: exit on missing smpHdr data
 
-            sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-            samples_[iSample] = std::make_unique<Sample>( sample );
+            smpHdr.dataType = SAMPLEDATA_SIGNED_8BIT;
+            samples_[sampleNr] = std::make_unique<Sample>( smpHdr );
 
         }   
-        fileOffset += sample.length; // ??
-        instruments_[iSample] = std::make_unique <Instrument>( instrument );
+        fileOffset += smpHdr.length; // avoid if  length <= 2 ?
+        instruments_[sampleNr] = std::make_unique <Instrument>( instHdr );
 
 #ifdef debug_mod_play_samples
         if ( showDebugInfo_ )
-            playSampleNr( iSample );
+            playSampleNr( sampleNr );
 #endif
     }
     // And now the patterns. First, go to the right offset
@@ -383,7 +414,7 @@ int Module::loadModFile()
     for ( unsigned patternNr = 0; patternNr < nPatterns_; patternNr++ ) {
         // to redo in a safer way
         if ( flt8Err )
-            if ( convertFlt8Pattern( modFile ) )
+            if ( ModHelperFn::convertFlt8Pattern( modFile ) )
                 return 0;
         if ( loadModPattern( modFile,patternNr ) )
             return 0;
@@ -405,25 +436,24 @@ int Module::loadModFile()
             << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No")
             << "\nSong Length          = " << songLength_
             << "\nSong Restart Positn. = " << songRestartPosition_
-            << "\nNST File             = " << (nstFile ? "Yes" : "No")
+            << "\nNST File             = " << (nstErr ? "Yes" : "No")
             << "\n.WOW File            = " << (wowFile ? "Yes" : "No")
             << "\nFile Tag             = " << trackerTag_.c_str()
             << "\nTotal Samples Size   = " << sampleDataSize
-            << "\nptnHdr               = " << patternHeader
-            << "\nptnCalc              = " << patternCalc
+            << "\nptnHdr               = " << hdrPatternCnt
+            << "\nPatternDataSize      = " << patternDataSize
+            << "\nCalcPatternCnt       = " << calcPatternCnt
             << "\nRest from Divide     = " 
             << patternDivideRest << " (should be zero)";
     return 0;
 }
 
-
-
 // convert 8 chn startrekker patterns to regular ones
-int convertFlt8Pattern( VirtualFile& modFile )
+int ModHelperFn::convertFlt8Pattern( VirtualFile& modFile )
 {
     unsigned flt[8 * MOD_ROWS];   // 4 bytes / note * 8 channels * 64 rows
     unsigned *p = (unsigned *)modFile.getSafePointer( sizeof( flt ) );
-    if ( p == nullptr )
+    if ( !p )
         return -1; 
 
     // save data to a temp buffer
@@ -449,17 +479,9 @@ int convertFlt8Pattern( VirtualFile& modFile )
 int Module::loadModPattern( VirtualFile& modFile,int patternNr )
 {
     std::vector<Note> patternData( nChannels_ * MOD_ROWS );
-    //Note        *iNote,*patternData;   // old
-    unsigned char j1,j2,j3,j4;
-
     std::vector<Note>::iterator iNote = patternData.begin();
-
-    //patterns_[patternNr] = new Pattern;              
-    //patternData = new Note[nChannels_ * MOD_ROWS];   // old
-    //patterns_[patternNr]->initialise( nChannels_,MOD_ROWS,patternData ); // old
-    //iNote = patternData; // old
-
     for ( unsigned n = 0; n < (nChannels_ * MOD_ROWS); n++ ) {
+        unsigned char j1,j2,j3,j4;
         modFile.read( &j1,sizeof( unsigned char ) );
         modFile.read( &j2,sizeof( unsigned char ) );
         modFile.read( &j3,sizeof( unsigned char ) );
@@ -505,7 +527,7 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
                 iNote->note = j + 1 - 36; // three octaves down
         }
         // do some error checking & effect remapping:
-        remapModEffects( iNote->effects[1] );
+        ModHelperFn::remapEffects( iNote->effects[1] );
 
 #ifdef debug_mod_show_patterns
         if ( showDebugInfo_ )
@@ -527,14 +549,12 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
 #endif
         iNote++;
     }
-    //patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,std::move( pattern ) );
-    //patterns_[patternNr] = new Pattern( nChannels_,MOD_ROWS,patternData );
     patterns_[patternNr] = std::make_unique < Pattern >
         ( nChannels_,MOD_ROWS,patternData );
     return 0;
 }
 
-void remapModEffects( Effect& remapFx )
+void ModHelperFn::remapEffects( Effect& remapFx )
 {
     switch ( remapFx.effect ) {
         case 0: // arpeggio
@@ -624,7 +644,7 @@ hexadecimal) represented single and double music notes, and some BBS's
 inserted these in the sample name strings to show the mod was downloaded
 from there.
 */
-int nBadComment( char *comment )
+int ModHelperFn::nBadComment( const char *comment )
 {
     char allowed[] = "\xD\xE !\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`" \
         "abcdefghijklmnopqrstuvwxyz{|}~";
@@ -636,7 +656,7 @@ int nBadComment( char *comment )
 }
 
 // this fn returns the number of channels based on the format tag (0 on error)
-int tagID( std::string tagID,bool &flt8Err,unsigned& trackerType )
+int ModHelperFn::tagID( const std::string& tagID,bool &flt8Err,unsigned& trackerType )
 {
     int     chn;
     trackerType = TRACKER_PROTRACKER;
@@ -671,7 +691,7 @@ int tagID( std::string tagID,bool &flt8Err,unsigned& trackerType )
 }
 
 // returns true if file has extension .WOW
-bool isWowFile( std::string fileName )
+bool ModHelperFn::isWowFile( std::string fileName )
 {
     int     i = 0;
     const char *p = fileName.c_str();

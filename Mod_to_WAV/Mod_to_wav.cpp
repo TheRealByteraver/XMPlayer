@@ -134,8 +134,8 @@ union INT_UNION {
 class Channel {
 public:
     bool            isMuted;
-    Instrument      *pInstrument;
-    Sample          *pSample;
+    Instrument*     pInstrument;
+    Sample*         pSample;
     unsigned        volume;
     unsigned        panning;
     unsigned        iPanningEnvelope;
@@ -260,10 +260,8 @@ public: // debug
     unsigned        iPatternTable;
     unsigned        patternLoopStartRow_;
     bool            patternLoopFlag_;
-    Pattern         *pattern;
 
-    //Note            *iNote;
-    //std::vector<Note>::const_iterator iNote;
+    Pattern*        pattern;
     const Note*     iNote;
 
     static CRITICAL_SECTION     waveCriticalSection;

@@ -156,8 +156,6 @@ private:
     int readblock( VirtualFile& file );
     int freeblock();
     unsigned readbits( unsigned char n );
-
-    //unsigned char*   sourcebuffer;
     std::unique_ptr < unsigned char[] > sourcebuffer;
     unsigned char*   ibuf;
     unsigned         bitlen;

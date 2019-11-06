@@ -124,12 +124,12 @@ public:
         assert( sample <= MAX_SAMPLES ); // !!!!
         return (samples_[sample] ? *(samples_[sample]) : *(samples_[0]));
     }
-    Instrument&     getInstrument( unsigned instrument )  
+    Instrument&     getInstrument( unsigned instrument )
     { 
         assert( instrument <= MAX_INSTRUMENTS );
         return (instruments_[instrument] ? *(instruments_[instrument]) : *(instruments_[0]));
     }
-    Pattern&        getPattern( unsigned pattern ) 
+    Pattern&        getPattern( unsigned pattern )
     { 
         assert( pattern < MAX_PATTERN );
         return (patterns_[pattern] ? *(patterns_[pattern]) : emptyPattern_);
@@ -179,12 +179,21 @@ private:
     int             loadS3mFile();
     int             loadModFile();
 
-    int             loadItInstrument( VirtualFile& itFile,int instrumentNr,unsigned createdWTV );
-    int             loadItSample( VirtualFile& itFile,int sampleNr,bool convertToInstrument,bool isIt215Compression );
+    int             loadItInstrument( 
+        VirtualFile& itFile,
+        int instrumentNr,
+        unsigned createdWTV 
+    );
+    int             loadItSample( 
+        VirtualFile& itFile,
+        int sampleNr,
+        bool convertToInstrument,
+        bool isIt215Compression 
+    );
     int             loadItPattern( VirtualFile & itFile,int patternNr );
 
     int             loadXmInstrument( VirtualFile& xmFile,int instrumentNr );
-    int             loadXmSample( VirtualFile & xmFile,int sampleNr,SampleHeader& sampleHeader );
+    int             loadXmSample( VirtualFile & xmFile,int sampleNr,SampleHeader& smpHdr );
     int             loadXmPattern( VirtualFile & xmFile,int patternNr );
 
     int             loadModPattern( VirtualFile & modFile,int patternNr );

@@ -137,21 +137,21 @@ int Module::loadS3mFile() {
     VirtualFile s3mFile( fileName_ );
     if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
-    S3mFileHeader s3mFileHeader;
+    S3mFileHeader s3mFileHdr;
     unsigned fileSize = s3mFile.fileSize();
-    if ( s3mFile.read( &s3mFileHeader,sizeof( S3mFileHeader ) ) ) 
+    if ( s3mFile.read( &s3mFileHdr,sizeof( S3mFileHeader ) ) ) 
         return 0;
 
     // some very basic checking
     if ( (fileSize < S3M_MIN_FILESIZE) ||
-         ( ! ((s3mFileHeader.tag[0] == 'S') &&
-              (s3mFileHeader.tag[1] == 'C') &&
-              (s3mFileHeader.tag[2] == 'R') &&
-              (s3mFileHeader.tag[3] == 'M'))
+         ( ! ((s3mFileHdr.tag[0] == 'S') &&
+              (s3mFileHdr.tag[1] == 'C') &&
+              (s3mFileHdr.tag[2] == 'R') &&
+              (s3mFileHdr.tag[3] == 'M'))
           ) 
-        // || (s3mFileHeader.id != 0x1A)
-        || (s3mFileHeader.sampleDataType < 1)
-        || (s3mFileHeader.sampleDataType > 2)
+        // || (s3mFileHdr.id != 0x1A)
+        || (s3mFileHdr.sampleDataType < 1)
+        || (s3mFileHdr.sampleDataType > 2)
         ) { 
         if ( showDebugInfo_ )
             std::cout
@@ -159,12 +159,12 @@ int Module::loadS3mFile() {
         return 0;
     }
     // use the DOS EOF marker as end of cstring marker
-    s3mFileHeader.id = '\0'; 
+    s3mFileHdr.id = '\0'; 
     if ( showDebugInfo_ )
-        S3mDebugShow::fileHeader( s3mFileHeader );
+        S3mDebugShow::fileHeader( s3mFileHdr );
 
-    if ( (s3mFileHeader.CWTV == 0x1300) ||
-        (s3mFileHeader.flags & S3M_ST300_VOLSLIDES_FLAG) )
+    if ( (s3mFileHdr.CWTV == 0x1300) ||
+        (s3mFileHdr.flags & S3M_ST300_VOLSLIDES_FLAG) )
         trackerType_ = TRACKER_ST300;
     else    
         trackerType_ = TRACKER_ST321;
@@ -180,7 +180,7 @@ int Module::loadS3mFile() {
     for ( int chn = 0; chn < S3M_MAX_CHANNELS; chn++ ) {
         chnBackmap[chn] = S3M_CHN_UNUSED;
         chnPanVals[chn] = S3M_DEFAULT_PAN_CENTER;
-        int chnInfo = (int)s3mFileHeader.channelsEnabled[chn];
+        int chnInfo = (int)s3mFileHdr.channelsEnabled[chn];
         if ( chnInfo < 16 ) { // channel is used! // x64 FT2 detects weird #chn
             chnBackmap[nChannels_] = chn;
             chnRemap[chn] = nChannels_;
@@ -198,20 +198,22 @@ int Module::loadS3mFile() {
             << "\nNr of channels   : " << std::dec << nChannels_
             << "\nOrder list       : ";
 
-    for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) 
-        songTitle_ += s3mFileHeader.songTitle[i];
-    
-    for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) 
-        trackerTag_ += s3mFileHeader.tag[i];
+    //for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) 
+    //    songTitle_ += s3mFileHdr.songTitle[i];
+    //
+    //for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) 
+    //    trackerTag_ += s3mFileHdr.tag[i];
+    songTitle_.assign( s3mFileHdr.songTitle,S3M_MAX_SONGTITLE_LENGTH );
+    trackerTag_.assign( s3mFileHdr.tag,S3M_TRACKER_TAG_LENGTH );
     
     useLinearFrequencies_ = false;   // S3M uses AMIGA periods
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
     panningStyle_ = PANNING_STYLE_S3M; 
-    nInstruments_ = s3mFileHeader.nInstruments;
+    nInstruments_ = s3mFileHdr.nInstruments;
     nSamples_ = 0;
-    defaultTempo_ = s3mFileHeader.defaultTempo;
-    defaultBpm_ = s3mFileHeader.defaultBpm;
+    defaultTempo_ = s3mFileHdr.defaultTempo;
+    defaultBpm_ = s3mFileHdr.defaultBpm;
     if ( defaultTempo_ == 0 || defaultTempo_ == 255 ) 
         defaultTempo_ = 6;
     if ( defaultBpm_ < 33 ) 
@@ -222,7 +224,7 @@ int Module::loadS3mFile() {
     nPatterns_ = 0;
     songLength_ = 0;
 
-    for ( int i = 0; i < s3mFileHeader.songLength; i++ ) {
+    for ( int i = 0; i < s3mFileHdr.songLength; i++ ) {
         unsigned char readOrder;
         if ( s3mFile.read( &readOrder,sizeof( unsigned char ) ) ) 
             return 0;
@@ -245,19 +247,19 @@ int Module::loadS3mFile() {
             << "\nNr of patterns     : " << nPatterns_;
     // fix for empty patterns that are not present in the file, not even
     // with a header saying they're 0 bytes big:
-    if ( nPatterns_ > s3mFileHeader.nPatterns )
-        nPatterns_ = s3mFileHeader.nPatterns;
+    if ( nPatterns_ > s3mFileHdr.nPatterns )
+        nPatterns_ = s3mFileHdr.nPatterns;
 
     unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
     unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
     unsigned char   defPanPositions[S3M_MAX_CHANNELS];
-    for ( int nInst = 0; nInst < s3mFileHeader.nInstruments; nInst++ ) {
+    for ( int nInst = 0; nInst < s3mFileHdr.nInstruments; nInst++ ) {
         unsigned short instPointer;
         if ( s3mFile.read( &instPointer,sizeof( unsigned short ) ) ) 
             return 0;
         instrParaPtrs[nInst] = instPointer;
     }
-    for ( int nPtn = 0; nPtn < s3mFileHeader.nPatterns; nPtn++ ) {
+    for ( int nPtn = 0; nPtn < s3mFileHdr.nPatterns; nPtn++ ) {
         unsigned short ptnPointer;
         if ( s3mFile.read( &ptnPointer,sizeof( unsigned short ) ) ) 
             return 0;
@@ -269,14 +271,14 @@ int Module::loadS3mFile() {
     s3mFile.relSeek( -(int)(sizeof( unsigned char ) * S3M_MAX_CHANNELS) );
 
     // to be reviewed (ugly code) --------------------------
-    if ( (int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG )
+    if ( (int)s3mFileHdr.masterVolume & S3M_STEREO_FLAG )
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             defaultPanPositions_[i] = (defPanPositions[i] & 0xF) * 16; // convert to 8 bit pan
     else 
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             defaultPanPositions_[i] = S3M_DEFAULT_PAN_CENTER;
     
-    if ( s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT ) 
+    if ( s3mFileHdr.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT ) 
         for ( unsigned i = 0; i < nChannels_; i++ )
             chnPanVals[i] = defaultPanPositions_[chnBackmap[i]];
 
@@ -287,19 +289,19 @@ int Module::loadS3mFile() {
 
     if ( showDebugInfo_ ) {
         std::cout << "\n\nInstrument pointers: ";
-        for ( int i = 0; i < s3mFileHeader.nInstruments; i++ )
+        for ( int i = 0; i < s3mFileHdr.nInstruments; i++ )
             std::cout << instrParaPtrs[i] << " ";
         std::cout << "\n\nPattern pointers: ";
-        for ( int i = 0; i < s3mFileHeader.nPatterns; i++ )
+        for ( int i = 0; i < s3mFileHdr.nPatterns; i++ )
             std::cout << ptnParaPtrs[i] << " ";
         std::cout 
             << "\n\nUse default panning from file: "
-            << (s3mFileHeader.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT 
+            << (s3mFileHdr.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT 
                 ? "yes" : "no");
         std::cout << "\n\nDefault panning positions: ";
         for ( int i = 0; i < S3M_MAX_CHANNELS; i++ )
             std::cout << ((int)defPanPositions[i]) << " ";
-        if ( ((int)s3mFileHeader.masterVolume & S3M_STEREO_FLAG) == 0 )
+        if ( ((int)s3mFileHdr.masterVolume & S3M_STEREO_FLAG) == 0 )
             std::cout << "\n\nS3M file is in mono mode.";
         else    
             std::cout << "\n\nS3M file is in stereo mode.";
@@ -312,171 +314,169 @@ int Module::loadS3mFile() {
     // read instruments here
     nSamples_ = 0;
     unsigned smpDataPtrs[S3M_MAX_INSTRUMENTS];
-    if ( s3mFileHeader.nInstruments > S3M_MAX_INSTRUMENTS )
-        s3mFileHeader.nInstruments = S3M_MAX_INSTRUMENTS;
+    if ( s3mFileHdr.nInstruments > S3M_MAX_INSTRUMENTS )
+        s3mFileHdr.nInstruments = S3M_MAX_INSTRUMENTS;
 
-    for ( int nInst = 1; nInst <= s3mFileHeader.nInstruments; nInst++ ) {
-        S3mInstHeader   s3mInstHeader;
-        s3mFile.absSeek( 16 * instrParaPtrs[nInst - 1] );
-        if ( s3mFile.read( &s3mInstHeader,sizeof( S3mInstHeader ) ) ) 
+    for ( int instrumentNr = 1; instrumentNr <= s3mFileHdr.nInstruments; instrumentNr++ ) {
+        S3mInstHeader   s3mInstHdr;
+        s3mFile.absSeek( 16 * instrParaPtrs[instrumentNr - 1] );
+        if ( s3mFile.read( &s3mInstHdr,sizeof( S3mInstHeader ) ) ) 
             return 0;
 
-        smpDataPtrs[nInst - 1] = 16 * (((int)s3mInstHeader.memSeg << 16)
-                                      + (int)s3mInstHeader.memOfs);
+        smpDataPtrs[instrumentNr - 1] = 16 * (((int)s3mInstHdr.memSeg << 16)
+                                      + (int)s3mInstHdr.memOfs);
 
-        if ( !s3mInstHeader.c4Speed ) 
-            s3mInstHeader.c4Speed = (unsigned)NTSC_C4_SPEED;
+        if ( !s3mInstHdr.c4Speed ) 
+            s3mInstHdr.c4Speed = (unsigned)NTSC_C4_SPEED;
         
         if ( showDebugInfo_ ) {
             std::cout
-                << "\n\nInstrument nr " << nInst << " info:"
-                << "\nSample data ptr   : " << smpDataPtrs[nInst - 1];
-            S3mDebugShow::instHeader( s3mInstHeader );
+                << "\n\nInstrument nr " << instrumentNr << " info:"
+                << "\nSample data ptr   : " << smpDataPtrs[instrumentNr - 1];
+            S3mDebugShow::instHeader( s3mInstHdr );
         }
         
-        if ( (s3mInstHeader.sampleType != 0) &&
-            (s3mInstHeader.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {           
+        if ( (s3mInstHdr.sampleType != 0) &&
+            (s3mInstHdr.sampleType != S3M_INSTRUMENT_TYPE_SAMPLE) ) {           
             // exit on error disabled for 2nd_pm.s3m
             if ( showDebugInfo_ ) 
                 std::cout
                     << "\nWarning: song contains Adlib instruments!";
         }
-        InstrumentHeader    instrument;
-        SampleHeader        sample;
+        InstrumentHeader    instHdr;
+        SampleHeader        smpHdr;
 
         for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
-            sample.name += s3mInstHeader.name[i];
+            smpHdr.name += s3mInstHdr.name[i];
 
-        instrument.name = sample.name;
-        //instrument.nSamples = 1; // redundant?
+        instHdr.name = smpHdr.name;
+        //instHdr.nSamples = 1; // redundant?
         for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
-            instrument.sampleForNote[i].note = i;            
-            instrument.sampleForNote[i].sampleNr = nInst;
+            instHdr.sampleForNote[i].note = i;            
+            instHdr.sampleForNote[i].sampleNr = instrumentNr;
         }
-        sample.length = s3mInstHeader.length;
+        smpHdr.length = s3mInstHdr.length;
 
-        if ( (s3mInstHeader.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
-            (smpDataPtrs[nInst - 1] != 0)) {
+        if ( (s3mInstHdr.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
+            (smpDataPtrs[instrumentNr - 1] != 0)) {
             nSamples_++;
-            s3mFile.absSeek( smpDataPtrs[nInst - 1] );
-            sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
+            s3mFile.absSeek( smpDataPtrs[instrumentNr - 1] );
+            smpHdr.data = (SHORT *)s3mFile.getSafePointer( smpHdr.length );
 
-            // missing sample data, see if we can salvage something ;)
-            if ( sample.data == nullptr ) {
+            // missing smpHdr data, see if we can salvage something ;)
+            if ( smpHdr.data == nullptr ) {
                 int smpSize;
-                if ( smpDataPtrs[nInst - 1] >= s3mFile.fileSize() )
+                if ( smpDataPtrs[instrumentNr - 1] >= s3mFile.fileSize() )
                     smpSize = 0;
                 else
                     smpSize = s3mFile.dataLeft();
-                sample.length = smpSize;
-                if ( sample.length )
-                    sample.data = (SHORT *)s3mFile.getSafePointer( sample.length );
+                smpHdr.length = smpSize;
+                if ( smpHdr.length )
+                    smpHdr.data = (SHORT *)s3mFile.getSafePointer( smpHdr.length );
 
                 if ( showDebugInfo_ ) 
                     std::cout << std::dec
-                        << "\nMissing sample data for sample nr "
-                        << (nInst - 1)
-                        << "! Shortening sample."
-                        << "\nsample.data:   " << (unsigned)sample.data
-                        << "\nsample.length: " << sample.length
-                        << "\ndata + length: " << (unsigned)(sample.data + sample.length)
+                        << "\nMissing smpHdr data for smpHdr nr "
+                        << (instrumentNr - 1)
+                        << "! Shortening smpHdr."
+                        << "\nsample.data:   " << (unsigned)smpHdr.data
+                        << "\nsample.length: " << smpHdr.length
+                        << "\ndata + length: " << (unsigned)(smpHdr.data + smpHdr.length)
                         << "\nfilesize:      " << fileSize
-                        << "\novershoot:     " << (s3mInstHeader.length - sample.length)
+                        << "\novershoot:     " << (s3mInstHdr.length - smpHdr.length)
                         << "\n";
             }
-            // skip to next instrument if there is no sample data:
-            if ( !sample.length ) {
-                //sample.repeatOffset = 0;
+            // skip to next instHdr if there is no smpHdr data:
+            if ( !smpHdr.length ) {
+                //smpHdr.repeatOffset = 0;
                 continue;
             }
 
-            sample.repeatOffset = s3mInstHeader.loopStart;
-            sample.volume = (int)s3mInstHeader.volume;
-            //sample.c4Speed = instHeader.c4Speed;
+            smpHdr.repeatOffset = s3mInstHdr.loopStart;
+            smpHdr.volume = (int)s3mInstHdr.volume;
+            //smpHdr.c4Speed = instHeader.c4Speed;
             // safety checks:
-            if ( s3mInstHeader.loopEnd >= s3mInstHeader.loopStart )
-                sample.repeatLength = s3mInstHeader.loopEnd - s3mInstHeader.loopStart;
+            if ( s3mInstHdr.loopEnd >= s3mInstHdr.loopStart )
+                smpHdr.repeatLength = s3mInstHdr.loopEnd - s3mInstHdr.loopStart;
             else
-                sample.repeatLength = sample.length;
-            if ( sample.volume > S3M_MAX_VOLUME )
-                sample.volume = S3M_MAX_VOLUME;
-            if ( sample.repeatOffset >= sample.length )
-                sample.repeatOffset = 0;
-            if ( sample.repeatOffset + sample.repeatLength > sample.length )
-                sample.repeatLength = sample.length - sample.repeatOffset;
-            sample.isRepeatSample = (s3mInstHeader.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
+                smpHdr.repeatLength = smpHdr.length;
+            if ( smpHdr.volume > S3M_MAX_VOLUME )
+                smpHdr.volume = S3M_MAX_VOLUME;
+            if ( smpHdr.repeatOffset >= smpHdr.length )
+                smpHdr.repeatOffset = 0;
+            if ( smpHdr.repeatOffset + smpHdr.repeatLength > smpHdr.length )
+                smpHdr.repeatLength = smpHdr.length - smpHdr.repeatOffset;
+            smpHdr.isRepeatSample = (s3mInstHdr.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
 
             // convert sample data from unsigned to signed:
-            //sample.dataType = SAMPLEDATA_SIGNED_8BIT; // done later
-            bool is16BitSample = (s3mInstHeader.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
-            if ( s3mFileHeader.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
+            bool is16BitSample = (s3mInstHdr.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
+            if ( s3mFileHdr.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
                 if ( !is16BitSample ) {
-                    unsigned char* s = (unsigned char*)sample.data;
-                    for ( unsigned i = 0; i < sample.length; i++ ) 
+                    unsigned char* s = (unsigned char*)smpHdr.data;
+                    for ( unsigned i = 0; i < smpHdr.length; i++ ) 
                         *s++ ^= 0x80;
                 }
                 else {
-                    unsigned short* s = (unsigned short*)sample.data;
-                    for ( unsigned i = 0; i < sample.length; i++ ) 
+                    unsigned short* s = (unsigned short*)smpHdr.data;
+                    for ( unsigned i = 0; i < smpHdr.length; i++ ) 
                         *s++ ^= 0x8000;
                 }
             }            
             // finetune + relative note recalc
             unsigned int s3mPeriod = 
-                ((unsigned)8363 * periods[4 * 12]) / s3mInstHeader.c4Speed;
+                ((unsigned)8363 * periods[4 * 12]) / s3mInstHdr.c4Speed;
 
             unsigned j;
             for ( j = 0; j < MAXIMUM_NOTES; j++ ) 
                 if ( s3mPeriod >= periods[j] ) break;
             
             if ( j < MAXIMUM_NOTES ) {
-                sample.relativeNote = j - (4 * 12);
-                sample.finetune = (int)round(
+                smpHdr.relativeNote = j - (4 * 12);
+                smpHdr.finetune = (int)round(
                     ((double)(133 - j) - 12.0 * log2( (double)s3mPeriod / 13.375 ))
                      * 128.0) - 128;
             } 
             else { 
-                sample.relativeNote = 0;
-                sample.finetune = 0;
+                smpHdr.relativeNote = 0;
+                smpHdr.finetune = 0;
             }
             if ( showDebugInfo_ )
                 std::cout 
                     << "\nRelative note     : " 
-                    << noteStrings[4 * 12 + sample.relativeNote]
-                    << "\nFinetune          : " << sample.finetune;
+                    << noteStrings[4 * 12 + smpHdr.relativeNote]
+                    << "\nFinetune          : " << smpHdr.finetune;
             
-            if ( sample.length ) {
+            if ( smpHdr.length ) {
                 if ( is16BitSample )
-                    sample.dataType = SAMPLEDATA_SIGNED_16BIT;
+                    smpHdr.dataType = SAMPLEDATA_SIGNED_16BIT;
                 else
-                    sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-                samples_[nInst] = std::make_unique<Sample>( sample );
+                    smpHdr.dataType = SAMPLEDATA_SIGNED_8BIT;
+                samples_[instrumentNr] = std::make_unique<Sample>( smpHdr );
             }
         }
-        instruments_[nInst] = std::make_unique <Instrument>( instrument );
+        instruments_[instrumentNr] = std::make_unique <Instrument>( instHdr );
 
         if ( showDebugInfo_ ) {
 #ifdef debug_s3m_play_samples
-            if ( !samples_[nInst] ) 
+            if ( !samples_[instrumentNr] ) 
                 _getch();
             else
-                playSampleNr( nInst );
+                playSampleNr( instrumentNr );
 #endif
         }
     }
 
     // Now load the patterns:
-    //S3mUnpackedNote *unPackedPtn = new S3mUnpackedNote[S3M_ROWS_PER_PATTERN * nChannels_];
     std::unique_ptr < S3mUnpackedNote[] > unPackedPtn  = 
         std::make_unique < S3mUnpackedNote[] > ( S3M_ROWS_PER_PATTERN * nChannels_ );
 
-    for ( unsigned iPtn = 0; iPtn < nPatterns_; iPtn++ ) {
+    for ( unsigned patternNr = 0; patternNr < nPatterns_; patternNr++ ) {
 
         memset( unPackedPtn.get(),0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
 
         // empty patterns are not stored
-        if ( ptnParaPtrs[iPtn] ) { 
-            s3mFile.absSeek( (unsigned)16 * (unsigned)ptnParaPtrs[iPtn] );
+        if ( ptnParaPtrs[patternNr] ) { 
+            s3mFile.absSeek( (unsigned)16 * (unsigned)ptnParaPtrs[patternNr] );
             unsigned ptnMaxSize = s3mFile.dataLeft();
             char *s3mPtn = (char *)s3mFile.getSafePointer( ptnMaxSize );
 
@@ -545,7 +545,7 @@ int Module::loadS3mFile() {
         }
         if ( showDebugInfo_ ) {
 #ifdef debug_s3m_show_patterns
-            std::cout << std::dec << "\nPattern nr " << iPtn << ":\n";
+            std::cout << std::dec << "\nPattern nr " << patternNr << ":\n";
             S3mDebugShow::pattern( unPackedPtn,nChannels_ );            
 #endif
         }
@@ -588,8 +588,8 @@ int Module::loadS3mFile() {
             iNote++;
             unPackedNote++;
         }
-        //patterns_[iPtn] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
-        patterns_[iPtn] = std::make_unique < Pattern >
+        //patterns_[patternNr] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
+        patterns_[patternNr] = std::make_unique < Pattern >
             ( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
     }
     isLoaded_ = true;

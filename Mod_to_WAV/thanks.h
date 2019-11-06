@@ -38,6 +38,9 @@
         - The whole OpenMPT team, Saga Musix especially!
         https://openmpt.org
 
+        - Albinopapa and Chili for reigniting my interest in C++
+        https://planetchili.net
+
         - My Music Heroes:
 
             Henrik Sundberg aka fajser / RAGE PC 
@@ -62,7 +65,8 @@
             still AND you're such a gifted programmer!!!
             
             Jugi / Complex Media Labs
-            - dope.mod is fantastic for testing, great tune as well!
+            - dope.mod is fantastic for testing, great tune as well! Your
+            other tunes are super dope as well :)
 
             Magnus Högdahl aka Vogue / Triton / Starbreeze
             - you have too many talents, simple as that :)
@@ -73,7 +77,7 @@
             fantastic :), Necros / fm - that Unreal music is truly unreal! , 
             Linus Elman aka probe / TBL - LOOOOOVE the JIZZ & STASH 
             soundtracks!!!!!, Dune / Orange, Leinad / TYO, Kenny Chou aka 
-            C.C.C.Catch - beautiful melodies, same goes for Thomas Pytel 
+            C.C.Catch - beautiful melodies, same goes for Thomas Pytel 
             aka Tran - and some programmer you are, too! , Chris Korte, 
             Maso / Accession, Jari Karppinen, Scorpik / abs! , Mordicus / 
             Jamm, Azazel / TBL - cruel tunes just like we like 'em :)
@@ -90,8 +94,8 @@
             the friendship! May you rest in peace.
             - Sombritude - for the friendship, shared hardships & the XM's of 
             course!!!
-            - Mister Gustavo, for trying (and so far failing mostly) to convert
-            me into a web developer :D
+            - Mister "Kalevra" Gustavo, for trying (and so far failing mostly) 
+            to convert me into a web developer :D
 
         - ... and last but definitely not least: my long time girlfriend Maryna
         for letting me spend as much hours behind my computer as I care for and 
