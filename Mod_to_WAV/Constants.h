@@ -1,151 +1,38 @@
 #pragma once
 
+#include <windows.h> // for the color constants
+
 // color constants for functions that show debug info
-#define FOREGROUND_BLACK        0
-#define FOREGROUND_CYAN         (FOREGROUND_BLUE        | FOREGROUND_GREEN)              
-#define FOREGROUND_MAGENTA      (FOREGROUND_BLUE        | FOREGROUND_RED)                
-#define FOREGROUND_BROWN        (FOREGROUND_GREEN       | FOREGROUND_RED)               
-#define FOREGROUND_LIGHTGRAY    (FOREGROUND_BLUE        | FOREGROUND_GREEN | FOREGROUND_RED)
-#define FOREGROUND_DARKGRAY     (FOREGROUND_BLACK       | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTBLUE    (FOREGROUND_BLUE        | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTGREEN   (FOREGROUND_GREEN       | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTCYAN    (FOREGROUND_CYAN        | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTRED     (FOREGROUND_RED         | FOREGROUND_INTENSITY)
-#define FOREGROUND_LIGHTMAGENTA (FOREGROUND_MAGENTA     | FOREGROUND_INTENSITY)
-#define FOREGROUND_YELLOW       (FOREGROUND_BROWN       | FOREGROUND_INTENSITY)
-#define FOREGROUND_WHITE        (FOREGROUND_LIGHTGRAY   | FOREGROUND_INTENSITY)
+constexpr auto FOREGROUND_BLACK        = 0;
+constexpr auto FOREGROUND_CYAN         = (FOREGROUND_BLUE        | FOREGROUND_GREEN);              
+constexpr auto FOREGROUND_MAGENTA      = (FOREGROUND_BLUE        | FOREGROUND_RED);                
+constexpr auto FOREGROUND_BROWN        = (FOREGROUND_GREEN       | FOREGROUND_RED);               
+constexpr auto FOREGROUND_LIGHTGRAY    = (FOREGROUND_BLUE        | FOREGROUND_GREEN | FOREGROUND_RED);
+constexpr auto FOREGROUND_DARKGRAY     = (FOREGROUND_BLACK       | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_LIGHTBLUE    = (FOREGROUND_BLUE        | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_LIGHTGREEN   = (FOREGROUND_GREEN       | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_LIGHTCYAN    = (FOREGROUND_CYAN        | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_LIGHTRED     = (FOREGROUND_RED         | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_LIGHTMAGENTA = (FOREGROUND_MAGENTA     | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_YELLOW       = (FOREGROUND_BROWN       | FOREGROUND_INTENSITY);
+constexpr auto FOREGROUND_WHITE        = (FOREGROUND_LIGHTGRAY   | FOREGROUND_INTENSITY);
 
-#define BACKGROUND_BLACK        0
-#define BACKGROUND_CYAN         (BACKGROUND_BLUE        | BACKGROUND_GREEN)              
-#define BACKGROUND_MAGENTA      (BACKGROUND_BLUE        | BACKGROUND_RED)                
-#define BACKGROUND_BROWN        (BACKGROUND_GREEN       | BACKGROUND_RED)               
-#define BACKGROUND_LIGHTGRAY    (BACKGROUND_BLUE        | BACKGROUND_GREEN | BACKGROUND_RED)
-#define BACKGROUND_DARKGRAY     (BACKGROUND_BLACK       | BACKGROUND_INTENSITY)
-#define BACKGROUND_LIGHTBLUE    (BACKGROUND_BLUE        | BACKGROUND_INTENSITY)
-#define BACKGROUND_LIGHTGREEN   (BACKGROUND_GREEN       | BACKGROUND_INTENSITY)
-#define BACKGROUND_LIGHTCYAN    (BACKGROUND_CYAN        | BACKGROUND_INTENSITY)
-#define BACKGROUND_LIGHTRED     (BACKGROUND_RED         | BACKGROUND_INTENSITY)
-#define BACKGROUND_LIGHTMAGENTA (BACKGROUND_MAGENTA     | BACKGROUND_INTENSITY)
-#define BACKGROUND_YELLOW       (BACKGROUND_BROWN       | BACKGROUND_INTENSITY)
-#define BACKGROUND_WHITE        (BACKGROUND_LIGHTGRAY   | BACKGROUND_INTENSITY)
-
-// More general constants: 
-#define PAL_CALC                            7093789.2   // these values are
-#define NTSC_CALC                           7159090.5   // not used 
-#define NTSC_C4_SPEED                       8363.42
-#define PAL_C4_SPEED                        8287.14
-
-#define PANNING_STYLE_MOD                   1   // LRRL etc
-#define PANNING_STYLE_XM                    2   // ALL CENTER
-#define PANNING_STYLE_S3M                   3   // LRLR etc
-#define PANNING_STYLE_IT                    4
-#define MARKER_PATTERN                      254 // S3M/IT compatibility
-#define END_OF_SONG_MARKER                  255 // S3M/IT end of song marker
-
-#define MAX_VOLUME                          64
-#define MAX_SAMPLENAME_LENGTH               22
-#define MAX_INSTRUMENTNAME_LENGTH           (MAX_SAMPLENAME_LENGTH + 2)
-#define MAX_PATTERNS                        256
-#define MAX_INSTRUMENTS                     256
-#define MAX_SAMPLES                         (128 * 16) // FT2
-#define SAMPLEDATA_EXTENSION                256 // add 256 samples to the data for noise reduction
-#define SAMPLEDATA_TYPE_UNKNOWN             0
-#define SAMPLEDATA_SIGNED_8BIT              1
-#define SAMPLEDATA_SIGNED_16BIT             2
-#define INTERPOLATION_SPACER                2
-#define MAX_EFFECT_COLUMNS                  2
-#define MAXIMUM_NOTES                       (11 * 12)
-#define PLAYER_MAX_CHANNELS                 32
-#define PANNING_FULL_LEFT                   0
-#define PANNING_MAX_STEPS                   256  // must be a power of two
-#define PANNING_SHIFT                       8   // divide by 256 <=> SHR 8
-#define PANNING_CENTER                      (PANNING_MAX_STEPS / 2)
-#define PANNING_FULL_RIGHT                  (PANNING_MAX_STEPS - 1)
-
-#define FORWARD                             false
-#define BACKWARD                            true
-
-// differentiate trackers, for S3M compatibility mainly
-#define TRACKER_PROTRACKER                  1
-#define TRACKER_ST300                       2
-#define TRACKER_ST321                       3
-#define TRACKER_FT2                         4
-#define TRACKER_IT                          5
-
-// New Note Action constants
-#define NNA_NOTE_CUT                        0
-#define NNA_NOTE_CONTINUE                   1
-#define NNA_NOTE_OFF                        2
-#define NNA_NOTE_FADE                       3
-
-// effect nrs:
-#define NO_EFFECT                           0x0 // ARPEGGIO is remapped to 0x25
-#define PORTAMENTO_UP                       0x1
-#define PORTAMENTO_DOWN                     0x2
-#define TONE_PORTAMENTO                     0x3
-#define VIBRATO                             0x4
-#define TONE_PORTAMENTO_AND_VOLUME_SLIDE    0x5
-#define VIBRATO_AND_VOLUME_SLIDE            0x6
-#define TREMOLO                             0x7
-#define SET_FINE_PANNING                    0x8
-#define SET_SAMPLE_OFFSET                   0x9
-#define VOLUME_SLIDE                        0xA
-#define POSITION_JUMP                       0xB
-#define SET_VOLUME                          0xC
-#define PATTERN_BREAK                       0xD
-#define EXTENDED_EFFECTS                    0xE // extended effects
-#define SET_FILTER                          0x0 // XM effect E0
-#define FINE_PORTAMENTO_UP                  0x1 // XM effect E1
-#define FINE_PORTAMENTO_DOWN                0x2 // XM effect E2
-#define SET_GLISSANDO_CONTROL               0x3 // XM effect E3
-#define SET_VIBRATO_CONTROL                 0x4 // XM effect E4
-#define SET_FINETUNE                        0x5 // XM effect E5
-#define SET_PATTERN_LOOP                    0x6 // XM effect E6
-#define SET_TREMOLO_CONTROL                 0x7 // XM effect E7
-#define SET_ROUGH_PANNING                   0x8 // XM effect E8, not used in player
-#define NOTE_RETRIG                         0x9 // XM effect E9
-#define FINE_VOLUME_SLIDE_UP                0xA // XM effect EA
-#define FINE_VOLUME_SLIDE_DOWN              0xB // XM effect EB
-#define NOTE_CUT                            0xC // XM effect EC
-#define NOTE_DELAY                          0xD // XM effect ED
-#define PATTERN_DELAY                       0xE // XM effect EE
-#define INVERT_LOOP                         0xF // XM effect EF, end of XM extended effects
-#define S3M_SET_GLISSANDO_CONTROL           0x1 // S3M effect S1
-#define S3M_SET_FINETUNE                    0x2 // S3M effect S2
-#define S3M_SET_VIBRATO_CONTROL             0x3 // S3M effect S3
-#define S3M_SET_TREMOLO_CONTROL             0x4 // S3M effect S4
-#define S3M_SET_PANBRELLO_CONTROL           0x5 // S3M effect S5
-#define S3M_FINE_PATTERN_DELAY              0x6 // S3M effect S6
-#define S3M_SET_ROUGH_PANNING               0x8 // S3M effect S8
-#define S3M_SOUND_CONTROL                   0x9 // S3M effect S9
-#define S3M_SET_HIGH_SAMPLE_OFFSET          0xA // S3M effect SA
-#define S3M_SET_PATTERN_LOOP                0xB // S3M effect SB
-#define S3M_NOTE_CUT                        0xC // S3M effect SC
-#define S3M_NOTE_DELAY                      0xD // S3M effect SD
-#define S3M_PATTERN_DELAY                   0xE // S3M effect SE, end of S3M extended effects
-#define SET_TEMPO                           0xF 
-#define SET_GLOBAL_VOLUME                   0x10// XM effect G
-#define GLOBAL_VOLUME_SLIDE                 0x11// XM effect H
-#define SET_ENVELOPE_POSITION               0x15// XM effect L
-#define PANNING_SLIDE                       0x19// XM effect P
-#define MULTI_NOTE_RETRIG                   0x1B// XM effect R
-#define TREMOR                              0x1D// XM effect T
-#define EXTRA_FINE_PORTAMENTO               0x21// XM effect X
-#define EXTRA_FINE_PORTAMENTO_UP            0x1 // XM effect X1
-#define EXTRA_FINE_PORTAMENTO_DOWN          0x2 // XM effect X2
-#define PANBRELLO                           0x22// S3M effect Y 
-
-// internal remapped effects for the player
-#define SET_BPM                             0x24// after effect "Z" for XM safety
-#define ARPEGGIO                            0x25
-#define FINE_VIBRATO                        0x26// S3M fine vibrato
-#define SET_VIBRATO_SPEED                   0x27// XM Volc command
-#define KEY_OFF                             255 //(12 * 11 + 1) // 11 octaves
-#define KEY_NOTE_CUT                        254
-#define KEY_NOTE_FADE                       253
+constexpr auto BACKGROUND_BLACK        = 0;
+constexpr auto BACKGROUND_CYAN         = (BACKGROUND_BLUE        | BACKGROUND_GREEN);              
+constexpr auto BACKGROUND_MAGENTA      = (BACKGROUND_BLUE        | BACKGROUND_RED);                
+constexpr auto BACKGROUND_BROWN        = (BACKGROUND_GREEN       | BACKGROUND_RED);               
+constexpr auto BACKGROUND_LIGHTGRAY    = (BACKGROUND_BLUE        | BACKGROUND_GREEN | BACKGROUND_RED);
+constexpr auto BACKGROUND_DARKGRAY     = (BACKGROUND_BLACK       | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_LIGHTBLUE    = (BACKGROUND_BLUE        | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_LIGHTGREEN   = (BACKGROUND_GREEN       | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_LIGHTCYAN    = (BACKGROUND_CYAN        | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_LIGHTRED     = (BACKGROUND_RED         | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_LIGHTMAGENTA = (BACKGROUND_MAGENTA     | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_YELLOW       = (BACKGROUND_BROWN       | BACKGROUND_INTENSITY);
+constexpr auto BACKGROUND_WHITE        = (BACKGROUND_LIGHTGRAY   | BACKGROUND_INTENSITY);
 
 // for debugging only:
-const char * const noteStrings[2 + MAXIMUM_NOTES] = {
+const char* const noteStrings[] = { // 2 + MAXIMUM_NOTES entries
     "---",
     "C-0","C#0","D-0","D#0","E-0","F-0","F#0","G-0","G#0","A-0","A#0","B-0",
     "C-1","C#1","D-1","D#1","E-1","F-1","F#1","G-1","G#1","A-1","A#1","B-1",
@@ -160,6 +47,131 @@ const char * const noteStrings[2 + MAXIMUM_NOTES] = {
     "C-A","C#A","D-A","D#A","E-A","F-A","F#A","G-A","G#A","A-A","A#A","B-A",
     "==="
 };
+
+// General constants for the player: 
+constexpr auto PAL_CALC         = 7093789.2;    // these values are
+constexpr auto NTSC_CALC        = 7159090.5;   // not used 
+constexpr auto NTSC_C4_SPEED    = 8363.42;
+constexpr auto PAL_C4_SPEED     = 8287.14;
+
+constexpr auto PANNING_STYLE_MOD    = 1;    // LRRL etc
+constexpr auto PANNING_STYLE_XM     = 2;    // ALL CENTER
+constexpr auto PANNING_STYLE_S3M    = 3;    // LRLR etc
+constexpr auto PANNING_STYLE_IT     = 4;
+constexpr auto MARKER_PATTERN       = 254;  // S3M/IT compatibility
+constexpr auto END_OF_SONG_MARKER   = 255;  // S3M/IT end of song marker
+
+constexpr auto MAX_VOLUME                   = 64;
+constexpr auto MAX_SAMPLENAME_LENGTH        = 22;
+constexpr auto MAX_INSTRUMENTNAME_LENGTH    = (MAX_SAMPLENAME_LENGTH + 2);
+constexpr auto MAX_PATTERNS                 = 256;
+constexpr auto MAX_INSTRUMENTS              = 256;
+constexpr auto MAX_SAMPLES                  = (128 * 16); // FT2
+constexpr auto SAMPLEDATA_EXTENSION         = 256; // add 256 samples to the data for noise reduction
+constexpr auto SAMPLEDATA_TYPE_UNKNOWN      = 64;
+constexpr auto SAMPLEDATA_UNSIGNED_8BIT     = 0;   // 1st bit set == signed data
+constexpr auto SAMPLEDATA_SIGNED_8BIT       = 1;
+constexpr auto SAMPLEDATA_UNSIGNED_16BIT    = 2;  // 2nd bit set == 16bit data
+constexpr auto SAMPLEDATA_SIGNED_16BIT      = 3;
+constexpr auto INTERPOLATION_SPACER         = 2;
+constexpr auto MAX_EFFECT_COLUMNS           = 2;
+constexpr auto MAXIMUM_NOTES                = (11 * 12);
+constexpr auto PLAYER_MAX_CHANNELS          = 32;
+constexpr auto PANNING_FULL_LEFT            = 0;
+constexpr auto PANNING_MAX_STEPS            = 256; // must be a power of two
+constexpr auto PANNING_SHIFT                = 8;   // divide by 256 <=> SHR 8
+constexpr auto PANNING_CENTER               = (PANNING_MAX_STEPS / 2);
+constexpr auto PANNING_FULL_RIGHT           = (PANNING_MAX_STEPS - 1);
+
+constexpr auto FORWARD = false;
+constexpr auto BACKWARD = true;
+
+// differentiate trackers, for S3M compatibility mainly
+constexpr auto  TRACKER_PROTRACKER = 1;
+constexpr auto  TRACKER_ST300      = 2;
+constexpr auto  TRACKER_ST321      = 3;
+constexpr auto  TRACKER_FT2        = 4;
+constexpr auto  TRACKER_IT         = 5;
+
+// New Note Action constants
+constexpr auto  NNA_NOTE_CUT      = 0;
+constexpr auto  NNA_NOTE_CONTINUE = 1;
+constexpr auto  NNA_NOTE_OFF      = 2;
+constexpr auto  NNA_NOTE_FADE     = 3;
+                            
+// effect nrs:
+constexpr auto  NO_EFFECT                        = 0x0; // ARPEGGIO is remapped to 0x25
+constexpr auto  PORTAMENTO_UP                    = 0x1;
+constexpr auto  PORTAMENTO_DOWN                  = 0x2;
+constexpr auto  TONE_PORTAMENTO                  = 0x3;
+constexpr auto  VIBRATO                          = 0x4;
+constexpr auto  TONE_PORTAMENTO_AND_VOLUME_SLIDE = 0x5;
+constexpr auto  VIBRATO_AND_VOLUME_SLIDE         = 0x6;
+constexpr auto  TREMOLO                          = 0x7;
+constexpr auto  SET_FINE_PANNING                 = 0x8;
+constexpr auto  SET_SAMPLE_OFFSET                = 0x9;
+constexpr auto  VOLUME_SLIDE                     = 0xA;
+constexpr auto  POSITION_JUMP                    = 0xB;
+constexpr auto  SET_VOLUME                       = 0xC;
+constexpr auto  PATTERN_BREAK                    = 0xD;
+constexpr auto  EXTENDED_EFFECTS                 = 0xE; // extended effects
+constexpr auto  SET_FILTER                       = 0x0; // XM effect E0
+constexpr auto  FINE_PORTAMENTO_UP               = 0x1; // XM effect E1
+constexpr auto  FINE_PORTAMENTO_DOWN             = 0x2; // XM effect E2
+constexpr auto  SET_GLISSANDO_CONTROL            = 0x3; // XM effect E3
+constexpr auto  SET_VIBRATO_CONTROL              = 0x4; // XM effect E4
+constexpr auto  SET_FINETUNE                     = 0x5; // XM effect E5
+constexpr auto  SET_PATTERN_LOOP                 = 0x6; // XM effect E6
+constexpr auto  SET_TREMOLO_CONTROL              = 0x7; // XM effect E7
+constexpr auto  SET_ROUGH_PANNING                = 0x8; // XM effect E8, not used in player
+constexpr auto  NOTE_RETRIG                      = 0x9; // XM effect E9
+constexpr auto  FINE_VOLUME_SLIDE_UP             = 0xA; // XM effect EA
+constexpr auto  FINE_VOLUME_SLIDE_DOWN           = 0xB; // XM effect EB
+constexpr auto  NOTE_CUT                         = 0xC; // XM effect EC
+constexpr auto  NOTE_DELAY                       = 0xD; // XM effect ED
+constexpr auto  PATTERN_DELAY                    = 0xE; // XM effect EE
+constexpr auto  INVERT_LOOP                      = 0xF; // XM effect EF, end of XM extended effects
+constexpr auto  S3M_SET_GLISSANDO_CONTROL        = 0x1; // S3M effect S1
+constexpr auto  S3M_SET_FINETUNE                 = 0x2; // S3M effect S2
+constexpr auto  S3M_SET_VIBRATO_CONTROL          = 0x3; // S3M effect S3
+constexpr auto  S3M_SET_TREMOLO_CONTROL          = 0x4; // S3M effect S4
+constexpr auto  S3M_SET_PANBRELLO_CONTROL        = 0x5; // S3M effect S5
+constexpr auto  S3M_FINE_PATTERN_DELAY           = 0x6; // S3M effect S6
+constexpr auto  S3M_SET_ROUGH_PANNING            = 0x8; // S3M effect S8
+constexpr auto  S3M_SOUND_CONTROL                = 0x9; // S3M effect S9
+constexpr auto  S3M_SET_HIGH_SAMPLE_OFFSET       = 0xA; // S3M effect SA
+constexpr auto  S3M_SET_PATTERN_LOOP             = 0xB; // S3M effect SB
+constexpr auto  S3M_NOTE_CUT                     = 0xC; // S3M effect SC
+constexpr auto  S3M_NOTE_DELAY                   = 0xD; // S3M effect SD
+constexpr auto  S3M_PATTERN_DELAY                = 0xE; // S3M effect SE, end of S3M extended effects
+constexpr auto  SET_TEMPO                        = 0xF; 
+constexpr auto  SET_GLOBAL_VOLUME                = 0x10;// XM effect G
+constexpr auto  GLOBAL_VOLUME_SLIDE              = 0x11;// XM effect H
+constexpr auto  SET_ENVELOPE_POSITION            = 0x15;// XM effect L
+constexpr auto  PANNING_SLIDE                    = 0x19;// XM effect P
+constexpr auto  MULTI_NOTE_RETRIG                = 0x1B;// XM effect R
+constexpr auto  TREMOR                           = 0x1D;// XM effect T
+constexpr auto  EXTRA_FINE_PORTAMENTO            = 0x21;// XM effect X
+constexpr auto  EXTRA_FINE_PORTAMENTO_UP         = 0x1; // XM effect X1
+constexpr auto  EXTRA_FINE_PORTAMENTO_DOWN       = 0x2; // XM effect X2
+constexpr auto  PANBRELLO                        = 0x22;// S3M effect Y 
+
+// internal remapped effects for the player
+constexpr auto SET_BPM                          = 0x24; // after effect "Z" for XM safety
+constexpr auto ARPEGGIO                         = 0x25;
+constexpr auto FINE_VIBRATO                     = 0x26; // S3M fine vibrato
+constexpr auto SET_VIBRATO_SPEED                = 0x27; // XM Volc command
+constexpr auto KEY_OFF                          = 255;  //(12 * 11 + 1); // 11 octaves
+constexpr auto KEY_NOTE_CUT                     = 254;
+constexpr auto KEY_NOTE_FADE                    = 253;
+
+// different types of vibrato
+constexpr auto VIBRATO_SINEWAVE         = 0;
+constexpr auto VIBRATO_RAMPDOWN         = 1;
+constexpr auto VIBRATO_SQUAREWAVE       = 2;
+constexpr auto VIBRATO_RANDOM           = 3;
+constexpr auto VIBRATO_NO_RETRIG_FLAG   = 4;
+
 /*
     From MPT's test suite:
     Arpeggio behavior is very weird with more than 16 ticks per row. This comes
@@ -199,12 +211,6 @@ const int sineTable[] = {
     0
 };
 
-#define VIBRATO_SINEWAVE                    0
-#define VIBRATO_RAMPDOWN                    1
-#define VIBRATO_SQUAREWAVE                  2
-#define VIBRATO_RANDOM                      3
-#define VIBRATO_NO_RETRIG_FLAG              4
-
 /*
 const unsigned periods[MAXIMUM_NOTES] = {
    4*1712,4*1616,4*1524,4*1440,4*1356,4*1280,4*1208,4*1140,4*1076,4*1016, 4*960, 4*906,
@@ -243,6 +249,6 @@ const unsigned amigaPeriodTable[] = {
     494, 491, 487, 484, 480, 477, 474, 470, 467, 463, 460, 457
 };
 
+// These type definitions come in handy when loading module files
 typedef unsigned __int16 AMIGAWORD;
 typedef signed   __int16 SHORT;
-

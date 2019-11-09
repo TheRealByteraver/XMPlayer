@@ -29,7 +29,7 @@
 #include <iomanip>
 #include <vector>
 #include <iterator>
-#include <iterator>
+#include <algorithm>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -40,7 +40,7 @@
 constexpr auto MOD_DEBUG_SHOW_PATTERN_NO = 8; // pattern to be shown
 
 // Constants for the .MOD Format:
-constexpr auto MOD_LIMIT = 8;    // nr of illegal chars permitted in smp names
+constexpr auto MOD_MAX_ILLEGAL_CHARS = 8;    // nr of illegal chars permitted in smp names
 constexpr auto MOD_ROWS = 64;   // always 64 rows in a MOD pattern
 constexpr auto MOD_MAX_SONGNAME_LENGTH = 20;
 constexpr auto MOD_MAX_PATTERNS = 128;
@@ -94,63 +94,20 @@ inline AMIGAWORD SwapW( AMIGAWORD d ) {
 
 class ModHelperFn {
 public:
-    static int      nBadComment( const char* comment );
+    static int      badCommentCnt( const char* comment );
     static int      getNrSamples( const HeaderMK& headerMK );
-    static int      tagID( const std::string& tagID,bool& flt8Err,unsigned& trackerType );
+    static int      getTagInfo( const std::string& getTagInfo,bool& flt8Err,unsigned& trackerType );
     static bool     isWowFile( std::string fileName );
     static int      convertFlt8Pattern( VirtualFile& modFile );
     static void     remapEffects( Effect& remapFx );
 };
 
-// read sample names, this is how we differentiate a 31 instruments file 
-// from an old format 15 instruments file
-// if there is no tag then this is probably not a MOD file!
-int ModHelperFn::getNrSamples( const HeaderMK& headerMK )
-{
-    int count = 0;
-    for ( int i = 0; i < 15; i++ )
-        count += ModHelperFn::nBadComment( headerMK.samples[i].name );
-
-    // this is not a MOD file
-    if ( count > MOD_LIMIT )
-        return 0;
-
-    // no tag could mean this is an old NST - MOD file
-    count = 0;
-    for ( int i = 15; i < 31; i++ )
-        count += ModHelperFn::nBadComment( headerMK.samples[i].name );
-
-    // this is an NST MOD file
-    if ( count > MOD_LIMIT )
-        return 15;
-    // this is a normal MOD file
-    else
-        return 31;
-}
-
-
 int Module::loadModFile() 
 {
-    bool        smpErr   = false;   // if first 15 smp names are garbage
-    bool        nstErr   = false;   // if next  16 smp names are garbage (NST file)
-    bool        ptnErr   = false;   // if there seem to be an invalid nr of ptns
-    bool        tagErr   = false;   // true if no valid tag was found
-    bool        flt8Err  = false;   // if FLT8 pattern conversion will be needed
-    bool        wowFile  = false;   // if the file extension was .WOW rather than .MOD
-    unsigned    patternDataSize;
-    unsigned    patternDivideRest;
-    unsigned    sampleDataSize;
-    unsigned    sampleDataOffset;
-    unsigned    patternDataOffset;
-    unsigned    fileOffset;
-    unsigned    fileSize;
-
-    isLoaded_ = false;  // redundant
-
     VirtualFile modFile( fileName_ );
     if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
-    fileSize = modFile.fileSize();
+    unsigned fileSize = modFile.fileSize();
 
     // initialize mod specific variables:
     minPeriod_ = 14;    // periods[11 * 12 - 1]
@@ -165,16 +122,17 @@ int Module::loadModFile()
         return 0;
 
     // check extension for the wow factor ;)
-    wowFile = ModHelperFn::isWowFile( fileName_ );
+    bool wowFile = ModHelperFn::isWowFile( fileName_ );
 
     // check if a valid tag is present and get the MOD type
+    bool flt8Err;
     trackerTag_.assign( headerMK.tag,4 );
-    nChannels_ = ModHelperFn::tagID( trackerTag_,flt8Err,trackerType_ );
-    tagErr = nChannels_ == 0;
+    nChannels_ = ModHelperFn::getTagInfo( trackerTag_,flt8Err,trackerType_ );
+    bool tagErr = nChannels_ == 0;
 
     nInstruments_ = ModHelperFn::getNrSamples( headerMK );
-    nstErr = nInstruments_ == 15;
-    smpErr = nInstruments_ == 0;
+    bool nstErr = nInstruments_ == 15; // if only 1st 15 smp names are ok (NST file)
+    bool smpErr = nInstruments_ == 0;  // if even 1st 15 smp names are garbage
 
     if ( tagErr && nstErr && (!smpErr) ) {
         nChannels_ = 4;
@@ -183,9 +141,14 @@ int Module::loadModFile()
     else
         nstErr = false;
 
-    patternDataSize = fileSize - (nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK ));
+    // let's calculate the total size taken by the patterns
+    // first, subtract the size of the header
+    unsigned patternDataSize = fileSize 
+        - (nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK ));
+
     nSamples_ = 0;
-    sampleDataSize = 0; 
+    // calculate the total size of the samples
+    unsigned sampleDataSize = 0;
 
     // take care of the endianness and calculate total sample data size
     for( unsigned i = 0; i < nInstruments_; i++ ) {
@@ -197,16 +160,19 @@ int Module::loadModFile()
             SwapW( headerMK.samples[i].repeatLength );
         sampleDataSize += ((unsigned)headerMK.samples[i].length) << 1;
     }
-    
+    // and this finally gives us the total size taken by the pattern data:
     patternDataSize -= sampleDataSize;
+
+    // we use two different ways to calculate the pattern size
     unsigned calcPatternCnt = 0;
+    unsigned patternDivideRest;
     if ( nChannels_ ) {
-        // pattern size = 64 rows * 4 bytes/note * nrChannels 
-        //              = 256 * nrChannels
+        // pattern size in bytes = nrChannels * 64 rows * 4 bytes/note
         int patternSize = nChannels_ * MOD_ROWS * 4;   
         patternDivideRest = patternDataSize % patternSize; // should be 0
         calcPatternCnt = patternDataSize / patternSize;
     }
+
     // verify nr of patterns using pattern table
     unsigned hdrPatternCnt = 0;
     if ( nstErr ) {
@@ -244,8 +210,8 @@ int Module::loadModFile()
     defaultBpm_   = MOD_DEFAULT_BPM;
     useLinearFrequencies_ = false;
 
-    if ( hdrPatternCnt > MOD_MAX_PATTERNS ) 
-        ptnErr = true;
+    // we can't have more than 128 patterns in a mod file
+    bool ptnErr = hdrPatternCnt > MOD_MAX_PATTERNS;
 
     if ( (songRestartPosition_ > songLength_) ||
          (songRestartPosition_ == 127)) 
@@ -261,7 +227,7 @@ int Module::loadModFile()
     // check file integrity, correct nr of channels if necessary
     nPatterns_ = hdrPatternCnt;
     if ( !tagErr ) {              // ptnCalc and chn were initialised
-        if (wowFile && ((hdrPatternCnt * 2) == calcPatternCnt)) 
+        if ( wowFile && ((hdrPatternCnt * 2) == calcPatternCnt) ) 
             nChannels_ = 8;
     } 
     else {
@@ -278,9 +244,10 @@ int Module::loadModFile()
         }
     }
     //if ((calcPatternCnt < nPatterns_) && (!patternDivideRest)) nPatterns_ = calcPatternCnt;
-    patternDataOffset = nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK );
-    sampleDataOffset = patternDataOffset 
-        + nPatterns_ * nChannels_ * MOD_ROWS * 4;
+    unsigned patternDataOffset = nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK );
+    unsigned sampleDataOffset = patternDataOffset 
+                + nPatterns_ * nChannels_ * MOD_ROWS * 4;
+
     if ( (sampleDataOffset + sampleDataSize) > fileSize ) {
         unsigned missingData = (sampleDataOffset + sampleDataSize) - (int)fileSize;
         unsigned lastInstrument = nInstruments_;
@@ -351,7 +318,7 @@ int Module::loadModFile()
     songTitle_.assign( headerMK.songTitle,MOD_MAX_SONGNAME_LENGTH );
     
     // now, the sample headers & sample data.
-    fileOffset = sampleDataOffset;
+    unsigned fileOffset = sampleDataOffset;
     for ( unsigned sampleNr = 1; sampleNr <= nInstruments_; sampleNr++ ) {
         InstrumentHeader    instHdr;
         SampleHeader        smpHdr;
@@ -415,7 +382,7 @@ int Module::loadModFile()
         // to redo in a safer way
         if ( flt8Err )
             if ( ModHelperFn::convertFlt8Pattern( modFile ) )
-                return 0;
+                return 0;  // exit on error
         if ( loadModPattern( modFile,patternNr ) )
             return 0;
     }
@@ -426,19 +393,19 @@ int Module::loadModFile()
     if ( showDebugInfo_ )
         std::cout << std::dec
             << "\n"
-            << "\nFilename             = " << fileName_.c_str()
+            << "\nFilename             = " << fileName_
             << "\nis Loaded            = " << (isLoaded() ? "Yes" : "No")
             << "\nnChannels            = " << nChannels_
             << "\nnInstruments         = " << nInstruments_
             << "\nnSamples             = " << nSamples_
             << "\nnPatterns            = " << nPatterns_
-            << "\nSong Title           = " << songTitle_.c_str()
+            << "\nSong Title           = " << songTitle_
             << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No")
             << "\nSong Length          = " << songLength_
             << "\nSong Restart Positn. = " << songRestartPosition_
             << "\nNST File             = " << (nstErr ? "Yes" : "No")
             << "\n.WOW File            = " << (wowFile ? "Yes" : "No")
-            << "\nFile Tag             = " << trackerTag_.c_str()
+            << "\nFile Tag             = " << trackerTag_
             << "\nTotal Samples Size   = " << sampleDataSize
             << "\nptnHdr               = " << hdrPatternCnt
             << "\nPatternDataSize      = " << patternDataSize
@@ -554,6 +521,33 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
     return 0;
 }
 
+// read sample names, this is how we differentiate a 31 instruments file 
+// from an old format 15 instruments file
+// if there is no tag then this is probably not a MOD file!
+int ModHelperFn::getNrSamples( const HeaderMK& headerMK )
+{
+    int count = 0;
+    for ( int i = 0; i < 15; i++ )
+        count += ModHelperFn::badCommentCnt( headerMK.samples[i].name );
+
+    // this is probably not a MOD file
+    if ( count > MOD_MAX_ILLEGAL_CHARS )
+        return 0;
+
+    // If only the 1st 15 sample names are valid we prolly have a NST file
+    // So we check the validity of sample names 16 - 31:
+    count = 0;
+    for ( int i = 15; i < 31; i++ )
+        count += ModHelperFn::badCommentCnt( headerMK.samples[i].name );
+
+    // this is an NST MOD file
+    if ( count > MOD_MAX_ILLEGAL_CHARS )
+        return 15;
+    // this is a normal MOD file
+    else
+        return 31;
+}
+
 void ModHelperFn::remapEffects( Effect& remapFx )
 {
     switch ( remapFx.effect ) {
@@ -644,7 +638,7 @@ hexadecimal) represented single and double music notes, and some BBS's
 inserted these in the sample name strings to show the mod was downloaded
 from there.
 */
-int ModHelperFn::nBadComment( const char *comment )
+int ModHelperFn::badCommentCnt( const char *comment )
 {
     char allowed[] = "\xD\xE !\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`" \
         "abcdefghijklmnopqrstuvwxyz{|}~";
@@ -655,8 +649,11 @@ int ModHelperFn::nBadComment( const char *comment )
     return r;
 }
 
-// this fn returns the number of channels based on the format tag (0 on error)
-int ModHelperFn::tagID( const std::string& tagID,bool &flt8Err,unsigned& trackerType )
+// This fn returns the number of channels based on the format tag (0 on error)
+// and sets the flt8Err flag if an 8 channel startrekker mod file was detected.
+// It will set the tracker type as well (only support for 
+// TRACKER_PROTRACKER yet)
+int ModHelperFn::getTagInfo( const std::string& tagID,bool& flt8Err,unsigned& trackerType )
 {
     int     chn;
     trackerType = TRACKER_PROTRACKER;
@@ -667,40 +664,41 @@ int ModHelperFn::tagID( const std::string& tagID,bool &flt8Err,unsigned& tracker
     else if ( tagID == "FLT8" ) {
         chn = 8;
         flt8Err = true;
-    } else if ( tagID == "OCTA" ) chn = 8;
+    }
+    else if ( tagID == "OCTA" ) chn = 8;
     else if ( tagID == "CD81" ) chn = 8;
-    else if ( (tagID[2] == 'C') && (tagID[3] == 'H') ) {
-        chn = ((unsigned char)tagID[0] - 48) * 10 +
-            (unsigned char)tagID[1] - 48;
+    else if ( tagID.substr( 2,2 ) == "CH" ) {
+        chn = (tagID[0] - '0') * 10 + (tagID[1] - '0');
         if ( (chn > 32) || (chn < 10) )
             chn = 0;
-        //else trackerType = TRACKER_FT2;
-    } else if ( (tagID[0] == 'T') && (tagID[1] == 'D') && (tagID[2] == 'Z') ) {
-        chn = (unsigned char)tagID[3] - 48;
+    } 
+    else if ( tagID.substr( 0,3 ) == "TDZ" ) {
+        chn = tagID[3] - '0';
         if ( (chn < 1) || (chn > 3) )
             chn = 0; // only values 1..3 are valid
                      //else trackerType = TRACKER_FT2;
-    } else if ( (tagID[1] == 'C') && (tagID[2] == 'H') && (tagID[3] == 'N') ) {
-        chn = (unsigned char)tagID[0] - 48;
+    }
+    else if ( tagID.substr( 1,3 ) == "CHN" ) {
+        chn = tagID[0] - '0';
         if ( (chn < 5) || (chn > 9) )
             chn = 0; // only values 5..9 are valid
                      //else trackerType = TRACKER_FT2;
-    } else
+    }
+    else
         chn = 0;
     return chn;
 }
 
 // returns true if file has extension .WOW
+// wow files are exactly like M.K. files except they can have 8 channels :s
 bool ModHelperFn::isWowFile( std::string fileName )
 {
-    int     i = 0;
-    const char *p = fileName.c_str();
-    while ( *p && (i < 255) ) {
-        p++;
-        i++;
-    }
-    if ( (i < 4) || (i >= 255) )
-        return false;
-    p -= 4;
-    return (!_stricmp( p,".wow" )); // case insensitive compare
+    int len = fileName.length();
+    assert( len > 4 );
+    std::string strBuf( fileName );
+
+    // put everything in upper case for easy comparing
+    std::transform( strBuf.begin(),strBuf.end(),strBuf.begin(),::toupper );
+
+    return strBuf.substr( len - 3,3 ) == "WOW";
 }

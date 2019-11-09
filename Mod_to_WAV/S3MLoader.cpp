@@ -23,51 +23,49 @@ Thanks must go to:
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
-#define S3M_MIN_FILESIZE                    (sizeof(S3mFileHeader) + \
-                                             sizeof(S3mInstHeader) + 64 + 16)
-#define S3M_MAX_CHANNELS                    32
-#define S3M_MAX_INSTRUMENTS                 100
-#define S3M_MAX_PATTERNS                    200
-#define S3M_CHN_UNUSED                      255
-#define S3M_DEFAULT_PAN_LEFT                48
-#define S3M_DEFAULT_PAN_RIGHT               207
-#define S3M_DEFAULT_PAN_CENTER              128
-#define S3M_MAX_SONGTITLE_LENGTH            28
-#define S3M_MAX_SAMPLENAME_LENGTH           28
-#define S3M_MAX_VOLUME                      64
-#define S3M_TRACKER_TAG_LENGTH              4
-#define S3M_MARKER_PATTERN                  254
-#define S3M_END_OF_SONG_MARKER              255
-#define S3M_ST2VIBRATO_FLAG                 1
-#define S3M_ST2TEMPO_FLAG                   2
-#define S3M_AMIGASLIDES_FLAG                4
-#define S3M_VOLUME_ZERO_OPT_FLAG            8
-#define S3M_AMIGA_LIMITS_FLAG               16
-#define S3M_FILTER_ENABLE_FLAG              32
-#define S3M_ST300_VOLSLIDES_FLAG            64
-#define S3M_CUSTOM_DATA_FLAG                128
-#define S3M_TRACKER_MASK                    0xF000
-#define S3M_TRACKER_VERSION_MASK            0x0FFF
-#define S3M_SIGNED_SAMPLE_DATA              1
-#define S3M_UNSIGNED_SAMPLE_DATA            2
-#define S3M_STEREO_FLAG                     128
-#define S3M_DEFAULT_PANNING_PRESENT         0xFC
-#define S3M_SAMPLE_NOTPACKED_FLAG           0
-#define S3M_SAMPLE_PACKED_FLAG              1    // DP30ADPCM, not supported
-#define S3M_SAMPLE_LOOP_FLAG                1
-#define S3M_SAMPLE_STEREO_FLAG              2    // not supported
-#define S3M_SAMPLE_16BIT_FLAG               4    // not supported
-#define S3M_ROWS_PER_PATTERN                64
-#define S3M_PTN_END_OF_ROW_MARKER           0
-#define S3M_PTN_CHANNEL_MASK                31
-#define S3M_PTN_NOTE_INST_FLAG              32
-#define S3M_PTN_VOLUME_COLUMN_FLAG          64
-#define S3M_PTN_EFFECT_PARAM_FLAG           128
-#define S3M_KEY_NOTE_CUT                    254
-#define S3M_MAX_NOTE                        (9 * 12)
-#define S3M_INSTRUMENT_TYPE_SAMPLE          1
-#define S3M_INSTRUMENT_TYPE_ADLIB_MELODY    2
-#define S3M_INSTRUMENT_TYPE_ADLIB_DRUM      3
+constexpr auto S3M_MAX_CHANNELS                  = 32;
+constexpr auto S3M_MAX_INSTRUMENTS               = 100;
+constexpr auto S3M_MAX_PATTERNS                  = 200;
+constexpr auto S3M_CHN_UNUSED                    = 255;
+constexpr auto S3M_DEFAULT_PAN_LEFT              = 48;
+constexpr auto S3M_DEFAULT_PAN_RIGHT             = 207;
+constexpr auto S3M_DEFAULT_PAN_CENTER            = 128;
+constexpr auto S3M_MAX_SONGTITLE_LENGTH          = 28;
+constexpr auto S3M_MAX_SAMPLENAME_LENGTH         = 28;
+constexpr auto S3M_MAX_VOLUME                    = 64;
+constexpr auto S3M_TRACKER_TAG_LENGTH            = 4;
+constexpr auto S3M_MARKER_PATTERN                = 254;
+constexpr auto S3M_END_OF_SONG_MARKER            = 255;
+constexpr auto S3M_ST2VIBRATO_FLAG               = 1;
+constexpr auto S3M_ST2TEMPO_FLAG                 = 2;
+constexpr auto S3M_AMIGASLIDES_FLAG              = 4;
+constexpr auto S3M_VOLUME_ZERO_OPT_FLAG          = 8;
+constexpr auto S3M_AMIGA_LIMITS_FLAG             = 16;
+constexpr auto S3M_FILTER_ENABLE_FLAG            = 32;
+constexpr auto S3M_ST300_VOLSLIDES_FLAG          = 64;
+constexpr auto S3M_CUSTOM_DATA_FLAG              = 128;
+constexpr auto S3M_TRACKER_MASK                  = 0xF000;
+constexpr auto S3M_TRACKER_VERSION_MASK          = 0x0FFF;
+constexpr auto S3M_SIGNED_SAMPLE_DATA            = 1;
+constexpr auto S3M_UNSIGNED_SAMPLE_DATA          = 2;
+constexpr auto S3M_STEREO_FLAG                   = 128;
+constexpr auto S3M_DEFAULT_PANNING_PRESENT       = 0xFC;
+constexpr auto S3M_SAMPLE_NOTPACKED_FLAG         = 0;
+constexpr auto S3M_SAMPLE_PACKED_FLAG            = 1;   // DP30ADPCM, not supported
+constexpr auto S3M_SAMPLE_LOOP_FLAG              = 1;
+constexpr auto S3M_SAMPLE_STEREO_FLAG            = 2;   // not supported
+constexpr auto S3M_SAMPLE_16BIT_FLAG             = 4;   // not supported
+constexpr auto S3M_ROWS_PER_PATTERN              = 64;
+constexpr auto S3M_PTN_END_OF_ROW_MARKER         = 0;
+constexpr auto S3M_PTN_CHANNEL_MASK              = 31;
+constexpr auto S3M_PTN_NOTE_INST_FLAG            = 32;
+constexpr auto S3M_PTN_VOLUME_COLUMN_FLAG        = 64;
+constexpr auto S3M_PTN_EFFECT_PARAM_FLAG         = 128;
+constexpr auto S3M_KEY_NOTE_CUT                  = 254;
+constexpr auto S3M_MAX_NOTE                      = (9 * 12);
+constexpr auto S3M_INSTRUMENT_TYPE_SAMPLE        = 1;
+constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_MELODY  = 2;
+constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_DRUM    = 3;
 
 
 #pragma pack (1) 
@@ -112,6 +110,9 @@ struct S3mInstHeader {
     char            tag[4];         // "SCRS"
 };
 
+constexpr auto S3M_MIN_FILESIZE = (sizeof( S3mFileHeader ) + \
+                                   sizeof( S3mInstHeader ) + 64 + 16);
+
 struct S3mUnpackedNote {
     unsigned char note;
     unsigned char inst;
@@ -131,7 +132,7 @@ public:
 void remapS3mEffects( Effect& remapFx ); // temp forward declaration
 
 int Module::loadS3mFile() {
-    isLoaded_ = false;
+    //isLoaded_ = false; redundant
 
     // load file into byte buffer and then work on that buffer only
     VirtualFile s3mFile( fileName_ );
@@ -198,11 +199,6 @@ int Module::loadS3mFile() {
             << "\nNr of channels   : " << std::dec << nChannels_
             << "\nOrder list       : ";
 
-    //for ( int i = 0; i < S3M_MAX_SONGTITLE_LENGTH; i++ ) 
-    //    songTitle_ += s3mFileHdr.songTitle[i];
-    //
-    //for ( int i = 0; i < S3M_TRACKER_TAG_LENGTH; i++ ) 
-    //    trackerTag_ += s3mFileHdr.tag[i];
     songTitle_.assign( s3mFileHdr.songTitle,S3M_MAX_SONGTITLE_LENGTH );
     trackerTag_.assign( s3mFileHdr.tag,S3M_TRACKER_TAG_LENGTH );
     
@@ -245,6 +241,7 @@ int Module::loadS3mFile() {
         std::cout
             << "\nSong length (corr.): " << songLength_
             << "\nNr of patterns     : " << nPatterns_;
+
     // fix for empty patterns that are not present in the file, not even
     // with a header saying they're 0 bytes big:
     if ( nPatterns_ > s3mFileHdr.nPatterns )
@@ -323,8 +320,8 @@ int Module::loadS3mFile() {
         if ( s3mFile.read( &s3mInstHdr,sizeof( S3mInstHeader ) ) ) 
             return 0;
 
-        smpDataPtrs[instrumentNr - 1] = 16 * (((int)s3mInstHdr.memSeg << 16)
-                                      + (int)s3mInstHdr.memOfs);
+        smpDataPtrs[instrumentNr - 1] = (((int)s3mInstHdr.memSeg << 16)
+                                      + (int)s3mInstHdr.memOfs) << 4;
 
         if ( !s3mInstHdr.c4Speed ) 
             s3mInstHdr.c4Speed = (unsigned)NTSC_C4_SPEED;
@@ -346,9 +343,8 @@ int Module::loadS3mFile() {
         InstrumentHeader    instHdr;
         SampleHeader        smpHdr;
 
-        for ( int i = 0; i < S3M_MAX_SAMPLENAME_LENGTH; i++ )
-            smpHdr.name += s3mInstHdr.name[i];
-
+        // S3M has no instruments, only samples
+        smpHdr.name.assign( s3mInstHdr.name,S3M_MAX_SAMPLENAME_LENGTH );
         instHdr.name = smpHdr.name;
         //instHdr.nSamples = 1; // redundant?
         for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
@@ -408,20 +404,6 @@ int Module::loadS3mFile() {
                 smpHdr.repeatLength = smpHdr.length - smpHdr.repeatOffset;
             smpHdr.isRepeatSample = (s3mInstHdr.flags & S3M_SAMPLE_LOOP_FLAG) != 0;
 
-            // convert sample data from unsigned to signed:
-            bool is16BitSample = (s3mInstHdr.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
-            if ( s3mFileHdr.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA ) {
-                if ( !is16BitSample ) {
-                    unsigned char* s = (unsigned char*)smpHdr.data;
-                    for ( unsigned i = 0; i < smpHdr.length; i++ ) 
-                        *s++ ^= 0x80;
-                }
-                else {
-                    unsigned short* s = (unsigned short*)smpHdr.data;
-                    for ( unsigned i = 0; i < smpHdr.length; i++ ) 
-                        *s++ ^= 0x8000;
-                }
-            }            
             // finetune + relative note recalc
             unsigned int s3mPeriod = 
                 ((unsigned)8363 * periods[4 * 12]) / s3mInstHdr.c4Speed;
@@ -446,13 +428,11 @@ int Module::loadS3mFile() {
                     << noteStrings[4 * 12 + smpHdr.relativeNote]
                     << "\nFinetune          : " << smpHdr.finetune;
             
-            if ( smpHdr.length ) {
-                if ( is16BitSample )
-                    smpHdr.dataType = SAMPLEDATA_SIGNED_16BIT;
-                else
-                    smpHdr.dataType = SAMPLEDATA_SIGNED_8BIT;
+            bool is16BitSample = (s3mInstHdr.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
+            bool unsignedData = s3mFileHdr.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA;
+            smpHdr.dataType = (unsignedData ? 0 : 1) | (is16BitSample ? 2 : 0);
+            if ( smpHdr.length ) 
                 samples_[instrumentNr] = std::make_unique<Sample>( smpHdr );
-            }
         }
         instruments_[instrumentNr] = std::make_unique <Instrument>( instHdr );
 

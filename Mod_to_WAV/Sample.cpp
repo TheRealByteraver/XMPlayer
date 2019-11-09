@@ -43,13 +43,13 @@ Sample::Sample( const SampleHeader& sampleHeader )
     data_ = std::make_unique<SHORT[]>( k );
 
     switch ( sampleHeader.dataType ) {
-        case SAMPLEDATA_SIGNED_16BIT:
+        case SAMPLEDATA_UNSIGNED_8BIT:
         {
-            SHORT* ps = (SHORT*)sampleHeader.data;
+            signed char* ps = (signed char*)(sampleHeader.data);
             SHORT* pd = (data_.get() + INTERPOLATION_SPACER);
 
             for ( unsigned j = 0; j < length_; j++ ) {
-                *pd++ = *ps++;
+                *pd++ = (*ps++ ^ 0x80) << 8;
             }
             break;
         }
@@ -60,6 +60,26 @@ Sample::Sample( const SampleHeader& sampleHeader )
 
             for ( unsigned j = 0; j < length_; j++ ) {
                 *pd++ = *ps++ << 8;
+            }
+            break;
+        }
+        case SAMPLEDATA_UNSIGNED_16BIT:
+        {
+            SHORT* ps = (SHORT*)sampleHeader.data;
+            SHORT* pd = (data_.get() + INTERPOLATION_SPACER);
+
+            for ( unsigned j = 0; j < length_; j++ ) {
+                *pd++ = *ps++ ^ 0x8000;
+            }
+            break;
+        }
+        case SAMPLEDATA_SIGNED_16BIT:
+        {
+            SHORT* ps = (SHORT*)sampleHeader.data;
+            SHORT* pd = (data_.get() + INTERPOLATION_SPACER);
+
+            for ( unsigned j = 0; j < length_; j++ ) {
+                *pd++ = *ps++;
             }
             break;
         }

@@ -31,79 +31,74 @@ Thanks must go to:
 #include <bitset>
 #include <iomanip>
 
-//extern const char *noteStrings[2 + MAXIMUM_NOTES];
+constexpr auto IT_MAX_CHANNELS                       = 64;
+constexpr auto IT_MAX_PATTERNS                       = 200;
+constexpr auto IT_MAX_SONG_LENGTH                    = MAX_PATTERNS;
+constexpr auto IT_MIN_PATTERN_ROWS                   = 32;
+constexpr auto IT_MAX_PATTERN_ROWS                   = 200;
+constexpr auto IT_MAX_SAMPLES                        = 99;
+constexpr auto IT_MAX_INSTRUMENTS                    = 100; // ?
+constexpr auto IT_MAX_NOTE                           = 119; // 9 octaves: (C-0 -> B-9)
 
-#define IT_MAX_CHANNELS                         64
-#define IT_MAX_PATTERNS                         200
-#define IT_MAX_SONG_LENGTH                      MAX_PATTERNS
-#define IT_MIN_PATTERN_ROWS                     32
-#define IT_MAX_PATTERN_ROWS                     200
-#define IT_MAX_SAMPLES                          99
-#define IT_MAX_INSTRUMENTS                      100 // ?
-#define IT_MAX_NOTE                             119 // 9 octaves: (C-0 -> B-9)
+constexpr auto IT_STEREO_FLAG                        = 1;
+constexpr auto IT_VOL0_OPT_FLAG                      = 2;
+constexpr auto IT_INSTRUMENT_MODE                    = 4;
+constexpr auto IT_LINEAR_FREQUENCIES_FLAG            = 8;
+constexpr auto IT_OLD_EFFECTS_MODE                   = 16;
+constexpr auto IT_GEF_LINKED_EFFECT_MEMORY           = 32;
+constexpr auto IT_USE_MIDI_PITCH_CONTROLLER          = 64;
+constexpr auto IT_REQUEST_MIDI_CONFIG                = 128;
 
-#define IT_STEREO_FLAG                          1
-#define IT_VOL0_OPT_FLAG                        2
-#define IT_INSTRUMENT_MODE                      4
-#define IT_LINEAR_FREQUENCIES_FLAG              8
-#define IT_OLD_EFFECTS_MODE                     16
-#define IT_GEF_LINKED_EFFECT_MEMORY             32
-#define IT_USE_MIDI_PITCH_CONTROLLER            64
-#define IT_REQUEST_MIDI_CONFIG                  128
+constexpr auto IT_SONG_MESSAGE_FLAG                  = 1;
+constexpr auto IT_MIDI_CONFIG_EMBEDDED               = 8;
 
-#define IT_SONG_MESSAGE_FLAG                    1
-#define IT_MIDI_CONFIG_EMBEDDED                 8
-
-#define IT_DOS_FILENAME_LENGTH                  12
-#define IT_SONG_NAME_LENGTH                     26
-#define IT_INST_NAME_LENGTH                     26
+constexpr auto IT_DOS_FILENAME_LENGTH                = 12;
+constexpr auto IT_SONG_NAME_LENGTH                   = 26;
+constexpr auto IT_INST_NAME_LENGTH                   = 26;
 
 // sample flags
-#define IT_SMP_NAME_LENGTH                      26
-#define IT_SMP_ASSOCIATED_WITH_HEADER           1
-#define IT_SMP_IS_16_BIT                        2
-#define IT_SMP_IS_STEREO                        4 // not supported by Impulse Trckr
-#define IT_SMP_IS_COMPRESSED                    8
-#define IT_SMP_LOOP_ON                          16
-#define IT_SMP_SUSTAIN_LOOP_ON                  32
-#define IT_SMP_PINGPONG_LOOP_ON                 64
-#define IT_SMP_PINGPONG_SUSTAIN_LOOP_ON         128
-#define IT_SMP_USE_DEFAULT_PANNING              128
-#define IT_SMP_MAX_GLOBAL_VOLUME                64
-#define IT_SMP_MAX_VOLUME                       64
-#define IT_SIGNED_SAMPLE_DATA                   1
+constexpr auto IT_SMP_NAME_LENGTH                    = 26;
+constexpr auto IT_SMP_ASSOCIATED_WITH_HEADER         = 1;
+constexpr auto IT_SMP_IS_16_BIT                      = 2;
+constexpr auto IT_SMP_IS_STEREO                      = 4; // not supported by Impulse Trckr
+constexpr auto IT_SMP_IS_COMPRESSED                  = 8;
+constexpr auto IT_SMP_LOOP_ON                        = 16;
+constexpr auto IT_SMP_SUSTAIN_LOOP_ON                = 32;
+constexpr auto IT_SMP_PINGPONG_LOOP_ON               = 64;
+constexpr auto IT_SMP_PINGPONG_SUSTAIN_LOOP_ON       = 128;
+constexpr auto IT_SMP_USE_DEFAULT_PANNING            = 128;
+constexpr auto IT_SMP_MAX_GLOBAL_VOLUME              = 64;
+constexpr auto IT_SMP_MAX_VOLUME                     = 64;
+constexpr auto IT_SIGNED_SAMPLE_DATA                 = 1;
 
 // pattern flags
-#define IT_END_OF_SONG_MARKER                   255
-#define IT_MARKER_PATTERN                       254 
-#define IT_PATTERN_CHANNEL_MASK_AVAILABLE       128
-#define IT_PATTERN_END_OF_ROW_MARKER            0
-#define IT_PATTERN_NOTE_PRESENT                 1
-#define IT_PATTERN_INSTRUMENT_PRESENT           2
-#define IT_PATTERN_VOLUME_COLUMN_PRESENT        4
-#define IT_PATTERN_COMMAND_PRESENT              8
-#define IT_PATTERN_LAST_NOTE_IN_CHANNEL         16
-#define IT_PATTERN_LAST_INST_IN_CHANNEL         32
-#define IT_PATTERN_LAST_VOLC_IN_CHANNEL         64
-#define IT_PATTERN_LAST_COMMAND_IN_CHANNEL      128
-#define IT_NOTE_CUT                             254
-#define IT_KEY_OFF                              255
+constexpr auto IT_END_OF_SONG_MARKER                 = 255;
+constexpr auto IT_MARKER_PATTERN                     = 254;
+constexpr auto IT_PATTERN_CHANNEL_MASK_AVAILABLE     = 128;
+constexpr auto IT_PATTERN_END_OF_ROW_MARKER          = 0;
+constexpr auto IT_PATTERN_NOTE_PRESENT               = 1;
+constexpr auto IT_PATTERN_INSTRUMENT_PRESENT         = 2;
+constexpr auto IT_PATTERN_VOLUME_COLUMN_PRESENT      = 4;
+constexpr auto IT_PATTERN_COMMAND_PRESENT            = 8;
+constexpr auto IT_PATTERN_LAST_NOTE_IN_CHANNEL       = 16;
+constexpr auto IT_PATTERN_LAST_INST_IN_CHANNEL       = 32;
+constexpr auto IT_PATTERN_LAST_VOLC_IN_CHANNEL       = 64;
+constexpr auto IT_PATTERN_LAST_COMMAND_IN_CHANNEL    = 128;
+constexpr auto IT_NOTE_CUT                           = 254;
+constexpr auto IT_KEY_OFF                            = 255;
 
-/*
 // constants for decoding the volume column
-#define IT_VOLUME_COLUMN_UNDEFINED              213
-#define IT_VOLUME_COLUMN_VIBRATO                203
-#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        193
-#define IT_VOLUME_COLUMN_SET_PANNING            128
-#define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
-#define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
-#define IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      94
-#define IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        84
-#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN 74
-#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   64
-#define IT_VOLUME_COLUMN_SET_VOLUME             0
-*/
-
+constexpr auto IT_VOLUME_COLUMN_UNDEFINED              = 213;
+constexpr auto IT_VOLUME_COLUMN_VIBRATO                = 203;
+constexpr auto IT_VOLUME_COLUMN_TONE_PORTAMENTO        = 193;
+constexpr auto IT_VOLUME_COLUMN_SET_PANNING            = 128;
+constexpr auto IT_VOLUME_COLUMN_PORTAMENTO_UP          = 114;
+constexpr auto IT_VOLUME_COLUMN_PORTAMENTO_DOWN        = 104;
+constexpr auto IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      = 94;
+constexpr auto IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        = 84;
+constexpr auto IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN = 74;
+constexpr auto IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   = 64;
+constexpr auto IT_VOLUME_COLUMN_SET_VOLUME             = 0;
 
 #pragma pack (1) 
 struct ItFileHeader {
@@ -267,20 +262,20 @@ public:
 
 int Module::loadItFile()
 {
-    isLoaded_ = false;
     VirtualFile itFile( fileName_ );
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
+
     ItFileHeader itFileHeader;
     itFile.read( &itFileHeader,sizeof( itFileHeader ) );
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
 
+    songTitle_.assign( itFileHeader.songName,26 );
+    trackerTag_.assign( itFileHeader.tag,4 );
+
     // some very basic checking
-    if ( (!((itFileHeader.tag[0] == 'I') &&
-            (itFileHeader.tag[1] == 'M') &&
-            (itFileHeader.tag[2] == 'P') &&
-            (itFileHeader.tag[3] == 'M')))
+    if ( (trackerTag_ != "IMPM")
         //|| (itFileHeader.id != 0x1A)
         //|| (itFileHeader.sampleDataType < 1)
         //|| (itFileHeader.sampleDataType > 2)
@@ -289,12 +284,7 @@ int Module::loadItFile()
             std::cout << "\nIMPM tag not found or file is too small, exiting.";
         return 0;
     }
-    songTitle_ = "";
-    trackerTag_ = "";
-    for ( int i = 0; i < 26; i++ ) 
-        songTitle_ += itFileHeader.songName[i];
-    for ( int i = 0; i < 4; i++ ) 
-        trackerTag_ += itFileHeader.tag[i];
+
     trackerType_ = TRACKER_IT;
     useLinearFrequencies_ = (itFileHeader.flags & IT_LINEAR_FREQUENCIES_FLAG) != 0;
     isCustomRepeat_ = false;
@@ -529,7 +519,7 @@ int Module::loadItSample(
     ItSampleHeader itSampleHeader;
     if ( itFile.read( &itSampleHeader,sizeof( itSampleHeader ) ) ) 
         return -1;
-    bool is16bitData = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
+    bool is16BitSample = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
     bool isCompressed = (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) != 0;
     bool isStereoSample = (itSampleHeader.flag & IT_SMP_IS_STEREO) != 0;
     if ( showDebugInfo_ ) {
@@ -618,7 +608,7 @@ int Module::loadItSample(
 
     // Now take care of the sample data:
     unsigned    dataLength = sample.length;
-    if ( is16bitData ) {
+    if ( is16BitSample ) {
         sample.dataType = SAMPLEDATA_SIGNED_16BIT;
         dataLength <<= 1;
     } 
@@ -626,33 +616,25 @@ int Module::loadItSample(
         sample.dataType = SAMPLEDATA_SIGNED_8BIT;
     }
     itFile.absSeek( itSampleHeader.samplePointer );
-    //unsigned char *buffer = new unsigned char[dataLength];
     std::unique_ptr<unsigned char[]> buffer = std::make_unique<unsigned char[]>( dataLength );
 
     if ( !isCompressed ) {
-        if ( itFile.read( buffer.get(),dataLength ) ) return 0;
+        if ( itFile.read( buffer.get(),dataLength ) ) 
+            return 0;
     } 
     else {
         // decompress sample here
         ItSex itSex( isIt215Compression );
-        if ( is16bitData )
+        if ( is16BitSample )
             itSex.decompress16( itFile,buffer.get(),sample.length );
         else
             itSex.decompress8( itFile,buffer.get(),sample.length );
     }
-    sample.data = (SHORT *)buffer.get();
 
-    // convert unsigned to signed sample data:
-    if ( (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0 ) {
-        if ( is16bitData ) {
-            SHORT *data = sample.data;
-            for ( unsigned i = 0; i < sample.length; i++ ) data[i] ^= 0x8000;
-        } 
-        else {
-            char *data = (char *)sample.data;
-            for ( unsigned i = 0; i < sample.length; i++ ) data[i] ^= 0x80;
-        }
-    }
+    // Load the sample:
+    sample.data = (SHORT *)buffer.get();
+    bool unsignedData = (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0;
+    sample.dataType = (unsignedData ? 0 : 1) | (is16BitSample ? 2 : 0);
     samples_[sampleNr] = std::make_unique<Sample>( sample );
 
     // if the file is in sample mode, convert it to instrument mode
@@ -665,7 +647,6 @@ int Module::loadItSample(
         }
         instrumentHeader.name = sample.name;
         instruments_[sampleNr] = std::make_unique <Instrument>( instrumentHeader );
-
     }
     if ( showDebugInfo_ && !isStereoSample ) {
 #ifdef debug_it_play_samples
@@ -674,19 +655,6 @@ int Module::loadItSample(
     }
     return 0;
 }
-
-// constants for decoding the volume column
-#define IT_VOLUME_COLUMN_UNDEFINED              213
-#define IT_VOLUME_COLUMN_VIBRATO                203
-#define IT_VOLUME_COLUMN_TONE_PORTAMENTO        193
-#define IT_VOLUME_COLUMN_SET_PANNING            128            
-#define IT_VOLUME_COLUMN_PORTAMENTO_UP          114
-#define IT_VOLUME_COLUMN_PORTAMENTO_DOWN        104
-#define IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      94
-#define IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        84
-#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN 74
-#define IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   64
-#define IT_VOLUME_COLUMN_SET_VOLUME             0
 
 // Pattern decoder helper functions (effect remapping):
 void decodeItVolumeColumn( Effect& target,unsigned char volc )
@@ -907,7 +875,6 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
     //Note            *iNote,*patternData;
     ItPatternHeader itPatternHeader;
 
-    //patterns_[patternNr] = new Pattern;
     memset( &channelIsUsed,false,sizeof( channelIsUsed ) );
     memset( &masks,0,sizeof( masks ) );
     memset( &prevRow,0,sizeof( prevRow ) );
@@ -926,14 +893,6 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
     }
     std::vector<Note> patternData( nChannels_ * itPatternHeader.nRows );
     std::vector<Note>::iterator iNote = patternData.begin();
-
-    //patternData = new Note[nChannels_ * itPatternHeader.nRows];
-    //patterns_[patternNr]->initialise( 
-    //    nChannels_,
-    //    itPatternHeader.nRows,
-    //    patternData 
-    //);
-    //iNote = patternData;
 
     // start decoding:
     unsigned char *source = (unsigned char *)itFile.getSafePointer( itPatternHeader.dataSize );
@@ -1034,7 +993,6 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         ItDebugShow::pattern( *(patterns_[patternNr]) );
 #endif
     }
-    //patterns_[patternNr] = new Pattern( nChannels_,itPatternHeader.nRows,patternData );
     patterns_[patternNr] = std::make_unique < Pattern >
         ( nChannels_,itPatternHeader.nRows,patternData );
     return 0;
@@ -1176,7 +1134,7 @@ void ItDebugShow::newInstHeader( ItNewInstHeader& itNewInstHeader )
 
 void ItDebugShow::sampleHeader( ItSampleHeader& itSampleHeader )
 {
-    bool    is16bitData = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
+    bool    is16BitSample = (itSampleHeader.flag & IT_SMP_IS_16_BIT) != 0;
     bool    isCompressed = (itSampleHeader.flag & IT_SMP_IS_COMPRESSED) != 0;
     bool    isStereoSample = (itSampleHeader.flag & IT_SMP_IS_STEREO) != 0;
     std::cout
@@ -1186,7 +1144,7 @@ void ItDebugShow::sampleHeader( ItSampleHeader& itSampleHeader )
         << "\nGlobal volume       : " << (unsigned)itSampleHeader.globalVolume
         << "\nFlags               : " << (unsigned)itSampleHeader.flag
         << "\nAssociated w/ header: " << ((itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER) ? "yes" : "no")
-        << "\n16 bit sample       : " << (is16bitData ? "yes" : "no")
+        << "\n16 bit sample       : " << (is16BitSample ? "yes" : "no")
         << "\nStereo sample       : " << (isStereoSample ? "yes" : "no")
         << "\nCompressed sample   : " << (isCompressed ? "yes" : "no")
         << "\nLoop                : " << ((itSampleHeader.flag & IT_SMP_LOOP_ON) ? "on" : "off")

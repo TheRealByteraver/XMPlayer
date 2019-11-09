@@ -28,45 +28,44 @@
 //#define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
-#define XM_DEBUG_SHOW_PATTERN_NO        0 // pattern to be shown
-#define XM_DEBUG_SHOW_MAX_CHN           16
+constexpr auto XM_DEBUG_SHOW_PATTERN_NO      = 0;// pattern to be shown
+constexpr auto XM_DEBUG_SHOW_MAX_CHN         = 16;
 
 //extern const char *noteStrings[2 + MAXIMUM_NOTES]; // for debugging
 
-#define XM_HEADER_SIZE_PART_ONE         60
-#define XM_MAX_SONG_NAME_LENGTH         20
-#define XM_TRACKER_NAME_LENGTH          20
-#define XM_MAX_INSTRUMENT_NAME_LENGTH   22
-#define XM_MAX_SAMPLE_NAME_LENGTH       22
-#define XM_MAX_SAMPLES_PER_INST         16
-#define XM_MAX_PATTERNS                 256
-#define XM_MAX_INSTRUMENTS              128
-#define XM_MAXIMUM_NOTES                (8 * 12)
-#define XM_MAX_ENVELOPE_POINTS          12
-#define XM_MIN_CHANNELS                 2
-#define XM_MAX_CHANNELS                 32
-#define XM_MAX_SONG_LENGTH              256
-#define XM_MAX_CHANNELS                 32
-#define XM_LINEAR_FREQUENCIES_FLAG      1
-#define XM_MAX_BPM                      0xFF
-#define XM_MAX_TEMPO                    0x1F
-#define XM_MAX_PATTERN_ROWS             256
-#define XM_NOTE_IS_PACKED               128
-#define XM_NOTE_AVAIL                   1
-#define XM_INSTRUMENT_AVAIL             2
-#define XM_VOLUME_COLUMN_AVAIL          4
-#define XM_EFFECT_AVAIL                 8
-#define XM_EFFECT_ARGUMENT_AVAIL        16
-#define XM_SAMPLE_LOOP_MASK             3   // 011b
-#define XM_PINGPONG_LOOP_FLAG           2
-#define XM_SIXTEEN_BIT_SAMPLE_FLAG      16
-#define XM_STANDARD_COMPRESSION         0
-#define XM_ADPCM_COMPRESSION            0xAD
-#define XM_KEY_OFF                      97  // 8 octaves, 1 based, plus 1
+constexpr auto XM_HEADER_SIZE_PART_ONE       = 60;
+constexpr auto XM_MAX_SONG_NAME_LENGTH       = 20;
+constexpr auto XM_TRACKER_NAME_LENGTH        = 20;
+constexpr auto XM_MAX_INSTRUMENT_NAME_LENGTH = 22;
+constexpr auto XM_MAX_SAMPLE_NAME_LENGTH     = 22;
+constexpr auto XM_MAX_SAMPLES_PER_INST       = 16;
+constexpr auto XM_MAX_PATTERNS               = 256;
+constexpr auto XM_MAX_INSTRUMENTS            = 128;
+constexpr auto XM_MAXIMUM_NOTES              = ( 8 * 12 );
+constexpr auto XM_MAX_ENVELOPE_POINTS        = 12;
+constexpr auto XM_MIN_CHANNELS               = 2;
+constexpr auto XM_MAX_CHANNELS               = 32;
+constexpr auto XM_MAX_SONG_LENGTH            = 256;
+constexpr auto XM_LINEAR_FREQUENCIES_FLAG    = 1;
+constexpr auto XM_MAX_BPM                    = 0xFF;
+constexpr auto XM_MAX_TEMPO                  = 0x1F;
+constexpr auto XM_MAX_PATTERN_ROWS           = 256;
+constexpr auto XM_NOTE_IS_PACKED             = 128;
+constexpr auto XM_NOTE_AVAIL                 = 1;
+constexpr auto XM_INSTRUMENT_AVAIL           = 2;
+constexpr auto XM_VOLUME_COLUMN_AVAIL        = 4;
+constexpr auto XM_EFFECT_AVAIL               = 8;
+constexpr auto XM_EFFECT_ARGUMENT_AVAIL      = 16;
+constexpr auto XM_SAMPLE_LOOP_MASK           = 3;  // 011b
+constexpr auto XM_PINGPONG_LOOP_FLAG         = 2;
+constexpr auto XM_SIXTEEN_BIT_SAMPLE_FLAG    = 16;
+constexpr auto XM_STANDARD_COMPRESSION       = 0;
+constexpr auto XM_ADPCM_COMPRESSION          = 0xAD;
+constexpr auto XM_KEY_OFF                    = 97; // 8 octaves, 1 based, plus 1
 
 #pragma pack (1)
 
-struct XmHeader {                   // the xmHeader of the xm file... global info.
+struct XmHeader {                     // the header of the xm file... global info.
     char              fileTag[17];    // = "Extended Module"
     char              songTitle[XM_MAX_SONG_NAME_LENGTH];  // Name of the XM
     unsigned char     id;             // 0x1A
@@ -188,14 +187,7 @@ int Module::loadXmFile()
         return 0;
     }
     trackerType_ = TRACKER_FT2;
-    //songTitle_ = "";
     songTitle_.assign( xmHeader.songTitle,XM_MAX_SONG_NAME_LENGTH );
-    //for ( int i = 0; i < XM_MAX_SONG_NAME_LENGTH; i++ )
-    //    songTitle_ += xmHeader.songTitle[i];
-    
-    //trackerTag_ = "";
-    //for ( int i = 0; i < XM_TRACKER_NAME_LENGTH; i++ ) 
-    //    trackerTag_ += xmHeader.trackerName[i];
     trackerTag_.assign( xmHeader.trackerName,XM_TRACKER_NAME_LENGTH );
     
     xmHeader.id             = 0; // use as zero terminator
@@ -347,7 +339,6 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
         // start reading sample headers:
         for ( unsigned sampleNr = 0; sampleNr < instHdr.nSamples; sampleNr++ ) {
             XmSampleHeader  xmSampleHeader;
-            //SampleHeader& sampleHeader = smpHdr[sampleNr];
             xmFile.read( &xmSampleHeader,sizeof( XmSampleHeader ) );
 
             xmFile.relSeek(
@@ -456,8 +447,7 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& smpHdr 
     signed char     oldSample8 = 0;
     signed char     newSample8 = 0;
 
-    smpHdr.data =
-        (SHORT *)xmFile.getSafePointer( smpHdr.length );
+    smpHdr.data = (SHORT *)xmFile.getSafePointer( smpHdr.length );
     xmFile.relSeek( smpHdr.length );
 
     if ( smpHdr.data == nullptr ) { // temp DEBUG:
@@ -466,7 +456,7 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& smpHdr 
             << "\nCan't get safe sample pointer, exiting!";
         return 0;
     }
-
+    // decode delta encoded sample data
     if ( smpHdr.dataType == SAMPLEDATA_SIGNED_16BIT ) {
         SHORT   *ps = (SHORT *)smpHdr.data;
         SHORT   *pd = ps;
@@ -480,7 +470,7 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& smpHdr 
         }
     } 
     else {
-        signed char *ps = (signed char *)(smpHdr.data);
+        signed char *ps = (signed char *)smpHdr.data;
         signed char *pd = ps;
         for ( unsigned iData = 0; iData < smpHdr.length; iData++ ) {
             newSample8 = *ps++ + oldSample8;
@@ -743,6 +733,7 @@ void XmDebugShow::illegalNote( int patternNr,int nRows,int idx,int note )
         << ": " << note << "\n";
     _getch();
 }
+
 void XmDebugShow::fileHeader( XmHeader& xmHeader )
 {
     std::cout
@@ -831,7 +822,7 @@ void XmDebugShow::sampleHeader( int sampleNr,SampleHeader& smpHdr )
 {
     std::cout
         << "\n\nSample # " << sampleNr << ":"
-        << "\nName             : " << smpHdr.name.c_str()
+        << "\nName             : " << smpHdr.name
         << "\nFinetune         : " << smpHdr.finetune
         << "\nLength           : " << smpHdr.length
         << "\nRepeatLength     : " << smpHdr.repeatLength

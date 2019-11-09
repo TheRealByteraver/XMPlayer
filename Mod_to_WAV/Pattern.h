@@ -36,13 +36,13 @@ public:
 
 class Pattern {
 public:
-    Pattern( unsigned nChannels,unsigned nRows, const std::vector<Note>& data ) :
+    Pattern( unsigned nChannels,unsigned nRows, std::vector<Note> data ) :
         nChannels_( nChannels ),
-        nRows_( nRows )
-    {
-        size_ = nChannels * nRows;
+        nRows_( nRows ),
+        size_ ( nChannels * nRows ),
+        data_ ( std::move ( data ) ) // no pattern compression for now
+    {        
         assert( size_ > 0 );
-        data_ = data;  // no pattern compression for now
     }
     unsigned        getnRows() 
     { 

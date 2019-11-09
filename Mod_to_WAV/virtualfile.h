@@ -6,11 +6,11 @@
 
 #include "assert.h"
 
-#define VIRTFILE_NO_ERROR           0
-#define VIRTFILE_EOF                1
-#define VIRTFILE_BUFFER_OVERRUN     2
-#define VIRTFILE_BUFFER_UNDERRUN    3
-#define VIRTFILE_READ_ERROR         10  // errors are fatal from 10 on
+constexpr auto VIRTFILE_NO_ERROR        = 0;
+constexpr auto VIRTFILE_EOF             = 1;
+constexpr auto VIRTFILE_BUFFER_OVERRUN  = 2;
+constexpr auto VIRTFILE_BUFFER_UNDERRUN = 3;
+constexpr auto VIRTFILE_READ_ERROR      = 10;  // errors are fatal from 10 on
 
 /*
     the seek and read functions return an IO error which can be read
@@ -100,7 +100,6 @@ public:
             return;
         }
         fileSize_ = file.tellg();
-        //data_ = new char[(int)fileSize_];
         data_ = std::make_unique < char[] > ( (int)fileSize_ );
         filePos_ = data_.get();
         fileEOF_ = data_.get() + (int)fileSize_;
@@ -110,14 +109,6 @@ public:
         ioError_ = VIRTFILE_NO_ERROR;
     }
     VirtualFile( const VirtualFile& virtualFile ) = delete;
-    //{
-    //    // copying this object is not allowed
-    //    exit( -1 );
-    //}
-    //~VirtualFile()
-    //{
-    //    delete[] data_;
-    //}
     IOError     getIOError()
     {
         IOError ioError = ioError_;

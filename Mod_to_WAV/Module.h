@@ -136,9 +136,6 @@ public:
     }
 
 private:
-    int             loadFile();
-
-private:
     std::string     fileName_;
     std::string     songTitle_;
     std::string     trackerTag_;
@@ -174,6 +171,8 @@ private:
         );
     Instrument      emptyInstrument_ = Instrument( InstrumentHeader() );
 
+private:
+    int             loadFile();
     int             loadItFile();
     int             loadXmFile();
     int             loadS3mFile();

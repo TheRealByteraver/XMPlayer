@@ -14,9 +14,8 @@
 Module::Module()
 {
     // initialize channels' panning
-    for ( int i = 0; i < PLAYER_MAX_CHANNELS; i++ ) {
+    for ( int i = 0; i < PLAYER_MAX_CHANNELS; i++ ) 
         defaultPanPositions_[i] = PANNING_CENTER;
-    }
 
     // sample nr 0 is always a dummy sample
     samples_[0] = std::make_unique<Sample>( SampleHeader() );
@@ -43,7 +42,7 @@ void Module::playSampleNr( int sampleNr )
             << ", hit any key to continue...";
             /*
             << "\nSample " << sampleNr << ": name     = "
-            << samples_[sampleNr]->getName().c_str()
+            << samples_[sampleNr]->getName()
             << "\nSample " << sampleNr << ": length   = "
             << samples_[sampleNr]->getLength()
             << "\nSample " << sampleNr << ": rep ofs  = "

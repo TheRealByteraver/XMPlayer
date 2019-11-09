@@ -2989,6 +2989,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
+        "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
@@ -3073,8 +3074,8 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\un-land.s3m",
         //"D:\\MODS\\dosprog\\mods\\un-vectr.s3m",
         //"D:\\MODS\\dosprog\\mods\\un-worm.s3m",
-        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
-        "D:\\MODS\\dosprog\\mods\\theend.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        //"D:\\MODS\\dosprog\\mods\\theend.mod",
         //"C:\\Users\\Erland-i5\\Desktop\\mods\\jz-scpsm2.xm",
         //"D:\\MODS\\dosprog\\music\\xm\\united_7.xm",
         //"D:\\MODS\\dosprog\\ctstoast.xm",
@@ -3102,7 +3103,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\tearhate.s3m",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.s3m",
         
-        "D:\\MODS\\MOD\\beastsong.mod",
+        //"D:\\MODS\\MOD\\beastsong.mod",
         //"D:\\MODS\\dosprog\\mods\\over2bg.xm",
         //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
@@ -3137,7 +3138,6 @@ int main( int argc, char *argv[] )
         "D:\\MODS\\dosprog\\mods\\baska.mod",
         "D:\\MODS\\dosprog\\mods\\bj-love.xm",
 //        "D:\\MODS\\dosprog\\mods\\probmod\\3demon.mod",
-        "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\mods\\probmod\\flt8_1.mod",
         /* */
         nullptr
@@ -3186,14 +3186,14 @@ int main( int argc, char *argv[] )
         moduleFile.enableDebugMode();
         moduleFile.loadFile( filePaths[i] );
 
-        std::cout << "\n\nLoading " << filePaths[i].c_str() // moduleFilename
+        std::cout << "\n\nLoading " << filePaths[i] // moduleFilename
                   << ": " << (moduleFile.isLoaded() ? "Success." : "Error!\n");
 
         if ( moduleFile.isLoaded () ) {
             /*
             unsigned s = BLOCK_SIZE / (MIXRATE * 2); // * 2 for stereo
             std::cout << "\nCompiling module \"" 
-                      << moduleFile.getSongTitle().c_str()  
+                      << moduleFile.getSongTitle()  
                       << "\" into " << (s / 60) << "m "
                       << (s % 60) << "s of 16 bit WAVE data\n" 
                       << "Hit any key to start mixing.\n";
@@ -3202,7 +3202,7 @@ int main( int argc, char *argv[] )
             for ( unsigned i = 1; i <= moduleFile.getnInstruments(); i++ ) {
                 std::cout 
                     << "\n" << i << ":" 
-                    << moduleFile.getInstrument( i ).getName().c_str();
+                    << moduleFile.getInstrument( i ).getName();
             }
             std::cout << "\n";
             mixer.initialize( &moduleFile );  
