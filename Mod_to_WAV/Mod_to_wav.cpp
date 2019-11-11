@@ -104,8 +104,8 @@ Fixed / cleared up:
 
 #define LINEAR_INTERPOLATION  // this constant is not used
 
-#define MIXRATE                 44100    // in Hz
-#define BLOCK_SIZE              0x4000   // Pref. bigger than 44100 * 4 / 60 ?
+#define MIXRATE                 44100      // in Hz
+#define BLOCK_SIZE              0x4000  // normally 0x4000
 #define SAMPLES_PER_BLOCK       (BLOCK_SIZE / 2) // 16bit == 2 bytes / sample
 
 // these are not used for now:
@@ -138,8 +138,12 @@ public:
     Sample*         pSample;
     unsigned        volume;
     unsigned        panning;
-    unsigned        iPanningEnvelope;
+
     unsigned        iVolumeEnvelope;
+    unsigned        iPanningEnvelope;
+    unsigned        iPitchFltrEnvelope;
+    bool            keyIsReleased;
+
     Note            oldNote;
     Note            newNote;
     unsigned        lastNote;
@@ -283,9 +287,10 @@ private: // debug
     int             playSample( unsigned fromChannel, Sample *sample, unsigned offset, bool direction );
     int             stopChannelPrimary( unsigned fromChannel );
     int             setVolumes();
-    int             updateImmediateEffects(); 
-    int             updateEffects();
     int             updateNotes();
+    int             updateEffects();
+    int             updateImmediateEffects();
+    int             updateEnvelopes();
     int             updateBpm();
     int             setBpm() 
     { 
@@ -1118,7 +1123,7 @@ int Mixer::setGlobalBalance( int balance )  // range: -100...0...+100
     return 0;
 }
 
-int Mixer::playSample ( 
+int Mixer::playSample (    // rename to playInstrument() ?
     unsigned    fromChannel, 
     Sample      *sample, 
     unsigned    sampleOffset, 
@@ -1157,6 +1162,15 @@ int Mixer::playSample (
         std::cout << "\nFailed to allocate mixer channel!\n";
         return -1;
     }
+
+    // added for envelope processing:
+    channels[fromChannel].iVolumeEnvelope = 0;
+    channels[fromChannel].iPanningEnvelope = 0;
+    channels[fromChannel].iPitchFltrEnvelope = 0;
+    channels[fromChannel].keyIsReleased = false;
+    // end of addition for envelopes
+
+
     mixerChannels[newMc].isActive = true;
     mixerChannels[newMc].isMaster = true;
     mixerChannels[newMc].isPlayingBackwards = direction;
@@ -1886,7 +1900,8 @@ int Mixer::updateNotes () {
                         }
                         case SET_PATTERN_LOOP: 
                         {
-                            if ( !xfxArg ) channel.patternLoopStart = patternRow;
+                            if ( !xfxArg ) 
+                                channel.patternLoopStart = patternRow;
                             else {
                                 if ( !channel.patternIsLooping ) { 
                                     channel.patternLoopCounter = xfxArg;
@@ -2816,10 +2831,17 @@ int Mixer::updateImmediateEffects ()
     return 0;
 }
 
+int Mixer::updateEnvelopes()
+{
+    for ( unsigned iChannel = 0; iChannel < nChannels; iChannel++ ) {
+
+    }
+}
+
 int Mixer::setVolumes () 
 {
     for (unsigned iChannel = 0; iChannel < nChannels; iChannel++) {
-        setMixerVolume(iChannel);
+        setMixerVolume( iChannel );
     }
     return 0;
 }
@@ -2988,8 +3010,10 @@ int main( int argc, char *argv[] )
     char        *modPaths[] = {
         //"D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
+        "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\05-rocket.it",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
-        "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
+  //      "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
         //"D:\\MODS\\M2W_BUGTEST\\women2.s3m",
@@ -3057,7 +3081,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\probmod\\nowwhat3.mod",
         //"D:\\MODS\\dosprog\\mods\\probmod\\xenolog1.mod",
         //"D:\\MODS\\dosprog\\mods\\menutune.s3m",
-        "D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\ssi.s3m",
         //"D:\\MODS\\mod_to_wav\\XM JL\\BIZARE.XM",
         //"D:\\MODS\\S3M\\Karsten Koch\\aryx.s3m",
         //"D:\\MODS\\dosprog\\mods\\women.s3m",
@@ -3109,34 +3133,34 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\mental.xm",
         //"D:\\MODS\\dosprog\\mods\\probmod\\chipmod\\MENTALbidi.xm",
         "D:\\MODS\\dosprog\\mods\\baska.mod",
-        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
-        "d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
+        //"d:\\Erland Backup\\C_SCHIJF\\erland\\bp7\\bin\\exe\\cd2part2.mod",
 //        "D:\\MODS\\dosprog\\audiopls\\crmx-trm.mod",
         //"D:\\MODS\\dosprog\\ctstoast.xm",
-        "D:\\MODS\\dosprog\\dope.mod",
+        //"D:\\MODS\\dosprog\\dope.mod",
 //        "D:\\MODS\\dosprog\\smokeoutstripped.xm",
         //"D:\\MODS\\dosprog\\smokeout.xm",
         //"D:\\MODS\\dosprog\\KNGDMSKY.XM",
         //"D:\\MODS\\dosprog\\KNGDMSKY-mpt.XM",
         //"D:\\MODS\\dosprog\\myrieh.xm",
-        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
-        "D:\\MODS\\dosprog\\chipmod\\crain.mod",
-        "D:\\MODS\\dosprog\\chipmod\\toybox.mod",
-        "D:\\MODS\\dosprog\\chipmod\\etanol.mod",
-        "D:\\MODS\\dosprog\\chipmod\\sac09.mod",
-        "D:\\MODS\\dosprog\\chipmod\\1.mod",
-        "D:\\MODS\\dosprog\\chipmod\\bbobble.mod",
-        "D:\\MODS\\dosprog\\chipmod\\asm94.mod",
-        "D:\\MODS\\dosprog\\chipmod\\4ma.mod",
-        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+
+        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\crain.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\toybox.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\etanol.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\sac09.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\1.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\bbobble.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\asm94.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\4ma.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\mods\\over2bg.xm",
         "D:\\MODS\\dosprog\\mods\\explorat.xm",
         "D:\\MODS\\dosprog\\mods\\devlpr94.xm",
-        "D:\\MODS\\dosprog\\mods\\bj-eyes.xm",
+        //"D:\\MODS\\dosprog\\mods\\bj-eyes.xm",
         "D:\\MODS\\dosprog\\mods\\1993.mod",
         "D:\\MODS\\dosprog\\mods\\1993.xm",
-        "D:\\MODS\\dosprog\\mods\\baska.mod",
-        "D:\\MODS\\dosprog\\mods\\bj-love.xm",
+        //"D:\\MODS\\dosprog\\mods\\baska.mod",
+        //"D:\\MODS\\dosprog\\mods\\bj-love.xm",
 //        "D:\\MODS\\dosprog\\mods\\probmod\\3demon.mod",
         "D:\\MODS\\dosprog\\mods\\probmod\\flt8_1.mod",
         /* */

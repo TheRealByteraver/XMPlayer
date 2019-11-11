@@ -166,17 +166,17 @@ private:
     Pattern         emptyPattern_ = 
         Pattern( 
             PLAYER_MAX_CHANNELS,
-            64,
-            std::vector<Note>( PLAYER_MAX_CHANNELS * 64 ) 
+            DEFAULT_NR_PATTERN_ROWS,
+            std::vector<Note>( PLAYER_MAX_CHANNELS * DEFAULT_NR_PATTERN_ROWS )
         );
     Instrument      emptyInstrument_ = Instrument( InstrumentHeader() );
 
 private:
     int             loadFile();
-    int             loadItFile();
-    int             loadXmFile();
-    int             loadS3mFile();
-    int             loadModFile();
+    int             loadItFile( VirtualFile& moduleFile );
+    int             loadXmFile( VirtualFile& moduleFile );
+    int             loadS3mFile( VirtualFile& moduleFile );
+    int             loadModFile( VirtualFile& moduleFile );
 
     int             loadItInstrument( 
         VirtualFile& itFile,

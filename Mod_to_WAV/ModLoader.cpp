@@ -43,6 +43,7 @@ constexpr auto MOD_DEBUG_SHOW_PATTERN_NO = 8; // pattern to be shown
 constexpr auto MOD_MAX_ILLEGAL_CHARS = 8;    // nr of illegal chars permitted in smp names
 constexpr auto MOD_ROWS = 64;   // always 64 rows in a MOD pattern
 constexpr auto MOD_MAX_SONGNAME_LENGTH = 20;
+constexpr auto MOD_MAX_SAMPLENAME_LENGTH = 22;
 constexpr auto MOD_MAX_PATTERNS = 128;
 constexpr auto MOD_MAX_CHANNELS = 32;
 constexpr auto MOD_DEFAULT_BPM = 125;
@@ -57,7 +58,7 @@ constexpr auto MOD_MAX_PERIOD = 7248; // chosen a bit arbitrarily!;
 
 #pragma pack (1) 
 struct ModSampleHeader { 
-    char            name[MAX_SAMPLENAME_LENGTH];
+    char            name[MOD_MAX_SAMPLENAME_LENGTH];
     AMIGAWORD       length;         // Big-End Word; * 2 = samplelength in bytes
     char            finetune;       // This is in fact a signed nibble 
     unsigned char   linearVolume;
@@ -102,11 +103,14 @@ public:
     static void     remapEffects( Effect& remapFx );
 };
 
-int Module::loadModFile() 
+int Module::loadModFile( VirtualFile& moduleFile )
 {
-    VirtualFile modFile( fileName_ );
-    if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) 
-        return 0;
+    //VirtualFile modFile( fileName_ );
+    //if ( modFile.getIOError() != VIRTFILE_NO_ERROR ) 
+    //    return 0;
+
+    moduleFile.absSeek( 0 );
+    VirtualFile& modFile = moduleFile;    
     unsigned fileSize = modFile.fileSize();
 
     // initialize mod specific variables:
@@ -326,7 +330,7 @@ int Module::loadModFile()
         smpHdr.name.clear();        
         smpHdr.name.append( 
             headerMK.samples[sampleNr - 1].name,
-            MAX_SAMPLENAME_LENGTH );
+            MOD_MAX_SAMPLENAME_LENGTH );
         instHdr.name = smpHdr.name;
         //instrument.nSamples = 1; // redundant?
         for ( int i = 0; i < MAXIMUM_NOTES; i++ ) {
@@ -643,7 +647,7 @@ int ModHelperFn::badCommentCnt( const char *comment )
     char allowed[] = "\xD\xE !\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`" \
         "abcdefghijklmnopqrstuvwxyz{|}~";
     int r = 0;
-    for ( int i = 0; i < MAX_SAMPLENAME_LENGTH; i++ )
+    for ( int i = 0; i < MOD_MAX_SAMPLENAME_LENGTH; i++ )
         if ( !strchr( allowed,tolower( comment[i] ) ) ) 
             r++;
     return r;

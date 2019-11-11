@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "Module.h"
+#include "virtualfile.h"
 
 Module::Module()
 {
@@ -172,15 +173,21 @@ void Module::playSampleNr( int sampleNr )
 }
 
 int Module::loadFile() {
+    assert( isLoaded() == false );
+
+    VirtualFile virtualFile( fileName_ );
+    if ( virtualFile.getIOError() != NO_ERROR )
+        return -1;
+
     int result = -1;
     if ( !isLoaded() ) 
-        result = loadS3mFile();
+        result = loadS3mFile( virtualFile );
     if ( !isLoaded() ) 
-        result = loadXmFile();
+        result = loadXmFile( virtualFile );
     if ( !isLoaded() ) 
-        result = loadItFile();
+        result = loadItFile( virtualFile );
     if ( !isLoaded() ) 
-        result = loadModFile();
+        result = loadModFile( virtualFile );
     return result;
 }
 

@@ -61,28 +61,34 @@ constexpr auto PANNING_STYLE_IT     = 4;
 constexpr auto MARKER_PATTERN       = 254;  // S3M/IT compatibility
 constexpr auto END_OF_SONG_MARKER   = 255;  // S3M/IT end of song marker
 
+constexpr auto DEFAULT_NR_PATTERN_ROWS      = 64;
 constexpr auto MAX_VOLUME                   = 64;
-constexpr auto MAX_SAMPLENAME_LENGTH        = 22;
-constexpr auto MAX_INSTRUMENTNAME_LENGTH    = (MAX_SAMPLENAME_LENGTH + 2);
-constexpr auto MAX_PATTERNS                 = 256;
-constexpr auto MAX_INSTRUMENTS              = 256;
-constexpr auto MAX_SAMPLES                  = (128 * 16); // FT2
-constexpr auto SAMPLEDATA_EXTENSION         = 256; // add 256 samples to the data for noise reduction
-constexpr auto SAMPLEDATA_TYPE_UNKNOWN      = 64;
+constexpr auto MAX_PATTERNS                 = 254; // 0 .. 253
+constexpr auto MAX_INSTRUMENTS              = 255; // 1 .. 255
+constexpr auto MAX_SAMPLES                  = 128 * 16 - 1; // FT2 compatibility
+constexpr auto SAMPLEDATA_EXTENSION         = 128; // add 128 samples to the data for noise reduction
 constexpr auto SAMPLEDATA_UNSIGNED_8BIT     = 0;   // 1st bit set == signed data
 constexpr auto SAMPLEDATA_SIGNED_8BIT       = 1;
-constexpr auto SAMPLEDATA_UNSIGNED_16BIT    = 2;  // 2nd bit set == 16bit data
+constexpr auto SAMPLEDATA_UNSIGNED_16BIT    = 2;   // 2nd bit set == 16bit data
 constexpr auto SAMPLEDATA_SIGNED_16BIT      = 3;
+constexpr auto SAMPLEDATA_TYPE_UNKNOWN      = 64;  // safety
 constexpr auto INTERPOLATION_SPACER         = 2;
 constexpr auto MAX_EFFECT_COLUMNS           = 2;
-constexpr auto MAXIMUM_NOTES                = (11 * 12);
+constexpr auto MAXIMUM_NOTES                = 11 * 12;
 constexpr auto PLAYER_MAX_CHANNELS          = 32;
 constexpr auto PANNING_FULL_LEFT            = 0;
 constexpr auto PANNING_MAX_STEPS            = 256; // must be a power of two
 constexpr auto PANNING_SHIFT                = 8;   // divide by 256 <=> SHR 8
-constexpr auto PANNING_CENTER               = (PANNING_MAX_STEPS / 2);
-constexpr auto PANNING_FULL_RIGHT           = (PANNING_MAX_STEPS - 1);
+constexpr auto PANNING_CENTER               = PANNING_MAX_STEPS / 2 - 1;
+constexpr auto PANNING_FULL_RIGHT           = PANNING_MAX_STEPS - 1;
+constexpr auto MAX_ENVELOPE_POINTS          = 25;  // XM has 12, IT has 25
+constexpr auto ENVELOPE_IS_ENABLED_FLAG     = 1;
+constexpr auto ENVELOPE_IS_SUSTAINED_FLAG   = 2;
+constexpr auto ENVELOPE_IS_LOOPED_FLAG      = 4;
 
+
+// direction indicating how the sample is being played in the mixer.
+// this is necessary for ping pong loops
 constexpr auto FORWARD = false;
 constexpr auto BACKWARD = true;
 

@@ -165,7 +165,6 @@ struct ItOldInstHeader {
     unsigned char   reserved2;
     char            name[IT_INST_NAME_LENGTH];
     unsigned char   reserved3[6];
-    //unsigned char   sampleForNote[240];
     ItNoteSampleMap sampleForNote[120];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
     unsigned char   nodes[25 * 2];       // ?
@@ -211,7 +210,6 @@ struct ItNewInstHeader {
     unsigned char   midiChannel;
     unsigned char   midiProgram;
     unsigned short  midiBank;
-    //unsigned char   sampleForNote[240];
     ItNoteSampleMap sampleForNote[120];
     ItNewEnvelope   volumeEnvelope;
     ItNewEnvelope   panningEnvelope;
@@ -260,18 +258,20 @@ public:
     static void pattern( Pattern& Pattern );
 };
 
-int Module::loadItFile()
+int Module::loadItFile( VirtualFile& moduleFile )
 {
-    VirtualFile itFile( fileName_ );
-    if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
-        return 0;
+    //VirtualFile itFile( fileName_ );
+    //if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
+    //    return 0;
+    moduleFile.absSeek( 0 );
+    VirtualFile& itFile = moduleFile;
 
     ItFileHeader itFileHeader;
     itFile.read( &itFileHeader,sizeof( itFileHeader ) );
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
 
-    songTitle_.assign( itFileHeader.songName,26 );
+    songTitle_.assign( itFileHeader.songName,IT_SONG_NAME_LENGTH );
     trackerTag_.assign( itFileHeader.tag,4 );
 
     // some very basic checking
@@ -438,9 +438,10 @@ int Module::loadItInstrument(
         unsigned char   nodes[25 * 2];       // ?
         */
         instrumentHeader.name = itInstHeader.name;
+        instrumentHeader.name.assign( itInstHeader.name,IT_INST_NAME_LENGTH );
         //instrumentHeader.nSamples = 0;       // can probably be removed
-        instrumentHeader.volumeLoopStart = itInstHeader.volumeLoopStart;
-        instrumentHeader.volumeLoopEnd = itInstHeader.volumeLoopEnd;
+        instrumentHeader.volumeEnvelope.loopStart = itInstHeader.volumeLoopStart;
+        instrumentHeader.volumeEnvelope.loopEnd = itInstHeader.volumeLoopEnd;
 
         for ( int n = 0; n < IT_MAX_NOTE; n++ ) {
             instrumentHeader.sampleForNote[n].note =

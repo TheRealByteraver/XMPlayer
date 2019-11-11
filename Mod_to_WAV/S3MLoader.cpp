@@ -131,13 +131,16 @@ public:
 
 void remapS3mEffects( Effect& remapFx ); // temp forward declaration
 
-int Module::loadS3mFile() {
+int Module::loadS3mFile( VirtualFile& moduleFile ) {
     //isLoaded_ = false; redundant
 
     // load file into byte buffer and then work on that buffer only
-    VirtualFile s3mFile( fileName_ );
-    if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) 
-        return 0;
+    //VirtualFile s3mFile( fileName_ );
+    //if ( s3mFile.getIOError() != VIRTFILE_NO_ERROR ) 
+    //    return 0;
+    moduleFile.absSeek( 0 );
+    VirtualFile& s3mFile = moduleFile;
+
     S3mFileHeader s3mFileHdr;
     unsigned fileSize = s3mFile.fileSize();
     if ( s3mFile.read( &s3mFileHdr,sizeof( S3mFileHeader ) ) ) 

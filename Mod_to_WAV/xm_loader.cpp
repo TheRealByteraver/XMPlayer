@@ -31,8 +31,6 @@
 constexpr auto XM_DEBUG_SHOW_PATTERN_NO      = 0;// pattern to be shown
 constexpr auto XM_DEBUG_SHOW_MAX_CHN         = 16;
 
-//extern const char *noteStrings[2 + MAXIMUM_NOTES]; // for debugging
-
 constexpr auto XM_HEADER_SIZE_PART_ONE       = 60;
 constexpr auto XM_MAX_SONG_NAME_LENGTH       = 20;
 constexpr auto XM_TRACKER_NAME_LENGTH        = 20;
@@ -41,8 +39,11 @@ constexpr auto XM_MAX_SAMPLE_NAME_LENGTH     = 22;
 constexpr auto XM_MAX_SAMPLES_PER_INST       = 16;
 constexpr auto XM_MAX_PATTERNS               = 256;
 constexpr auto XM_MAX_INSTRUMENTS            = 128;
-constexpr auto XM_MAXIMUM_NOTES              = ( 8 * 12 );
+constexpr auto XM_MAXIMUM_NOTES              = 8 * 12;
 constexpr auto XM_MAX_ENVELOPE_POINTS        = 12;
+constexpr auto XM_ENVELOPE_IS_ENABLED_FLAG   = 1;
+constexpr auto XM_ENVELOPE_IS_SUSTAINED_FLAG = 2;
+constexpr auto XM_ENVELOPE_IS_LOOPED_FLAG    = 4;
 constexpr auto XM_MIN_CHANNELS               = 2;
 constexpr auto XM_MAX_CHANNELS               = 32;
 constexpr auto XM_MAX_SONG_LENGTH            = 256;
@@ -109,8 +110,8 @@ struct XmInstrumentHeader2 {
     unsigned short    sampleHeaderSize;
     unsigned short    reserved;            // !!!
     unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
-    XmEnvelopePoint   volumeEnvelope[12]; 
-    XmEnvelopePoint   panningEnvelope[12];
+    XmEnvelopePoint   volumeEnvelope[XM_MAX_ENVELOPE_POINTS];
+    XmEnvelopePoint   panningEnvelope[XM_MAX_ENVELOPE_POINTS];
     unsigned char     nVolumePoints;
     unsigned char     nPanningPoints;
     unsigned char     volumeSustain;
@@ -155,14 +156,16 @@ public:
     static void illegalNote( int patternNr,int nRows,int idx,int note );
 };
 
-int Module::loadXmFile() 
+int Module::loadXmFile( VirtualFile& moduleFile )
 {
-    unsigned fileSize = 0;
-    isLoaded_ = false;
-    VirtualFile xmFile( fileName_ );
-    if ( xmFile.getIOError() != VIRTFILE_NO_ERROR ) 
-        return 0;
-    fileSize = xmFile.fileSize();
+    //unsigned fileSize = 0;
+    //isLoaded_ = false;
+    //VirtualFile xmFile( fileName_ );
+    //if ( xmFile.getIOError() != VIRTFILE_NO_ERROR ) 
+    //    return 0;
+    moduleFile.absSeek( 0 );
+    VirtualFile& xmFile = moduleFile;
+    unsigned fileSize = xmFile.fileSize();
 
     XmHeader xmHeader;
     if ( xmFile.read( &xmHeader,sizeof( XmHeader ) ) ) 
@@ -256,7 +259,6 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
         std::cout << "\n\nInstrument header " << instrumentNr << ":";
         XmDebugShow::instHeader1( xmInstHdr1 );
     }
-
     // Necessary for packed xm files:
     if ( xmInstHdr1.headerSize < sizeof( XmInstrumentHeader1 ) )
         xmInstHdr1.nSamples = 0;
@@ -264,10 +266,8 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
     if ( xmInstHdr1.nSamples == 0 ) {
         if ( xmInstHdr1.headerSize >=
             sizeof( XmInstrumentHeader1 ) )
-            instHdr.name.append(
+            instHdr.name.assign(
                 xmInstHdr1.name,XM_MAX_INSTRUMENT_NAME_LENGTH );
-        else
-            instHdr.name = "";
         instHdr.nSamples = 0;
 
         // Correct file pointer according to header size in file:
@@ -296,40 +296,81 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             return 0;
         }
 
-        instHdr.name.append(
+        instHdr.name.assign(
             xmInstHdr1.name,XM_MAX_INSTRUMENT_NAME_LENGTH );
 
-        // take care of enveloppes
-        for ( unsigned i = 0; i < XM_MAX_ENVELOPE_POINTS; i++ ) {
-            instHdr.volumeEnvelope[i].x  = xmInstHdr2.volumeEnvelope[i].x;
-            instHdr.volumeEnvelope[i].y  = xmInstHdr2.volumeEnvelope[i].y;
-            instHdr.panningEnvelope[i].x = xmInstHdr2.panningEnvelope[i].x;
-            instHdr.panningEnvelope[i].y = xmInstHdr2.panningEnvelope[i].y;
-            if ( showDebugInfo_ )
-                std::cout
-                << "\nEnveloppe point nr " << i << ": "
-                << instHdr.volumeEnvelope[i].x << ","
-                << instHdr.volumeEnvelope[i].y;
+        // take care of envelopes. First, range checking:
+        if ( xmInstHdr2.nVolumePoints > XM_MAX_ENVELOPE_POINTS )
+            xmInstHdr2.nVolumePoints = XM_MAX_ENVELOPE_POINTS;
+        if ( xmInstHdr2.nPanningPoints > XM_MAX_ENVELOPE_POINTS )
+            xmInstHdr2.nPanningPoints = XM_MAX_ENVELOPE_POINTS;
+
+        // initialize volume envelope parameters. 1st the volume envelope:
+        unsigned char flags = 0;
+        if ( xmInstHdr2.volumeType & XM_ENVELOPE_IS_ENABLED_FLAG )
+            flags |= ENVELOPE_IS_ENABLED_FLAG;
+        if ( xmInstHdr2.volumeType & XM_ENVELOPE_IS_SUSTAINED_FLAG )
+            flags |= ENVELOPE_IS_SUSTAINED_FLAG;
+        if ( xmInstHdr2.volumeType & XM_ENVELOPE_IS_LOOPED_FLAG )
+            flags |= ENVELOPE_IS_LOOPED_FLAG;
+        instHdr.volumeEnvelope.setFlags( flags );
+
+        // and now the panning envelope:
+        flags = 0;
+        if ( xmInstHdr2.panningType & XM_ENVELOPE_IS_ENABLED_FLAG )
+            flags |= ENVELOPE_IS_ENABLED_FLAG;
+        if ( xmInstHdr2.panningType & XM_ENVELOPE_IS_SUSTAINED_FLAG )
+            flags |= ENVELOPE_IS_SUSTAINED_FLAG;
+        if ( xmInstHdr2.panningType & XM_ENVELOPE_IS_LOOPED_FLAG )
+            flags |= ENVELOPE_IS_LOOPED_FLAG;
+        instHdr.panningEnvelope.setFlags( flags );
+
+        // copy volume envelope:
+        for ( unsigned i = 0; i < xmInstHdr2.nVolumePoints; i++ ) {
+            instHdr.volumeEnvelope.points[i].x  = xmInstHdr2.volumeEnvelope[i].x;
+            instHdr.volumeEnvelope.points[i].y  = 
+                (unsigned char)xmInstHdr2.volumeEnvelope[i].y;
+            //if ( showDebugInfo_ )
+            //    std::cout
+            //    << "\nVolume envelope point nr " << i << ": "
+            //    << instHdr.volumeEnvelope.points[i].x << ","
+            //    << (unsigned)(instHdr.volumeEnvelope.points[i].y);
         }
-        instHdr.nVolumePoints    = xmInstHdr2.nVolumePoints;
-        instHdr.volumeSustain    = xmInstHdr2.volumeSustain;
-        instHdr.volumeLoopStart  = xmInstHdr2.volumeLoopStart;
-        instHdr.volumeLoopEnd    = xmInstHdr2.volumeLoopEnd;
-        instHdr.volumeType       = xmInstHdr2.volumeType;
-        instHdr.volumeFadeOut    = xmInstHdr2.volumeFadeOut;
-        instHdr.nPanningPoints   = xmInstHdr2.nPanningPoints;
-        instHdr.panningSustain   = xmInstHdr2.panningSustain;
-        instHdr.panningLoopStart = xmInstHdr2.panningLoopStart;
-        instHdr.panningLoopEnd   = xmInstHdr2.panningLoopEnd;
-        instHdr.panningType      = xmInstHdr2.panningType;
-        instHdr.vibratoType      = xmInstHdr2.vibratoType;
-        instHdr.vibratoSweep     = xmInstHdr2.vibratoSweep;
-        instHdr.vibratoDepth     = xmInstHdr2.vibratoDepth;
-        instHdr.vibratoRate      = xmInstHdr2.vibratoRate;
+        instHdr.volumeEnvelope.nrPoints = xmInstHdr2.nVolumePoints;
+        instHdr.volumeEnvelope.sustain = xmInstHdr2.volumeSustain;
+        instHdr.volumeEnvelope.loopStart = xmInstHdr2.volumeLoopStart;
+        instHdr.volumeEnvelope.loopEnd = xmInstHdr2.volumeLoopEnd;
+
+        // copy panning envelope:
+        for ( unsigned i = 0; i < xmInstHdr2.nPanningPoints; i++ ) {
+            instHdr.panningEnvelope.points[i].x = xmInstHdr2.panningEnvelope[i].x;
+            instHdr.panningEnvelope.points[i].y = 
+                (unsigned char)xmInstHdr2.panningEnvelope[i].y;
+            //if ( showDebugInfo_ )
+            //    std::cout
+            //    << "\nPanning envelope point nr " << i << ": "
+            //    << instHdr.panningEnvelope.points[i].x << ","
+            //    << (unsigned)(instHdr.panningEnvelope.points[i].y);
+        }
+        instHdr.panningEnvelope.nrPoints = xmInstHdr2.nPanningPoints;
+        instHdr.panningEnvelope.sustain = xmInstHdr2.panningSustain;
+        instHdr.panningEnvelope.loopStart = xmInstHdr2.panningLoopStart;
+        instHdr.panningEnvelope.loopEnd = xmInstHdr2.panningLoopEnd;
+
+        // copy some more miscellaneous parameters:
+        instHdr.volumeFadeOut = xmInstHdr2.volumeFadeOut;
+        instHdr.vibratoConfig.type = xmInstHdr2.vibratoType;
+        instHdr.vibratoConfig.sweep = xmInstHdr2.vibratoSweep;
+        instHdr.vibratoConfig.depth = xmInstHdr2.vibratoDepth;
+        instHdr.vibratoConfig.rate = xmInstHdr2.vibratoRate;
+
         if ( showDebugInfo_ )
-            std::cout
-            << "\nSample xm header size for this instHdr : "
-            << xmInstHdr2.sampleHeaderSize << "\n";
+            XmDebugShow::instHeader2( xmInstHdr2 );
+
+        //if ( showDebugInfo_ )
+        //    std::cout
+        //    << "\nSample xm header size for this instHdr : "
+        //    << xmInstHdr2.sampleHeaderSize << "\n";
     } // done reading instHdr, except for sample-for-note table
 
     if ( instHdr.nSamples ) {
@@ -736,9 +777,17 @@ void XmDebugShow::illegalNote( int patternNr,int nRows,int idx,int note )
 
 void XmDebugShow::fileHeader( XmHeader& xmHeader )
 {
+    std::string fileTag;
+    std::string songTitle;
+    std::string trackerName;
+    fileTag.assign( xmHeader.fileTag,17 );
+    songTitle.assign( xmHeader.songTitle,XM_MAX_SONG_NAME_LENGTH );
+    trackerName.assign( xmHeader.trackerName,XM_TRACKER_NAME_LENGTH );
+
     std::cout
-        << "\nXM Module title          : " << xmHeader.songTitle // ? to correct
-        << "\nXM file Tracker ID       : " << xmHeader.fileTag   // ? to correct
+        << "\nXM Module tag            : " << fileTag
+        << "\nXM Module title          : " << songTitle
+        << "\nXM Module tracker name   : " << trackerName
         << std::hex
         << "\nXM file version          : " << xmHeader.version << std::dec
         << "\nNr of channels           : " << xmHeader.nChannels
@@ -776,64 +825,50 @@ void XmDebugShow::instHeader2( XmInstrumentHeader2& xmInstHdr2 )
     std::cout
         << "\nSample hdr size  : " << xmInstHdr2.sampleHeaderSize
         << "\nSmp hdr sz. (res): " << xmInstHdr2.reserved
-        /*
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        << "\n                 : " << xmInstHdr2
-        */
-        ;
-
-/*
-    unsigned short    sampleHeaderSize;
-    unsigned short    reserved;       // !!!
-    unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
-    XmEnvelopePoint   volumeEnvelope[12];
-    XmEnvelopePoint   panningEnvelope[12];
-    unsigned char     nVolumePoints;
-    unsigned char     nPanningPoints;
-    unsigned char     volumeSustain;
-    unsigned char     volumeLoopStart;
-    unsigned char     volumeLoopEnd;
-    unsigned char     panningSustain;
-    unsigned char     panningLoopStart;
-    unsigned char     panningLoopEnd;
-    unsigned char     volumeType;
-    unsigned char     panningType;
-    unsigned char     vibratoType;
-    unsigned char     vibratoSweep;
-    unsigned char     vibratoDepth;
-    unsigned char     vibratoRate;
-    unsigned short    volumeFadeOut;
-*/
+       
+        << "\n# vol. env. pts  : " << (unsigned)xmInstHdr2.nVolumePoints
+        << "\nvol. loop start @: " << (unsigned)xmInstHdr2.volumeLoopStart
+        << "\nvol. loop End @  : " << (unsigned)xmInstHdr2.volumeLoopEnd
+        << "\nvol. sustain @   : " << (unsigned)xmInstHdr2.volumeSustain
+        << "\nvol. env. enabled: " 
+        << ((xmInstHdr2.volumeType & XM_ENVELOPE_IS_ENABLED_FLAG) ? "yes" : "no")
+        << "\nvol. env. sustain: "
+        << ((xmInstHdr2.volumeType & XM_ENVELOPE_IS_SUSTAINED_FLAG) ? "yes" : "no")
+        << "\nvol. env. looped : "
+        << ((xmInstHdr2.volumeType & XM_ENVELOPE_IS_LOOPED_FLAG) ? "yes" : "no")
+        << "\n# panning Pts    : " << (unsigned)xmInstHdr2.nPanningPoints
+        << "\npanning sustain @: " << (unsigned)xmInstHdr2.panningSustain
+        << "\npan. loop Start @: " << (unsigned)xmInstHdr2.panningLoopStart
+        << "\npan. loop End @  : " << (unsigned)xmInstHdr2.panningLoopEnd
+        << "\npan. env. enabled: "
+        << ((xmInstHdr2.panningType & XM_ENVELOPE_IS_ENABLED_FLAG) ? "yes" : "no")
+        << "\npan. env. sustain: "
+        << ((xmInstHdr2.panningType & XM_ENVELOPE_IS_SUSTAINED_FLAG) ? "yes" : "no")
+        << "\npan. env. looped : "
+        << ((xmInstHdr2.panningType & XM_ENVELOPE_IS_LOOPED_FLAG) ? "yes" : "no")
+        << "\nvolumeFadeOut    : " << xmInstHdr2.volumeFadeOut
+        << "\nvibratoType      : " << (unsigned)xmInstHdr2.vibratoType
+        << "\nvibratoDepth     : " << (unsigned)xmInstHdr2.vibratoDepth
+        << "\nvibratoRate      : " << (unsigned)xmInstHdr2.vibratoRate
+        << "\nvibratoSweep     : " << (unsigned)xmInstHdr2.vibratoSweep;
 }
 
 void XmDebugShow::sampleHeader( int sampleNr,SampleHeader& smpHdr )
 {
     std::cout
-        << "\n\nSample # " << sampleNr << ":"
-        << "\nName             : " << smpHdr.name
-        << "\nFinetune         : " << smpHdr.finetune
-        << "\nLength           : " << smpHdr.length
-        << "\nRepeatLength     : " << smpHdr.repeatLength
-        << "\nRepeatOffset     : " << smpHdr.repeatOffset
-        << "\nRepeatSample     : " << smpHdr.isRepeatSample
-        << "\nVolume           : " << smpHdr.volume
-        << "\nRelative Note    : " << smpHdr.relativeNote
-        << "\nPanning          : " << smpHdr.panning
-        << "\n16 bit sample    : "
+        << "\n\n    Sample # " << sampleNr << ":"
+        << "\n    Name             : " << smpHdr.name
+        << "\n    Finetune         : " << smpHdr.finetune
+        << "\n    Length           : " << smpHdr.length
+        << "\n    RepeatLength     : " << smpHdr.repeatLength
+        << "\n    RepeatOffset     : " << smpHdr.repeatOffset
+        << "\n    RepeatSample     : " << smpHdr.isRepeatSample
+        << "\n    Volume           : " << smpHdr.volume
+        << "\n    Relative Note    : " << smpHdr.relativeNote
+        << "\n    Panning          : " << smpHdr.panning
+        << "\n    16 bit sample    : "
         << ((smpHdr.dataType == SAMPLEDATA_SIGNED_16BIT) ? "Yes" : "No")
-        << "\nPing Loop active : " 
+        << "\n    Ping Loop active : " 
         << (smpHdr.isPingpongSample ? "Yes" : "No");
 }
 
