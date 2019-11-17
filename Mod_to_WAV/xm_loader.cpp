@@ -40,7 +40,7 @@ constexpr auto XM_MAX_SAMPLES_PER_INST       = 16;
 constexpr auto XM_MAX_PATTERNS               = 256;
 constexpr auto XM_MAX_INSTRUMENTS            = 128;
 constexpr auto XM_MAXIMUM_NOTES              = 8 * 12;
-constexpr auto XM_MAX_ENVELOPE_POINTS        = 12;
+constexpr auto XM_MAX_ENVELOPE_NODES         = 12;
 constexpr auto XM_ENVELOPE_IS_ENABLED_FLAG   = 1;
 constexpr auto XM_ENVELOPE_IS_SUSTAINED_FLAG = 2;
 constexpr auto XM_ENVELOPE_IS_LOOPED_FLAG    = 4;
@@ -66,20 +66,21 @@ constexpr auto XM_KEY_OFF                    = 97; // 8 octaves, 1 based, plus 1
 
 #pragma pack (1)
 
-struct XmHeader {                     // the header of the xm file... global info.
-    char              fileTag[17];    // = "Extended Module"
-    char              songTitle[XM_MAX_SONG_NAME_LENGTH];  // Name of the XM
-    unsigned char     id;             // 0x1A
+// the header of the xm file... global info.
+struct XmHeader {    
+    char              fileTag[17];                        // = "Extended Module"
+    char              songTitle[XM_MAX_SONG_NAME_LENGTH]; // Name of the XM
+    unsigned char     id;                                 // 0x1A
     char              trackerName[XM_TRACKER_NAME_LENGTH];// = "FastTracker v2.00"
-    unsigned short    version;        // 0x01 0x04
-    unsigned short    headerSize;     // size of xmHeader from here: min. 20 + 1 bytes
+    unsigned short    version;                            // 0x01 0x04
+    unsigned short    headerSize;       // size of xmHeader from here: min. 20 + 1 bytes
     unsigned short    reserved; 
     unsigned short    songLength;
     unsigned short    songRestartPosition;
-    unsigned short    nChannels;
+    unsigned short    nrChannels;
     unsigned short    nPatterns;
     unsigned short    nInstruments;
-    unsigned short    flags;       // 0 = Amiga frequency table 1 = Linear frequency table
+    unsigned short    flags;            // 0 = Amiga frequency table 1 = Linear frequency table
     unsigned short    defaultTempo;   
     unsigned short    defaultBpm;     
     unsigned char     patternTable[XM_MAX_SONG_LENGTH];
@@ -101,7 +102,7 @@ struct XmInstrumentHeader1 {
     unsigned short    nSamples;
 };                                 // sizeof == 29 bytes
 
-struct XmEnvelopePoint {
+struct XmEnvelopeNode {
     unsigned short  x;
     unsigned short  y;
 };
@@ -110,10 +111,10 @@ struct XmInstrumentHeader2 {
     unsigned short    sampleHeaderSize;
     unsigned short    reserved;            // !!!
     unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
-    XmEnvelopePoint   volumeEnvelope[XM_MAX_ENVELOPE_POINTS];
-    XmEnvelopePoint   panningEnvelope[XM_MAX_ENVELOPE_POINTS];
-    unsigned char     nVolumePoints;
-    unsigned char     nPanningPoints;
+    XmEnvelopeNode    volumeEnvelope[XM_MAX_ENVELOPE_NODES];
+    XmEnvelopeNode    panningEnvelope[XM_MAX_ENVELOPE_NODES];
+    unsigned char     nrVolumeNodes;
+    unsigned char     nrPanningNodes;
     unsigned char     volumeSustain;
     unsigned char     volumeLoopStart;
     unsigned char     volumeLoopEnd;
@@ -152,7 +153,7 @@ public:
     static void instHeader2( XmInstrumentHeader2& xmInstrumentHeader2 );
     static void sampleHeader( int sampleNr,SampleHeader& sampleHeader );
     static void patternHeader( int patternNr,XmPatternHeader& xmPatternHeader );
-    static void pattern( Pattern & pattern,int nChannels );
+    static void pattern( Pattern & pattern,int nrChannels );
     static void illegalNote( int patternNr,int nRows,int idx,int note );
 };
 
@@ -179,8 +180,8 @@ int Module::loadXmFile( VirtualFile& moduleFile )
         //(xmHeader.id != 0x1A                         ) ||  // removed for stripped xm compatibility
         //((xmHeader.version >> 8) != 1                ) ||  // removed for stripped xm compatibility
         (xmHeader.songLength     > XM_MAX_SONG_LENGTH) ||
-        (xmHeader.nChannels      > XM_MAX_CHANNELS   ) ||
-        (xmHeader.nChannels      < XM_MIN_CHANNELS   ) ||
+        (xmHeader.nrChannels      > XM_MAX_CHANNELS   ) ||
+        (xmHeader.nrChannels      < XM_MIN_CHANNELS   ) ||
         (xmHeader.nInstruments   > XM_MAX_INSTRUMENTS) ||
         (xmHeader.nPatterns      > XM_MAX_PATTERNS)    ||
         (xmHeader.defaultBpm     > XM_MAX_BPM)         ||
@@ -197,10 +198,10 @@ int Module::loadXmFile( VirtualFile& moduleFile )
     useLinearFrequencies_   = (bool)(xmHeader.flags & XM_LINEAR_FREQUENCIES_FLAG);
     isCustomRepeat_         = true;
     panningStyle_           = PANNING_STYLE_XM;
-    nChannels_              = xmHeader.nChannels;
-    nInstruments_           = xmHeader.nInstruments;
-    nSamples_               = 0;
-    nPatterns_              = xmHeader.nPatterns;
+    nrChannels_             = xmHeader.nrChannels;
+    nrInstruments_          = xmHeader.nInstruments;
+    nrSamples_              = 0;
+    nrPatterns_             = xmHeader.nPatterns;
     defaultTempo_           = xmHeader.defaultTempo;
     defaultBpm_             = xmHeader.defaultBpm;
     songLength_             = xmHeader.songLength;
@@ -215,7 +216,7 @@ int Module::loadXmFile( VirtualFile& moduleFile )
         minPeriod_ = 113;
         maxPeriod_ = 27392;
     }
-    for ( unsigned i = 0; i < nChannels_; i++ )
+    for ( unsigned i = 0; i < nrChannels_; i++ )
         defaultPanPositions_[i] = PANNING_CENTER;
     
     // reset entries in the order table to one above the highest pattern number.
@@ -224,22 +225,22 @@ int Module::loadXmFile( VirtualFile& moduleFile )
     memset( patternTable_,0,sizeof( Module::patternTable_ ) );
     for ( unsigned i = 0; i < songLength_; i++ ) {
         unsigned k = xmHeader.patternTable[i];
-        if ( k >= nPatterns_ ) 
-            k = nPatterns_; 
+        if ( k >= nrPatterns_ ) 
+            k = nrPatterns_; 
         patternTable_[i] = k;
     }
     // start reading the patterns
     xmFile.absSeek( XM_HEADER_SIZE_PART_ONE + xmHeader.headerSize ); 
-    for (unsigned patternNr = 0; patternNr < nPatterns_; patternNr++) {
+    for (unsigned patternNr = 0; patternNr < nrPatterns_; patternNr++) {
         if ( loadXmPattern( xmFile,patternNr ) )
             return 0;
 #ifdef debug_xm_show_patterns
         if ( showDebugInfo_ && (patternNr == XM_DEBUG_SHOW_PATTERN_NO) )
-            XmDebugShow::pattern( *(patterns_[patternNr]),nChannels_ );
+            XmDebugShow::pattern( *(patterns_[patternNr]),nrChannels_ );
 #endif
     }
     // Now read all the instruments & sample data
-    for ( unsigned instrumentNr = 1; instrumentNr <= nInstruments_; instrumentNr++ ) {
+    for ( unsigned instrumentNr = 1; instrumentNr <= nrInstruments_; instrumentNr++ ) {
         if ( loadXmInstrument( xmFile,instrumentNr ) )
             return 0;
     }
@@ -268,7 +269,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             sizeof( XmInstrumentHeader1 ) )
             instHdr.name.assign(
                 xmInstHdr1.name,XM_MAX_INSTRUMENT_NAME_LENGTH );
-        instHdr.nSamples = 0;
+        instHdr.nrSamples = 0;
 
         // Correct file pointer according to header size in file:
         xmFile.relSeek(
@@ -276,7 +277,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             (int)sizeof( XmInstrumentHeader1 ) );
     } 
     else {
-        instHdr.nSamples = xmInstHdr1.nSamples;
+        instHdr.nrSamples = xmInstHdr1.nSamples;
         xmFile.read( &xmInstHdr2,sizeof( XmInstrumentHeader2 ) );
 
         // Set file pointer to correct position for sample reading
@@ -285,11 +286,11 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             - (int)sizeof( XmInstrumentHeader1 ) 
             - (int)sizeof( XmInstrumentHeader2 ) );
 
-        if ( instHdr.nSamples > XM_MAX_SAMPLES_PER_INST ) {
+        if ( instHdr.nrSamples > XM_MAX_SAMPLES_PER_INST ) {
             if ( showDebugInfo_ )
                 std::cout
                     << "\nMore than " << XM_MAX_SAMPLES_PER_INST
-                    << " (" << instHdr.nSamples
+                    << " (" << instHdr.nrSamples
                     << ") samples for this instHdr, exiting!"
                     << "\nSample Header Size       : "
                     << xmInstHdr2.sampleHeaderSize;
@@ -300,12 +301,12 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             xmInstHdr1.name,XM_MAX_INSTRUMENT_NAME_LENGTH );
 
         // take care of envelopes. First, range checking:
-        if ( xmInstHdr2.nVolumePoints > XM_MAX_ENVELOPE_POINTS )
-            xmInstHdr2.nVolumePoints = XM_MAX_ENVELOPE_POINTS;
-        if ( xmInstHdr2.nPanningPoints > XM_MAX_ENVELOPE_POINTS )
-            xmInstHdr2.nPanningPoints = XM_MAX_ENVELOPE_POINTS;
+        if ( xmInstHdr2.nrVolumeNodes > XM_MAX_ENVELOPE_NODES )
+            xmInstHdr2.nrVolumeNodes = XM_MAX_ENVELOPE_NODES;
+        if ( xmInstHdr2.nrPanningNodes > XM_MAX_ENVELOPE_NODES )
+            xmInstHdr2.nrPanningNodes = XM_MAX_ENVELOPE_NODES;
 
-        // initialize volume envelope parameters. 1st the volume envelope:
+        // initialize envelope parameters. First the volume envelope:
         unsigned char flags = 0;
         if ( xmInstHdr2.volumeType & XM_ENVELOPE_IS_ENABLED_FLAG )
             flags |= ENVELOPE_IS_ENABLED_FLAG;
@@ -326,34 +327,26 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
         instHdr.panningEnvelope.setFlags( flags );
 
         // copy volume envelope:
-        for ( unsigned i = 0; i < xmInstHdr2.nVolumePoints; i++ ) {
-            instHdr.volumeEnvelope.points[i].x  = xmInstHdr2.volumeEnvelope[i].x;
-            instHdr.volumeEnvelope.points[i].y  = 
+        for ( unsigned i = 0; i < xmInstHdr2.nrVolumeNodes; i++ ) {
+            instHdr.volumeEnvelope.nodes[i].x  = xmInstHdr2.volumeEnvelope[i].x;
+            instHdr.volumeEnvelope.nodes[i].y  =
                 (unsigned char)xmInstHdr2.volumeEnvelope[i].y;
-            //if ( showDebugInfo_ )
-            //    std::cout
-            //    << "\nVolume envelope point nr " << i << ": "
-            //    << instHdr.volumeEnvelope.points[i].x << ","
-            //    << (unsigned)(instHdr.volumeEnvelope.points[i].y);
         }
-        instHdr.volumeEnvelope.nrPoints = xmInstHdr2.nVolumePoints;
-        instHdr.volumeEnvelope.sustain = xmInstHdr2.volumeSustain;
+        instHdr.volumeEnvelope.nrNodes = xmInstHdr2.nrVolumeNodes;
+        instHdr.volumeEnvelope.sustainStart = 
+            instHdr.volumeEnvelope.sustainEnd = xmInstHdr2.volumeSustain;
         instHdr.volumeEnvelope.loopStart = xmInstHdr2.volumeLoopStart;
         instHdr.volumeEnvelope.loopEnd = xmInstHdr2.volumeLoopEnd;
 
         // copy panning envelope:
-        for ( unsigned i = 0; i < xmInstHdr2.nPanningPoints; i++ ) {
-            instHdr.panningEnvelope.points[i].x = xmInstHdr2.panningEnvelope[i].x;
-            instHdr.panningEnvelope.points[i].y = 
+        for ( unsigned i = 0; i < xmInstHdr2.nrPanningNodes; i++ ) {
+            instHdr.panningEnvelope.nodes[i].x = xmInstHdr2.panningEnvelope[i].x;
+            instHdr.panningEnvelope.nodes[i].y =
                 (unsigned char)xmInstHdr2.panningEnvelope[i].y;
-            //if ( showDebugInfo_ )
-            //    std::cout
-            //    << "\nPanning envelope point nr " << i << ": "
-            //    << instHdr.panningEnvelope.points[i].x << ","
-            //    << (unsigned)(instHdr.panningEnvelope.points[i].y);
         }
-        instHdr.panningEnvelope.nrPoints = xmInstHdr2.nPanningPoints;
-        instHdr.panningEnvelope.sustain = xmInstHdr2.panningSustain;
+        instHdr.panningEnvelope.nrNodes = xmInstHdr2.nrPanningNodes;
+        instHdr.panningEnvelope.sustainStart = 
+            instHdr.panningEnvelope.sustainEnd = xmInstHdr2.panningSustain;
         instHdr.panningEnvelope.loopStart = xmInstHdr2.panningLoopStart;
         instHdr.panningEnvelope.loopEnd = xmInstHdr2.panningLoopEnd;
 
@@ -366,19 +359,14 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
 
         if ( showDebugInfo_ )
             XmDebugShow::instHeader2( xmInstHdr2 );
-
-        //if ( showDebugInfo_ )
-        //    std::cout
-        //    << "\nSample xm header size for this instHdr : "
-        //    << xmInstHdr2.sampleHeaderSize << "\n";
     } // done reading instHdr, except for sample-for-note table
 
-    if ( instHdr.nSamples ) {
+    if ( instHdr.nrSamples ) {
         SampleHeader    smpHdr[XM_MAX_SAMPLES_PER_INST];
         char            sampleNames[XM_MAX_SAMPLES_PER_INST][XM_MAX_SAMPLE_NAME_LENGTH + 1];
 
         // start reading sample headers:
-        for ( unsigned sampleNr = 0; sampleNr < instHdr.nSamples; sampleNr++ ) {
+        for ( unsigned sampleNr = 0; sampleNr < instHdr.nrSamples; sampleNr++ ) {
             XmSampleHeader  xmSampleHeader;
             xmFile.read( &xmSampleHeader,sizeof( XmSampleHeader ) );
 
@@ -426,7 +414,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
 
         int sampleMap[XM_MAX_SAMPLES_PER_INST];
         int smpCnt = 0;
-        for ( unsigned i = 0; i < instHdr.nSamples; i++ ) {
+        for ( unsigned i = 0; i < instHdr.nrSamples; i++ ) {
             if ( smpHdr[i].length > 0 ) {
                 smpCnt++;
                 sampleMap[i] = smpCnt;
@@ -438,7 +426,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             std::cout << "\nSample for note table: \n";
         for ( unsigned i = 0; i < XM_MAXIMUM_NOTES; i++ ) {
             unsigned smpNr = xmInstHdr2.sampleForNote[i];
-            if ( smpNr > instHdr.nSamples ) {
+            if ( smpNr > instHdr.nrSamples ) {
                 if ( showDebugInfo_ )
                     std::cout
                         << "\nIllegal sample nr in"
@@ -447,7 +435,7 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             }
             if ( sampleMap[smpNr] > 0 )
                 instHdr.sampleForNote[i].sampleNr = 
-                    nSamples_ + sampleMap[smpNr];
+                    nrSamples_ + sampleMap[smpNr];
             else
                 instHdr.sampleForNote[i].sampleNr = 0;
             if ( showDebugInfo_ )
@@ -464,11 +452,11 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
 
         // load sample data of this instruments' sample Header:
         for ( unsigned sampleNr = 0;
-            sampleNr < instHdr.nSamples;
+            sampleNr < instHdr.nrSamples;
             sampleNr++ ) {
             if ( smpHdr[sampleNr].length ) {
-                nSamples_++;
-                loadXmSample( xmFile,nSamples_,smpHdr[sampleNr] );
+                nrSamples_++;
+                loadXmSample( xmFile,nrSamples_,smpHdr[sampleNr] );
                 if ( showDebugInfo_ ) {
 #ifdef debug_xm_play_samples
                     playSampleNr( nSamples_ );
@@ -669,14 +657,14 @@ int Module::loadXmPattern( VirtualFile& xmFile,int patternNr )
     if ( xmPtnHdr.nRows > XM_MAX_PATTERN_ROWS )
         return  -1;   
 
-    std::vector<Note> patternData( nChannels_ * xmPtnHdr.nRows );
+    std::vector<Note> patternData( nrChannels_ * xmPtnHdr.nRows );
     std::vector<Note>::iterator iNote = patternData.begin();
 
     // empty patterns are not stored
     if ( !xmPtnHdr.patternSize ) 
         return 0;
 
-    for ( unsigned n = 0; n < (nChannels_ * xmPtnHdr.nRows); n++ ) {
+    for ( unsigned n = 0; n < (nrChannels_ * xmPtnHdr.nRows); n++ ) {
         unsigned char pack;
         unsigned char volumeColumn;
         if ( xmFile.read( &pack,sizeof( unsigned char ) ) )
@@ -759,7 +747,7 @@ int Module::loadXmPattern( VirtualFile& xmFile,int patternNr )
         iNote++;
     }
     patterns_[patternNr] = std::make_unique < Pattern >
-        ( nChannels_,xmPtnHdr.nRows,patternData );
+        ( nrChannels_,xmPtnHdr.nRows,patternData );
     return 0;
 }
 
@@ -790,7 +778,7 @@ void XmDebugShow::fileHeader( XmHeader& xmHeader )
         << "\nXM Module tracker name   : " << trackerName
         << std::hex
         << "\nXM file version          : " << xmHeader.version << std::dec
-        << "\nNr of channels           : " << xmHeader.nChannels
+        << "\nNr of channels           : " << xmHeader.nrChannels
         << "\nNr of instruments        : " << xmHeader.nInstruments
         << "\nNr of patterns           : " << xmHeader.nPatterns
         << "\nDefault Tempo            : " << xmHeader.defaultTempo
@@ -826,7 +814,7 @@ void XmDebugShow::instHeader2( XmInstrumentHeader2& xmInstHdr2 )
         << "\nSample hdr size  : " << xmInstHdr2.sampleHeaderSize
         << "\nSmp hdr sz. (res): " << xmInstHdr2.reserved
        
-        << "\n# vol. env. pts  : " << (unsigned)xmInstHdr2.nVolumePoints
+        << "\n# vol. env. pts  : " << (unsigned)xmInstHdr2.nrVolumeNodes
         << "\nvol. loop start @: " << (unsigned)xmInstHdr2.volumeLoopStart
         << "\nvol. loop End @  : " << (unsigned)xmInstHdr2.volumeLoopEnd
         << "\nvol. sustain @   : " << (unsigned)xmInstHdr2.volumeSustain
@@ -836,7 +824,7 @@ void XmDebugShow::instHeader2( XmInstrumentHeader2& xmInstHdr2 )
         << ((xmInstHdr2.volumeType & XM_ENVELOPE_IS_SUSTAINED_FLAG) ? "yes" : "no")
         << "\nvol. env. looped : "
         << ((xmInstHdr2.volumeType & XM_ENVELOPE_IS_LOOPED_FLAG) ? "yes" : "no")
-        << "\n# panning Pts    : " << (unsigned)xmInstHdr2.nPanningPoints
+        << "\n# panning Pts    : " << (unsigned)xmInstHdr2.nrPanningNodes
         << "\npanning sustain @: " << (unsigned)xmInstHdr2.panningSustain
         << "\npan. loop Start @: " << (unsigned)xmInstHdr2.panningLoopStart
         << "\npan. loop End @  : " << (unsigned)xmInstHdr2.panningLoopEnd
@@ -882,11 +870,11 @@ void XmDebugShow::patternHeader( int patternNr,XmPatternHeader& xmPtnHdr )
         << "\nPattern Data Size       : " << xmPtnHdr.patternSize;
 }
 
-void XmDebugShow::pattern( Pattern& pattern,int nChannels )
+void XmDebugShow::pattern( Pattern& pattern,int nrChannels )
 {
     for ( unsigned rowNr = 0; rowNr < pattern.getnRows(); rowNr++ ) {                     
         const Note *iNote = pattern.getRow( rowNr );
-        for ( int chn = 0; chn < nChannels; chn++ ) {
+        for ( int chn = 0; chn < nrChannels; chn++ ) {
             if ( chn == 0 ) {
                 std::cout
                     << "\n" << std::hex << std::setw( 2 ) << rowNr << "/"

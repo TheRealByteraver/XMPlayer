@@ -42,6 +42,9 @@
     <ClCompile Include="itsex.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mixer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Module.h">
@@ -69,6 +72,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Instrument.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Mixer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

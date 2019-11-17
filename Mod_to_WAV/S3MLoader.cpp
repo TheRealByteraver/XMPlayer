@@ -62,7 +62,7 @@ constexpr auto S3M_PTN_NOTE_INST_FLAG            = 32;
 constexpr auto S3M_PTN_VOLUME_COLUMN_FLAG        = 64;
 constexpr auto S3M_PTN_EFFECT_PARAM_FLAG         = 128;
 constexpr auto S3M_KEY_NOTE_CUT                  = 254;
-constexpr auto S3M_MAX_NOTE                      = (9 * 12);
+constexpr auto S3M_MAX_NOTE                      = 9 * 12;
 constexpr auto S3M_INSTRUMENT_TYPE_SAMPLE        = 1;
 constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_MELODY  = 2;
 constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_DRUM    = 3;
@@ -75,8 +75,8 @@ struct S3mFileHeader {
     unsigned char   fileType;       // 0x1D for ScreamTracker 3
     unsigned short  reserved1;
     unsigned short  songLength;     // 
-    unsigned short  nInstruments;
-    unsigned short  nPatterns;      // including marker (unsaved) patterns
+    unsigned short  nrInstruments;
+    unsigned short  nrPatterns;      // including marker (unsaved) patterns
     unsigned short  flags;          // CWTV == 1320h -> ST3.20
     unsigned short  CWTV;           // Created with tracker / version
     unsigned short  sampleDataType; // 1 = signed, 2 = unsigned
@@ -177,7 +177,7 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
     minPeriod_ = 56;    // periods[9 * 12 - 1]
     maxPeriod_ = 27392; // periods[0]
 
-    nChannels_ = 0;
+    nrChannels_ = 0;
     int chnRemap[S3M_MAX_CHANNELS];
     int chnBackmap[S3M_MAX_CHANNELS];
     int chnPanVals[S3M_MAX_CHANNELS];
@@ -186,20 +186,20 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
         chnPanVals[chn] = S3M_DEFAULT_PAN_CENTER;
         int chnInfo = (int)s3mFileHdr.channelsEnabled[chn];
         if ( chnInfo < 16 ) { // channel is used! // x64 FT2 detects weird #chn
-            chnBackmap[nChannels_] = chn;
-            chnRemap[chn] = nChannels_;
+            chnBackmap[nrChannels_] = chn;
+            chnRemap[chn] = nrChannels_;
             if ( chnInfo < 7 )
-                chnPanVals[nChannels_] = PANNING_FULL_LEFT;//S3M_DEFAULT_PAN_LEFT;
+                chnPanVals[nrChannels_] = PANNING_FULL_LEFT;//S3M_DEFAULT_PAN_LEFT;
             else
-                chnPanVals[nChannels_] = PANNING_FULL_RIGHT;//S3M_DEFAULT_PAN_RIGHT;
-            nChannels_++;
+                chnPanVals[nrChannels_] = PANNING_FULL_RIGHT;//S3M_DEFAULT_PAN_RIGHT;
+            nrChannels_++;
         } 
         else 
             chnRemap[chn] = S3M_CHN_UNUSED;
     }
     if ( showDebugInfo_ )
         std::cout 
-            << "\nNr of channels   : " << std::dec << nChannels_
+            << "\nNr of channels   : " << std::dec << nrChannels_
             << "\nOrder list       : ";
 
     songTitle_.assign( s3mFileHdr.songTitle,S3M_MAX_SONGTITLE_LENGTH );
@@ -209,8 +209,8 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
     songRestartPosition_ = 0;
     isCustomRepeat_ = false;
     panningStyle_ = PANNING_STYLE_S3M; 
-    nInstruments_ = s3mFileHdr.nInstruments;
-    nSamples_ = 0;
+    nrInstruments_ = s3mFileHdr.nrInstruments;
+    nrSamples_ = 0;
     defaultTempo_ = s3mFileHdr.defaultTempo;
     defaultBpm_ = s3mFileHdr.defaultBpm;
     if ( defaultTempo_ == 0 || defaultTempo_ == 255 ) 
@@ -220,7 +220,7 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
 
     // Read in the Pattern order table:
     memset( patternTable_,0,sizeof( *patternTable_ ) * MAX_PATTERNS );
-    nPatterns_ = 0;
+    nrPatterns_ = 0;
     songLength_ = 0;
 
     for ( int i = 0; i < s3mFileHdr.songLength; i++ ) {
@@ -232,34 +232,34 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
             order = END_OF_SONG_MARKER;
         else if ( order >= S3M_MARKER_PATTERN ) 
             order = MARKER_PATTERN;
-        else if ( order > nPatterns_ ) 
-            nPatterns_ = order;
+        else if ( order > nrPatterns_ ) 
+            nrPatterns_ = order;
         patternTable_[songLength_] = order;
         songLength_++;        
         if ( showDebugInfo_ )
             std::cout << order << " ";
     }
-    nPatterns_++;
+    nrPatterns_++;
     if ( showDebugInfo_ )
         std::cout
             << "\nSong length (corr.): " << songLength_
-            << "\nNr of patterns     : " << nPatterns_;
+            << "\nNr of patterns     : " << nrPatterns_;
 
     // fix for empty patterns that are not present in the file, not even
     // with a header saying they're 0 bytes big:
-    if ( nPatterns_ > s3mFileHdr.nPatterns )
-        nPatterns_ = s3mFileHdr.nPatterns;
+    if ( nrPatterns_ > s3mFileHdr.nrPatterns )
+        nrPatterns_ = s3mFileHdr.nrPatterns;
 
     unsigned        instrParaPtrs[S3M_MAX_INSTRUMENTS];
     unsigned        ptnParaPtrs[S3M_MAX_PATTERNS];
     unsigned char   defPanPositions[S3M_MAX_CHANNELS];
-    for ( int nInst = 0; nInst < s3mFileHdr.nInstruments; nInst++ ) {
+    for ( int nInst = 0; nInst < s3mFileHdr.nrInstruments; nInst++ ) {
         unsigned short instPointer;
         if ( s3mFile.read( &instPointer,sizeof( unsigned short ) ) ) 
             return 0;
         instrParaPtrs[nInst] = instPointer;
     }
-    for ( int nPtn = 0; nPtn < s3mFileHdr.nPatterns; nPtn++ ) {
+    for ( int nPtn = 0; nPtn < s3mFileHdr.nrPatterns; nPtn++ ) {
         unsigned short ptnPointer;
         if ( s3mFile.read( &ptnPointer,sizeof( unsigned short ) ) ) 
             return 0;
@@ -279,20 +279,20 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
             defaultPanPositions_[i] = S3M_DEFAULT_PAN_CENTER;
     
     if ( s3mFileHdr.useDefaultPanning == S3M_DEFAULT_PANNING_PRESENT ) 
-        for ( unsigned i = 0; i < nChannels_; i++ )
+        for ( unsigned i = 0; i < nrChannels_; i++ )
             chnPanVals[i] = defaultPanPositions_[chnBackmap[i]];
 
-    for ( unsigned i = 0; i < nChannels_; i++ )
+    for ( unsigned i = 0; i < nrChannels_; i++ )
         defaultPanPositions_[i] = chnPanVals[i];
     // end "to be reviewed" marker -------------------------
 
 
     if ( showDebugInfo_ ) {
         std::cout << "\n\nInstrument pointers: ";
-        for ( int i = 0; i < s3mFileHdr.nInstruments; i++ )
+        for ( int i = 0; i < s3mFileHdr.nrInstruments; i++ )
             std::cout << instrParaPtrs[i] << " ";
         std::cout << "\n\nPattern pointers: ";
-        for ( int i = 0; i < s3mFileHdr.nPatterns; i++ )
+        for ( int i = 0; i < s3mFileHdr.nrPatterns; i++ )
             std::cout << ptnParaPtrs[i] << " ";
         std::cout 
             << "\n\nUse default panning from file: "
@@ -312,12 +312,12 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
     }
 
     // read instruments here
-    nSamples_ = 0;
+    nrSamples_ = 0;
     unsigned smpDataPtrs[S3M_MAX_INSTRUMENTS];
-    if ( s3mFileHdr.nInstruments > S3M_MAX_INSTRUMENTS )
-        s3mFileHdr.nInstruments = S3M_MAX_INSTRUMENTS;
+    if ( s3mFileHdr.nrInstruments > S3M_MAX_INSTRUMENTS )
+        s3mFileHdr.nrInstruments = S3M_MAX_INSTRUMENTS;
 
-    for ( int instrumentNr = 1; instrumentNr <= s3mFileHdr.nInstruments; instrumentNr++ ) {
+    for ( int instrumentNr = 1; instrumentNr <= s3mFileHdr.nrInstruments; instrumentNr++ ) {
         S3mInstHeader   s3mInstHdr;
         s3mFile.absSeek( 16 * instrParaPtrs[instrumentNr - 1] );
         if ( s3mFile.read( &s3mInstHdr,sizeof( S3mInstHeader ) ) ) 
@@ -358,7 +358,7 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
 
         if ( (s3mInstHdr.sampleType == S3M_INSTRUMENT_TYPE_SAMPLE) &&
             (smpDataPtrs[instrumentNr - 1] != 0)) {
-            nSamples_++;
+            nrSamples_++;
             s3mFile.absSeek( smpDataPtrs[instrumentNr - 1] );
             smpHdr.data = (SHORT *)s3mFile.getSafePointer( smpHdr.length );
 
@@ -451,11 +451,11 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
 
     // Now load the patterns:
     std::unique_ptr < S3mUnpackedNote[] > unPackedPtn  = 
-        std::make_unique < S3mUnpackedNote[] > ( S3M_ROWS_PER_PATTERN * nChannels_ );
+        std::make_unique < S3mUnpackedNote[] > ( S3M_ROWS_PER_PATTERN * nrChannels_ );
 
-    for ( unsigned patternNr = 0; patternNr < nPatterns_; patternNr++ ) {
+    for ( unsigned patternNr = 0; patternNr < nrPatterns_; patternNr++ ) {
 
-        memset( unPackedPtn.get(),0,S3M_ROWS_PER_PATTERN * nChannels_ * sizeof( S3mUnpackedNote ) );
+        memset( unPackedPtn.get(),0,S3M_ROWS_PER_PATTERN * nrChannels_ * sizeof( S3mUnpackedNote ) );
 
         // empty patterns are not stored
         if ( ptnParaPtrs[patternNr] ) { 
@@ -505,8 +505,8 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
                         fx = *ptnPtr++;
                         fxp = *ptnPtr++;
                     }
-                    if ( chn < nChannels_ ) {
-                        S3mUnpackedNote& unpackedNote = unPackedPtn[row * nChannels_ + chn];
+                    if ( chn < nrChannels_ ) {
+                        S3mUnpackedNote& unpackedNote = unPackedPtn[row * nrChannels_ + chn];
                         if ( newNote ) {
                             if ( note == S3M_KEY_NOTE_CUT ) 
                                 unpackedNote.note = KEY_NOTE_CUT;
@@ -534,10 +534,10 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
         }
         // read the pattern into the internal format:
         S3mUnpackedNote* unPackedNote = unPackedPtn.get();
-        std::vector<Note> patternData( nChannels_* S3M_ROWS_PER_PATTERN );
+        std::vector<Note> patternData( nrChannels_* S3M_ROWS_PER_PATTERN );
         std::vector<Note>::iterator iNote = patternData.begin();
 
-        for ( unsigned n = 0; n < (nChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
+        for ( unsigned n = 0; n < (nrChannels_ * S3M_ROWS_PER_PATTERN); n++ ) {
             iNote->note = unPackedNote->note;
             iNote->instrument = unPackedNote->inst;
 
@@ -573,7 +573,7 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
         }
         //patterns_[patternNr] = new Pattern( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
         patterns_[patternNr] = std::make_unique < Pattern >
-            ( nChannels_,S3M_ROWS_PER_PATTERN,patternData );
+            ( nrChannels_,S3M_ROWS_PER_PATTERN,patternData );
     }
     isLoaded_ = true;
     return 0;
@@ -819,8 +819,8 @@ void S3mDebugShow::fileHeader( S3mFileHeader& s3mFileHeader )
         << "\nSong title       : " << s3mFileHeader.songTitle
         << "\nFile type        : " << std::hex << (int)s3mFileHeader.fileType
         << "\nSong length      : " << std::dec << (int)s3mFileHeader.songLength
-        << "\nNr of instruments: " << (int)s3mFileHeader.nInstruments
-        << "\nNr of patterns   : " << (int)s3mFileHeader.nPatterns
+        << "\nNr of instruments: " << (int)s3mFileHeader.nrInstruments
+        << "\nNr of patterns   : " << (int)s3mFileHeader.nrPatterns
         << "\nFlags            : " << std::bitset<16>( s3mFileHeader.flags )
         << "\nMade w/ (CWTV)   : " << std::hex << s3mFileHeader.CWTV
         << "\nSample data type : ";

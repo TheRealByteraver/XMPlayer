@@ -19,8 +19,12 @@
     Not Supported:
     PP20 compressed mod's, or other variants of compression
 */
-#include <conio.h>
+
+#define NOMINMAX
 #include <windows.h>
+
+
+#include <conio.h>
 #include <mmsystem.h>
 #pragma comment (lib, "winmm.lib") 
 #include <iostream>
@@ -131,15 +135,15 @@ int Module::loadModFile( VirtualFile& moduleFile )
     // check if a valid tag is present and get the MOD type
     bool flt8Err;
     trackerTag_.assign( headerMK.tag,4 );
-    nChannels_ = ModHelperFn::getTagInfo( trackerTag_,flt8Err,trackerType_ );
-    bool tagErr = nChannels_ == 0;
+    nrChannels_ = ModHelperFn::getTagInfo( trackerTag_,flt8Err,trackerType_ );
+    bool tagErr = nrChannels_ == 0;
 
-    nInstruments_ = ModHelperFn::getNrSamples( headerMK );
-    bool nstErr = nInstruments_ == 15; // if only 1st 15 smp names are ok (NST file)
-    bool smpErr = nInstruments_ == 0;  // if even 1st 15 smp names are garbage
+    nrInstruments_ = ModHelperFn::getNrSamples( headerMK );
+    bool nstErr = nrInstruments_ == 15; // if only 1st 15 smp names are ok (NST file)
+    bool smpErr = nrInstruments_ == 0;  // if even 1st 15 smp names are garbage
 
     if ( tagErr && nstErr && (!smpErr) ) {
-        nChannels_ = 4;
+        nrChannels_ = 4;
         trackerTag_ = "NST";
     }
     else
@@ -150,12 +154,12 @@ int Module::loadModFile( VirtualFile& moduleFile )
     unsigned patternDataSize = fileSize 
         - (nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK ));
 
-    nSamples_ = 0;
+    nrSamples_ = 0;
     // calculate the total size of the samples
     unsigned sampleDataSize = 0;
 
     // take care of the endianness and calculate total sample data size
-    for( unsigned i = 0; i < nInstruments_; i++ ) {
+    for( unsigned i = 0; i < nrInstruments_; i++ ) {
         headerMK.samples[i].length       = 
             SwapW( headerMK.samples[i].length       );
         headerMK.samples[i].repeatOffset = 
@@ -170,9 +174,9 @@ int Module::loadModFile( VirtualFile& moduleFile )
     // we use two different ways to calculate the pattern size
     unsigned calcPatternCnt = 0;
     unsigned patternDivideRest;
-    if ( nChannels_ ) {
+    if ( nrChannels_ ) {
         // pattern size in bytes = nrChannels * 64 rows * 4 bytes/note
-        int patternSize = nChannels_ * MOD_ROWS * 4;   
+        int patternSize = nrChannels_ * MOD_ROWS * 4;   
         patternDivideRest = patternDataSize % patternSize; // should be 0
         calcPatternCnt = patternDataSize / patternSize;
     }
@@ -229,17 +233,17 @@ int Module::loadModFile( VirtualFile& moduleFile )
         return 0;
 
     // check file integrity, correct nr of channels if necessary
-    nPatterns_ = hdrPatternCnt;
+    nrPatterns_ = hdrPatternCnt;
     if ( !tagErr ) {              // ptnCalc and chn were initialised
         if ( wowFile && ((hdrPatternCnt * 2) == calcPatternCnt) ) 
-            nChannels_ = 8;
+            nrChannels_ = 8;
     } 
     else {
         if ( !nstErr ) {         // ptnCalc and chn were not initialised
             patternDivideRest = calcPatternCnt % (MOD_ROWS * 4);
             calcPatternCnt >>= 8;
-            nChannels_ = calcPatternCnt / hdrPatternCnt; 
-            if ( (nChannels_ > MOD_MAX_CHANNELS) || (!nChannels_) ) {
+            nrChannels_ = calcPatternCnt / hdrPatternCnt; 
+            if ( (nrChannels_ > MOD_MAX_CHANNELS) || (!nrChannels_) ) {
                 if ( showDebugInfo_ )
                     std::cout 
                     << "\nUnable to detect nr of channels, exiting.\n";
@@ -250,15 +254,15 @@ int Module::loadModFile( VirtualFile& moduleFile )
     //if ((calcPatternCnt < nPatterns_) && (!patternDivideRest)) nPatterns_ = calcPatternCnt;
     unsigned patternDataOffset = nstErr ? sizeof( HeaderNST ) : sizeof( HeaderMK );
     unsigned sampleDataOffset = patternDataOffset 
-                + nPatterns_ * nChannels_ * MOD_ROWS * 4;
+                + nrPatterns_ * nrChannels_ * MOD_ROWS * 4;
 
     if ( (sampleDataOffset + sampleDataSize) > fileSize ) {
         unsigned missingData = (sampleDataOffset + sampleDataSize) - (int)fileSize;
-        unsigned lastInstrument = nInstruments_;
+        unsigned lastInstrument = nrInstruments_;
         if ( showDebugInfo_ )
             std::cout 
                 << "\nWarning! File misses Sample Data!\n"
-                << "\nnPatterns          = " << nPatterns_
+                << "\nnPatterns          = " << nrPatterns_
                 << "\nPatternHeader      = " << hdrPatternCnt
                 << "\nPatternDataSize    = " << patternDataSize
                 << "\nCalcPatternCnt     = " << calcPatternCnt
@@ -306,7 +310,7 @@ int Module::loadModFile( VirtualFile& moduleFile )
         }
     }  
     // take care of default panning positions:
-    for ( unsigned i = 0; i < nChannels_; i++ ) 
+    for ( unsigned i = 0; i < nrChannels_; i++ ) 
         if( ((i & 3) == 0) || ((i & 3) == 3) )
             defaultPanPositions_[i] = PANNING_FULL_LEFT;
         else
@@ -323,7 +327,7 @@ int Module::loadModFile( VirtualFile& moduleFile )
     
     // now, the sample headers & sample data.
     unsigned fileOffset = sampleDataOffset;
-    for ( unsigned sampleNr = 1; sampleNr <= nInstruments_; sampleNr++ ) {
+    for ( unsigned sampleNr = 1; sampleNr <= nrInstruments_; sampleNr++ ) {
         InstrumentHeader    instHdr;
         SampleHeader        smpHdr;
 
@@ -357,7 +361,7 @@ int Module::loadModFile( VirtualFile& moduleFile )
             (signed char)(headerMK.samples[sampleNr - 1].finetune << 4);
 
         if ( smpHdr.length > 2 ) {
-            nSamples_++;
+            nrSamples_++;
             modFile.absSeek( fileOffset );
             smpHdr.data = (SHORT *)modFile.getSafePointer( smpHdr.length );
             if ( smpHdr.data == nullptr )
@@ -382,7 +386,7 @@ int Module::loadModFile( VirtualFile& moduleFile )
 
     // Now read the patterns and convert them into the internal format
     modFile.absSeek( patternDataOffset );
-    for ( unsigned patternNr = 0; patternNr < nPatterns_; patternNr++ ) {
+    for ( unsigned patternNr = 0; patternNr < nrPatterns_; patternNr++ ) {
         // to redo in a safer way
         if ( flt8Err )
             if ( ModHelperFn::convertFlt8Pattern( modFile ) )
@@ -399,10 +403,10 @@ int Module::loadModFile( VirtualFile& moduleFile )
             << "\n"
             << "\nFilename             = " << fileName_
             << "\nis Loaded            = " << (isLoaded() ? "Yes" : "No")
-            << "\nnChannels            = " << nChannels_
-            << "\nnInstruments         = " << nInstruments_
-            << "\nnSamples             = " << nSamples_
-            << "\nnPatterns            = " << nPatterns_
+            << "\nnChannels            = " << nrChannels_
+            << "\nnInstruments         = " << nrInstruments_
+            << "\nnSamples             = " << nrSamples_
+            << "\nnPatterns            = " << nrPatterns_
             << "\nSong Title           = " << songTitle_
             << "\nis CustomRepeat      = " << (isCustomRepeat() ? "Yes" : "No")
             << "\nSong Length          = " << songLength_
@@ -449,9 +453,9 @@ int ModHelperFn::convertFlt8Pattern( VirtualFile& modFile )
 
 int Module::loadModPattern( VirtualFile& modFile,int patternNr )
 {
-    std::vector<Note> patternData( nChannels_ * MOD_ROWS );
+    std::vector<Note> patternData( nrChannels_ * MOD_ROWS );
     std::vector<Note>::iterator iNote = patternData.begin();
-    for ( unsigned n = 0; n < (nChannels_ * MOD_ROWS); n++ ) {
+    for ( unsigned n = 0; n < (nrChannels_ * MOD_ROWS); n++ ) {
         unsigned char j1,j2,j3,j4;
         modFile.read( &j1,sizeof( unsigned char ) );
         modFile.read( &j2,sizeof( unsigned char ) );
@@ -521,7 +525,7 @@ int Module::loadModPattern( VirtualFile& modFile,int patternNr )
         iNote++;
     }
     patterns_[patternNr] = std::make_unique < Pattern >
-        ( nChannels_,MOD_ROWS,patternData );
+        ( nrChannels_,MOD_ROWS,patternData );
     return 0;
 }
 

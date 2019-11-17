@@ -8,8 +8,9 @@ Thanks must go to:
   itsex.h for details.
 */
 
-#include <conio.h>
+#define NOMINMAX
 #include <windows.h>
+#include <conio.h>
 #include <mmsystem.h>
 #pragma comment (lib, "winmm.lib") 
 #include <iostream>
@@ -17,6 +18,7 @@ Thanks must go to:
 #include <vector>
 #include <iterator>
 #include <memory>
+#include <algorithm>
 
 #include "Module.h"
 #include "virtualfile.h"
@@ -55,6 +57,13 @@ constexpr auto IT_MIDI_CONFIG_EMBEDDED               = 8;
 constexpr auto IT_DOS_FILENAME_LENGTH                = 12;
 constexpr auto IT_SONG_NAME_LENGTH                   = 26;
 constexpr auto IT_INST_NAME_LENGTH                   = 26;
+constexpr auto IT_MAX_ENVELOPE_NODES                 = 25;
+constexpr auto IT_ENVELOPE_END_MARKER                = 0xFF;
+constexpr auto IT_ENVELOPE_ENABLED_FLAG              = 1;
+constexpr auto IT_ENVELOPE_IS_LOOPED_FLAG            = 2;
+constexpr auto IT_ENVELOPE_IS_SUSTAINED_FLAG         = 4;
+constexpr auto IT_ENVELOPE_CARRY_ENABLED_FLAG        = 8;
+constexpr auto IT_ENVELOPE_IS_FOR_FILTER_FLAG        = 128;
 
 // sample flags
 constexpr auto IT_SMP_NAME_LENGTH                    = 26;
@@ -106,9 +115,9 @@ struct ItFileHeader {
     char            songName[IT_SONG_NAME_LENGTH];
     unsigned short  phiLight;       // pattern row hilight info (ignore)
     unsigned short  songLength;
-    unsigned short  nInstruments;
-    unsigned short  nSamples;
-    unsigned short  nPatterns;
+    unsigned short  nrInstruments;
+    unsigned short  nrSamples;
+    unsigned short  nrPatterns;
     unsigned short  createdWTV;
     unsigned short  compatibleWTV;
     unsigned short  flags;
@@ -161,29 +170,28 @@ struct ItOldInstHeader {
     unsigned char   NNA;            // New Note Action
     unsigned char   DNC;            // duplicate Note Check
     unsigned short  trackerVersion;
-    unsigned char   nSamples;       // nr of samples in instrument
+    unsigned char   nrSamples;       // nr of samples in instrument
     unsigned char   reserved2;
     char            name[IT_INST_NAME_LENGTH];
     unsigned char   reserved3[6];
     ItNoteSampleMap sampleForNote[120];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
-    unsigned char   nodes[25 * 2];       // ?
+    unsigned char   nodes[IT_MAX_ENVELOPE_NODES * 2];       // ?
 };
 
 struct ItNewEnvelopeNodePoint {
     char            magnitude;      // 0..64 for volume, -32 .. +32 for panning or pitch
     unsigned short  tickIndex;      // 0 .. 9999
-
 };
 
 struct ItNewEnvelope {
     unsigned char   flag;           // bit0: env on/off,bit1: loop on/off,bit2:susLoop on/off
-    unsigned char   nNodes;         // nr of node points
+    unsigned char   nrNodes;        // nr of node points
     unsigned char   loopStart;
     unsigned char   loopEnd;
     unsigned char   sustainLoopStart;
     unsigned char   sustainLoopEnd;
-    ItNewEnvelopeNodePoint  nodes[25];
+    ItNewEnvelopeNodePoint  nodes[IT_MAX_ENVELOPE_NODES];
     unsigned char   reserved;
 };
 
@@ -202,7 +210,7 @@ struct ItNewInstHeader {
     unsigned char   randVolumeVariation; // expressed in percent
     unsigned char   randPanningVariation;// not implemented
     unsigned short  trackerVersion;
-    unsigned char   nSamples;
+    unsigned char   nrSamples;
     unsigned char   reserved;
     char            name[IT_INST_NAME_LENGTH];
     unsigned char   initialFilterCutOff;
@@ -213,7 +221,7 @@ struct ItNewInstHeader {
     ItNoteSampleMap sampleForNote[120];
     ItNewEnvelope   volumeEnvelope;
     ItNewEnvelope   panningEnvelope;
-    ItNewEnvelope   pitchEnvelope;
+    ItNewEnvelope   pitchFltrEnvelope;
 };
 
 struct ItSampleHeader {
@@ -316,11 +324,11 @@ int Module::loadItFile( VirtualFile& moduleFile )
     unsigned instHdrPtrs[IT_MAX_INSTRUMENTS];
     unsigned smpHdrPtrs[IT_MAX_SAMPLES];
     unsigned ptnHdrPtrs[IT_MAX_PATTERNS];
-    for ( unsigned i = 0; i < itFileHeader.nInstruments; i++ )
+    for ( unsigned i = 0; i < itFileHeader.nrInstruments; i++ )
         itFile.read( &(instHdrPtrs[i]),sizeof( unsigned ) );
-    for ( unsigned i = 0; i < itFileHeader.nSamples; i++ )
+    for ( unsigned i = 0; i < itFileHeader.nrSamples; i++ )
         itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
-    for ( unsigned i = 0; i < itFileHeader.nPatterns; i++ )
+    for ( unsigned i = 0; i < itFileHeader.nrPatterns; i++ )
         itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );
 
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
@@ -331,22 +339,22 @@ int Module::loadItFile( VirtualFile& moduleFile )
         for ( int i = 0; i < itFileHeader.songLength; i++ )
             std::cout << std::setw( 4 ) << (unsigned)patternTable_[i];
         std::cout << std::hex << "\n\nInstrument header pointers: \n";
-        for ( int i = 0; i < itFileHeader.nInstruments; i++ )
+        for ( int i = 0; i < itFileHeader.nrInstruments; i++ )
             std::cout << std::setw( 8 ) << instHdrPtrs[i];
         std::cout << "\n\nSample header pointers: \n";
-        for ( int i = 0; i < itFileHeader.nSamples; i++ )
+        for ( int i = 0; i < itFileHeader.nrSamples; i++ )
             std::cout << std::setw( 8 ) << smpHdrPtrs[i];
         std::cout << "\n\nPattern header pointers: \n";
-        for ( int i = 0; i < itFileHeader.nPatterns; i++ )
+        for ( int i = 0; i < itFileHeader.nrPatterns; i++ )
             std::cout << std::setw( 8 ) << ptnHdrPtrs[i];
     }
     defaultTempo_ = itFileHeader.initialSpeed;
     defaultBpm_ = itFileHeader.initialBpm;
 
     // load instruments
-    nInstruments_ = itFileHeader.nInstruments;
+    nrInstruments_ = itFileHeader.nrInstruments;
     if ( itFileHeader.flags & IT_INSTRUMENT_MODE ) {
-        for ( unsigned instNr = 1; instNr <= nInstruments_; instNr++ ) {
+        for ( unsigned instNr = 1; instNr <= nrInstruments_; instNr++ ) {
             itFile.absSeek( instHdrPtrs[instNr - 1] );
             if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
                 return 0;
@@ -356,11 +364,11 @@ int Module::loadItFile( VirtualFile& moduleFile )
         }
     }
     // load samples
-    nSamples_ = itFileHeader.nSamples;
+    nrSamples_ = itFileHeader.nrSamples;
     bool convertToInstrument = !(itFileHeader.flags & IT_INSTRUMENT_MODE);
     if ( convertToInstrument )
-        nInstruments_ = nSamples_;
-    for ( unsigned sampleNr = 1; sampleNr <= nSamples_; sampleNr++ ) {
+        nrInstruments_ = nrSamples_;
+    for ( unsigned sampleNr = 1; sampleNr <= nrSamples_; sampleNr++ ) {
         itFile.absSeek( smpHdrPtrs[sampleNr - 1] );
         int result = loadItSample(
             itFile,
@@ -372,7 +380,7 @@ int Module::loadItFile( VirtualFile& moduleFile )
             return 0;
     }
     // load patterns
-    for ( int patternNr = 0; patternNr < itFileHeader.nPatterns; patternNr++ ) {
+    for ( int patternNr = 0; patternNr < itFileHeader.nrPatterns; patternNr++ ) {
         unsigned offset = ptnHdrPtrs[patternNr];
         if ( offset ) {
             itFile.absSeek( offset );
@@ -394,7 +402,12 @@ int Module::loadItInstrument(
     unsigned createdWTV ) 
 {
     InstrumentHeader instrumentHeader;
-    if ( createdWTV < 0x200 ) { // old IT instrument header
+    if ( createdWTV < 0x200 ) { 
+
+        // *******************************************
+        // Too bad, it is an old .IT instrument header
+        // *******************************************
+
         ItOldInstHeader itInstHeader;
         itFile.read( &itInstHeader,sizeof( ItOldInstHeader ) );
         if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) {
@@ -410,39 +423,7 @@ int Module::loadItInstrument(
             ItDebugShow::oldInstHeader( itInstHeader );
 #endif
         }
-
-        /*
-
-
-
-
-        char            tag[4];         // "IMPI"
-        char            fileName[12];
-        char            asciiz;
-        unsigned char   flag;
-        unsigned char   volumeLoopStart;// these are node numbers
-        unsigned char   volumeLoopEnd;
-        unsigned char   sustainLoopStart;
-        unsigned char   sustainLoopEnd;
-        unsigned short  reserved;
-        unsigned short  fadeOut;        // 0..64
-        unsigned char   NNA;            // New Note Action
-        unsigned char   DNC;            // duplicate Note Check
-        unsigned short  trackerVersion;
-        unsigned char   nSamples;       // nr of samples in instrument
-        unsigned char   reserved2;
-        char            name[26];
-        unsigned char   reserved3[6];
-        unsigned char   sampleForNote[240];
-        unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
-        unsigned char   nodes[25 * 2];       // ?
-        */
-        instrumentHeader.name = itInstHeader.name;
         instrumentHeader.name.assign( itInstHeader.name,IT_INST_NAME_LENGTH );
-        //instrumentHeader.nSamples = 0;       // can probably be removed
-        instrumentHeader.volumeEnvelope.loopStart = itInstHeader.volumeLoopStart;
-        instrumentHeader.volumeEnvelope.loopEnd = itInstHeader.volumeLoopEnd;
-
         for ( int n = 0; n < IT_MAX_NOTE; n++ ) {
             instrumentHeader.sampleForNote[n].note =
                 itInstHeader.sampleForNote[n].note;
@@ -450,8 +431,16 @@ int Module::loadItInstrument(
                 itInstHeader.sampleForNote[n].sampleNr;
         }
 
+        // take care of the volume envelope:
+        instrumentHeader.volumeEnvelope.loopStart       = itInstHeader.volumeLoopStart;
+        instrumentHeader.volumeEnvelope.loopEnd         = itInstHeader.volumeLoopEnd;
+        instrumentHeader.volumeEnvelope.sustainStart    = itInstHeader.sustainLoopStart;
+        instrumentHeader.volumeEnvelope.sustainEnd      = itInstHeader.sustainLoopEnd;
+
         /*
-        instrumentHeader.nVolumePoints =
+        //    Volume envelope: Values from 0->64, 0FFh indicating end of envelope.
+
+        instrumentHeader.nVolumePoints = itInstHeader.
         instrumentHeader.volumeEnvelope =
         instrumentHeader.volumeFadeOut =
         instrumentHeader.volumeLoopStart =
@@ -470,13 +459,29 @@ int Module::loadItInstrument(
         instrumentHeader.vibratoType =
         */
 
-        // ...
+        // copy the rest of the instrument info
+        instrumentHeader.name.assign( itInstHeader.name,IT_INST_NAME_LENGTH );
+        instrumentHeader.nnaType = itInstHeader.NNA;
+        instrumentHeader.dctType = itInstHeader.DNC;
+        instrumentHeader.dcaType = DCA_CUT;
+        //instrumentHeader.initialFilterCutoff = itInstHeader.initialFilterCutOff;
+        //instrumentHeader.initialFilterResonance = itInstHeader.initialFilterResonance;
+        instrumentHeader.volumeFadeOut = itInstHeader.fadeOut; // TO CHECK!
+        //instrumentHeader.pitchPanSeparation = itInstHeader.pitchPanSeparation;
+        //instrumentHeader.pitchPanCenter = itInstHeader.pitchPanCenter;
+        //instrumentHeader.globalVolume = itInstHeader.globalVolume;
+        //instrumentHeader.defaultPanning = itInstHeader.defaultPanning;
+        //instrumentHeader.randVolumeVariation = itInstHeader.randVolumeVariation;
+        //instrumentHeader.randPanningVariation = itInstHeader.randPanningVariation;
 
         instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
-
-
-    } 
+    }
     else {
+
+        // **********************************
+        // It is a new instrument header yay!
+        // **********************************
+
         ItNewInstHeader itInstHeader;
         itFile.read( &itInstHeader,sizeof( ItNewInstHeader ) );
         if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) {
@@ -492,17 +497,81 @@ int Module::loadItInstrument(
             ItDebugShow::newInstHeader( itInstHeader );
 #endif
         }
-
-        // do stuff with instrument here!
+        // Load the instrument data into our own format.
+        // we start with the sample for note table:
         for ( int n = 0; n < IT_MAX_NOTE; n++ ) { 
             instrumentHeader.sampleForNote[n].note =
                 itInstHeader.sampleForNote[n].note;
             instrumentHeader.sampleForNote[n].sampleNr =
                 itInstHeader.sampleForNote[n].sampleNr;
         }
+        // copy all three envelopes in one loop. First we declare some pointers
+        // to the envelopes so we can access them in the loop:
+        ItNewEnvelope* srcEnvs[] = {
+            &(itInstHeader.volumeEnvelope),
+            &(itInstHeader.panningEnvelope),
+            &(itInstHeader.pitchFltrEnvelope)
+        };
+        Envelope* destEnvs[] = {
+            &(instrumentHeader.volumeEnvelope),
+            &(instrumentHeader.panningEnvelope),
+            &(instrumentHeader.pitchFltrEnvelope)
+        };
 
-        // ...
+        const int nrEnvelopes = 3;
+        for ( int envNr = 0; envNr < nrEnvelopes; envNr++ ) {
 
+            // create some shorthand references:
+            Envelope& destEnv = *(destEnvs[envNr]);
+            ItNewEnvelope& srcEnv = *(srcEnvs[envNr]);
+
+            // copy envelope node points:
+            destEnv.nrNodes = std::min( (int)(srcEnv.nrNodes),IT_MAX_ENVELOPE_NODES );
+            for ( int i = 0; i < srcEnv.nrNodes; i++ ) {
+                destEnv.nodes[i].x = srcEnv.nodes[i].tickIndex;
+                destEnv.nodes[i].y = srcEnv.nodes[i].magnitude;
+            }
+            // copy other envelope parameters:
+            destEnv.sustainStart = srcEnv.sustainLoopStart;
+            destEnv.sustainEnd = srcEnv.sustainLoopEnd;
+            destEnv.loopStart = srcEnv.loopStart;
+            destEnv.loopEnd = srcEnv.loopEnd;
+
+            // take care of flags:
+            unsigned char flags = 0;
+            if ( srcEnv.flag & IT_ENVELOPE_ENABLED_FLAG )
+                flags |= ENVELOPE_IS_ENABLED_FLAG;
+
+            if ( srcEnv.flag & IT_ENVELOPE_IS_LOOPED_FLAG )
+                flags |= ENVELOPE_IS_LOOPED_FLAG;
+
+            if ( srcEnv.flag & IT_ENVELOPE_IS_SUSTAINED_FLAG )
+                flags |= ENVELOPE_IS_SUSTAINED_FLAG;
+
+            if ( (srcEnv.flag & IT_ENVELOPE_IS_FOR_FILTER_FLAG) && (envNr == 3) )
+                flags |= ENVELOPE_FOR_FILTER_FLAG;
+
+            if ( (srcEnv.flag & IT_ENVELOPE_CARRY_ENABLED_FLAG) && (envNr == 3) )
+                flags |= ENVELOPE_CARRY_ENABLED_FLAG;
+
+            destEnv.setFlags( flags );
+        }
+        // copy the rest of the instrument info
+        instrumentHeader.name.assign( itInstHeader.name,IT_INST_NAME_LENGTH );
+        instrumentHeader.nnaType                = itInstHeader.NNA;
+        instrumentHeader.dctType                = itInstHeader.dupCheckType;
+        instrumentHeader.dcaType                = itInstHeader.dupCheckAction;
+        instrumentHeader.initialFilterCutoff    = itInstHeader.initialFilterCutOff;
+        instrumentHeader.initialFilterResonance = itInstHeader.initialFilterResonance;
+        instrumentHeader.volumeFadeOut          = itInstHeader.fadeOut;
+        instrumentHeader.pitchPanSeparation     = itInstHeader.pitchPanSeparation;
+        instrumentHeader.pitchPanCenter         = itInstHeader.pitchPanCenter;
+        instrumentHeader.globalVolume           = itInstHeader.globalVolume;
+        instrumentHeader.defaultPanning         = itInstHeader.defaultPanning;
+        instrumentHeader.randVolumeVariation    = itInstHeader.randVolumeVariation;
+        instrumentHeader.randPanningVariation   = itInstHeader.randPanningVariation;
+
+        // create the instrument
         instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
     }
     return 0;
@@ -868,7 +937,7 @@ void remapItEffects( Effect& remapFx )
 // pattern numbers are 0-based
 int Module::loadItPattern( VirtualFile& itFile,int patternNr )
 {
-    nChannels_ = 32; // = IT_MAX_CHANNELS; // TODO TO FIX!
+    nrChannels_ = 32; // = IT_MAX_CHANNELS; // TODO TO FIX!
     boolean         channelIsUsed[IT_MAX_CHANNELS];
     unsigned char   masks[IT_MAX_CHANNELS];
     Note            prevRow[IT_MAX_CHANNELS];
@@ -892,7 +961,7 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
                 << "! Exiting.\n";
         return -1;
     }
-    std::vector<Note> patternData( nChannels_ * itPatternHeader.nRows );
+    std::vector<Note> patternData( nrChannels_ * itPatternHeader.nRows );
     std::vector<Note>::iterator iNote = patternData.begin();
 
     // start decoding:
@@ -982,8 +1051,8 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         decodeItVolumeColumn( note.effects[0],volc );
         remapItEffects( note.effects[1] );
 
-        if ( channelNr < nChannels_ ) {
-            patternData[rowNr * nChannels_ + channelNr] = note;
+        if ( channelNr < nrChannels_ ) {
+            patternData[rowNr * nrChannels_ + channelNr] = note;
         }
     }
     if ( showDebugInfo_ ) {
@@ -995,7 +1064,7 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
 #endif
     }
     patterns_[patternNr] = std::make_unique < Pattern >
-        ( nChannels_,itPatternHeader.nRows,patternData );
+        ( nrChannels_,itPatternHeader.nRows,patternData );
     return 0;
 }
 
@@ -1009,9 +1078,9 @@ void ItDebugShow::fileHeader( ItFileHeader& itFileHeader )
         << "\nSong Name                   : " << itFileHeader.songName
         << "\nPhilight                    : " << itFileHeader.phiLight
         << "\nSong length                 : " << itFileHeader.songLength
-        << "\nNr of instruments           : " << itFileHeader.nInstruments
-        << "\nNr of samples               : " << itFileHeader.nSamples
-        << "\nNr of patterns              : " << itFileHeader.nPatterns << std::hex
+        << "\nNr of instruments           : " << itFileHeader.nrInstruments
+        << "\nNr of samples               : " << itFileHeader.nrSamples
+        << "\nNr of patterns              : " << itFileHeader.nrPatterns << std::hex
         << "\nCreated w/ tracker version  : 0x" << itFileHeader.createdWTV
         << "\nCompat. w/ tracker version  : 0x" << itFileHeader.compatibleWTV
         << "\nFlags                       : 0x" << itFileHeader.flags
@@ -1048,7 +1117,7 @@ void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
         << "\nNew Note Action     : " << (unsigned)itOldInstHeader.NNA
         << "\nDupl. Note Action   : " << (unsigned)itOldInstHeader.DNC
         << "\nTracker version     : " << itOldInstHeader.trackerVersion
-        << "\nNr of samples       : " << (unsigned)itOldInstHeader.nSamples
+        << "\nNr of samples       : " << (unsigned)itOldInstHeader.nrSamples
         << "\nInstrument name     : " << itOldInstHeader.name
         << "\n\n"
         << "Note -> Sample table: \n" << std::dec;
@@ -1058,7 +1127,7 @@ void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
     for ( int i = 0; i < 200; i++ )
         std::cout << std::setw( 4 ) << (unsigned)itOldInstHeader.volumeEnvelope[i];
     std::cout << "\n\nEnvelope node points (?): \n";
-    for ( int i = 0; i < 25; i++ )
+    for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ )
         std::cout
         << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2] << ","
         << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2 + 1] << " ";
@@ -1067,22 +1136,26 @@ void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
 
 void ItDebugShow::newInstHeader( ItNewInstHeader& itNewInstHeader )
 {
-    std::cout //<< "\nInstrument nr " << instrumentNr << " Header: "
+    std::cout 
         << "\nInstrument headertag: " << itNewInstHeader.tag[0]
         << itNewInstHeader.tag[1] << itNewInstHeader.tag[2] << itNewInstHeader.tag[3]
-        << "\nInstrument filename : " << itNewInstHeader.fileName << std::hex
+        << "\nInstrument filename : " << itNewInstHeader.fileName 
+        << std::hex
         << "\nNew Note Action     : " << (unsigned)itNewInstHeader.NNA
         << "\nDup check type      : " << (unsigned)itNewInstHeader.dupCheckType
-        << "\nDup check Action    : " << (unsigned)itNewInstHeader.dupCheckAction << std::dec
-        << "\nFade out (0..128)   : " << (unsigned)itNewInstHeader.fadeOut        // 0..128
-        << "\nPitch Pan separation: " << (unsigned)itNewInstHeader.pitchPanSeparation // -32 .. +32
+        << "\nDup check Action    : " << (unsigned)itNewInstHeader.dupCheckAction 
+        << std::dec
+        << "\nFade out (0..128)   : " << (unsigned)itNewInstHeader.fadeOut    
+        << "\nPitch Pan separation: " << (int     )itNewInstHeader.pitchPanSeparation // -32 .. +32
         << "\nPitch pan center    : " << (unsigned)itNewInstHeader.pitchPanCenter // C-0 .. B-9 <=> 0..119
         << "\nGlobal volume (128) : " << (unsigned)itNewInstHeader.globalVolume   // 0..128
         << "\nDefault panning     : " << (unsigned)itNewInstHeader.defaultPanning // 0..64, don't use if bit 7 is set
         << "\nRandom vol variation: " << (unsigned)itNewInstHeader.randVolumeVariation // expressed in percent
-        << "\nRandom pan variation: " << (unsigned)itNewInstHeader.randPanningVariation << std::hex
-        << "\nTracker version     : " << itNewInstHeader.trackerVersion << std::dec
-        << "\nNr of samples       : " << (unsigned)itNewInstHeader.nSamples
+        << "\nRandom pan variation: " << (unsigned)itNewInstHeader.randPanningVariation 
+        << std::hex
+        << "\nTracker version     : " << itNewInstHeader.trackerVersion 
+        << std::dec
+        << "\nNr of samples       : " << (unsigned)itNewInstHeader.nrSamples
         << "\nInstrument name     : " << itNewInstHeader.name
         << "\nInit. filter cut off: " << (unsigned)itNewInstHeader.initialFilterCutOff
         << "\nInit. filter reson. : " << (unsigned)itNewInstHeader.initialFilterResonance
@@ -1095,42 +1168,41 @@ void ItDebugShow::newInstHeader( ItNewInstHeader& itNewInstHeader )
         std::cout << std::setw( 4 ) << (unsigned)itNewInstHeader.sampleForNote[i].sampleNr;
     std::cout << "\n\nVolume envelope: "
         << "\nFlag                : " << (unsigned)itNewInstHeader.volumeEnvelope.flag
-        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.volumeEnvelope.nNodes
+        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.volumeEnvelope.nrNodes
         << "\nLoop start          : " << (unsigned)itNewInstHeader.volumeEnvelope.loopStart
         << "\nLoop end            : " << (unsigned)itNewInstHeader.volumeEnvelope.loopEnd
         << "\nSustain loop start  : " << (unsigned)itNewInstHeader.volumeEnvelope.sustainLoopStart
         << "\nSustain loop end    : " << (unsigned)itNewInstHeader.volumeEnvelope.sustainLoopEnd
         << "\nEnvelope node points: \n" << std::dec;
-    for ( int i = 0; i < 25; i++ )
+    for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ )
         std::cout
         << std::setw( 2 ) << (unsigned)itNewInstHeader.volumeEnvelope.nodes[i].magnitude << ":"
         << std::setw( 4 ) << (unsigned)itNewInstHeader.volumeEnvelope.nodes[i].tickIndex << " ";
     std::cout << "\n\nPanning envelope: "
         << "\nFlag                : " << (unsigned)itNewInstHeader.panningEnvelope.flag
-        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.panningEnvelope.nNodes
+        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.panningEnvelope.nrNodes
         << "\nLoop start          : " << (unsigned)itNewInstHeader.panningEnvelope.loopStart
         << "\nLoop end            : " << (unsigned)itNewInstHeader.panningEnvelope.loopEnd
         << "\nSustain loop start  : " << (unsigned)itNewInstHeader.panningEnvelope.sustainLoopStart
         << "\nSustain loop end    : " << (unsigned)itNewInstHeader.panningEnvelope.sustainLoopEnd
         << "\nEnvelope node points: \n" << std::dec;
-    for ( int i = 0; i < 25; i++ )
+    for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ )
         std::cout
         << std::setw( 2 ) << (unsigned)itNewInstHeader.panningEnvelope.nodes[i].magnitude << ":"
         << std::setw( 4 ) << (unsigned)itNewInstHeader.panningEnvelope.nodes[i].tickIndex << " ";
     std::cout << "\n\nPitch envelope: "
-        << "\nFlag                : " << (unsigned)itNewInstHeader.pitchEnvelope.flag
-        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.pitchEnvelope.nNodes
-        << "\nLoop start          : " << (unsigned)itNewInstHeader.pitchEnvelope.loopStart
-        << "\nLoop end            : " << (unsigned)itNewInstHeader.pitchEnvelope.loopEnd
-        << "\nSustain loop start  : " << (unsigned)itNewInstHeader.pitchEnvelope.sustainLoopStart
-        << "\nSustain loop end    : " << (unsigned)itNewInstHeader.pitchEnvelope.sustainLoopEnd
+        << "\nFlag                : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.flag
+        << "\nNr of nodes         : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.nrNodes
+        << "\nLoop start          : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.loopStart
+        << "\nLoop end            : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.loopEnd
+        << "\nSustain loop start  : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.sustainLoopStart
+        << "\nSustain loop end    : " << (unsigned)itNewInstHeader.pitchFltrEnvelope.sustainLoopEnd
         << "\nEnvelope node points: \n" << std::dec;
-    for ( int i = 0; i < 25; i++ )
+    for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ )
         std::cout
-        << std::setw( 2 ) << (unsigned)itNewInstHeader.pitchEnvelope.nodes[i].magnitude << ":"
-        << std::setw( 4 ) << (unsigned)itNewInstHeader.pitchEnvelope.nodes[i].tickIndex << " ";
+        << std::setw( 2 ) << (unsigned)itNewInstHeader.pitchFltrEnvelope.nodes[i].magnitude << ":"
+        << std::setw( 4 ) << (unsigned)itNewInstHeader.pitchFltrEnvelope.nodes[i].tickIndex << " ";
     std::cout << "\n\n";
-
 }
 
 void ItDebugShow::sampleHeader( ItSampleHeader& itSampleHeader )

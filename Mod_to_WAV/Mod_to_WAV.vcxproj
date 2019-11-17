@@ -163,6 +163,7 @@
     <ClCompile Include="Instrument.cpp" />
     <ClCompile Include="ITLoader.cpp" />
     <ClCompile Include="itsex.cpp" />
+    <ClCompile Include="mixer.cpp" />
     <ClCompile Include="ModLoader.cpp" />
     <ClCompile Include="Module.cpp" />
     <ClCompile Include="Mod_to_wav.cpp" />
@@ -174,6 +175,7 @@
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Instrument.h" />
     <ClInclude Include="itsex.h" />
+    <ClInclude Include="Mixer.h" />
     <ClInclude Include="Module.h" />
     <ClInclude Include="Pattern.h" />
     <ClInclude Include="Sample.h" />

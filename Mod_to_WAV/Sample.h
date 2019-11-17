@@ -34,7 +34,6 @@ public:
 
 class Sample {
 public:
-    //bool            load( const SampleHeader& sampleHeader );
     Sample( const SampleHeader& sampleHeader );
     void operator=( const Sample& sourceSample );
 

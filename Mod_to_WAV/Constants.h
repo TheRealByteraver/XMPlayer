@@ -1,5 +1,6 @@
 #pragma once
 
+#define NOMINMAX
 #include <windows.h> // for the color constants
 
 // color constants for functions that show debug info
@@ -49,7 +50,7 @@ const char* const noteStrings[] = { // 2 + MAXIMUM_NOTES entries
 };
 
 // General constants for the player: 
-constexpr auto PAL_CALC         = 7093789.2;    // these values are
+constexpr auto PAL_CALC         = 7093789.2;   // these values are
 constexpr auto NTSC_CALC        = 7159090.5;   // not used 
 constexpr auto NTSC_C4_SPEED    = 8363.42;
 constexpr auto PAL_C4_SPEED     = 8287.14;
@@ -81,11 +82,31 @@ constexpr auto PANNING_MAX_STEPS            = 256; // must be a power of two
 constexpr auto PANNING_SHIFT                = 8;   // divide by 256 <=> SHR 8
 constexpr auto PANNING_CENTER               = PANNING_MAX_STEPS / 2 - 1;
 constexpr auto PANNING_FULL_RIGHT           = PANNING_MAX_STEPS - 1;
+
+// constants for envelopes:
 constexpr auto MAX_ENVELOPE_POINTS          = 25;  // XM has 12, IT has 25
 constexpr auto ENVELOPE_IS_ENABLED_FLAG     = 1;
 constexpr auto ENVELOPE_IS_SUSTAINED_FLAG   = 2;
 constexpr auto ENVELOPE_IS_LOOPED_FLAG      = 4;
+constexpr auto ENVELOPE_CARRY_ENABLED_FLAG  = 8;
+constexpr auto ENVELOPE_FOR_FILTER_FLAG     = 128; // for IT, not supported
 
+// New Note Action constants
+constexpr auto  NNA_NOTE_CUT      = 0;
+constexpr auto  NNA_NOTE_CONTINUE = 1;
+constexpr auto  NNA_NOTE_OFF      = 2;
+constexpr auto  NNA_NOTE_FADE     = 3;
+
+// New Note Action constants - Duplicate Check Type
+constexpr auto  DCT_OFF           = 0;
+constexpr auto  DCT_NOTE          = 1;
+constexpr auto  DCT_SAMPLE        = 2;
+constexpr auto  DCT_INSTRUMENT    = 3;
+
+// New Note Action constants - Duplicate Check Action
+constexpr auto  DCA_CUT           = 0;
+constexpr auto  DCA_NOTE_OFF      = 1;
+constexpr auto  DCA_NOTE_FADE     = 2;
 
 // direction indicating how the sample is being played in the mixer.
 // this is necessary for ping pong loops
@@ -99,12 +120,6 @@ constexpr auto  TRACKER_ST321      = 3;
 constexpr auto  TRACKER_FT2        = 4;
 constexpr auto  TRACKER_IT         = 5;
 
-// New Note Action constants
-constexpr auto  NNA_NOTE_CUT      = 0;
-constexpr auto  NNA_NOTE_CONTINUE = 1;
-constexpr auto  NNA_NOTE_OFF      = 2;
-constexpr auto  NNA_NOTE_FADE     = 3;
-                            
 // effect nrs:
 constexpr auto  NO_EFFECT                        = 0x0; // ARPEGGIO is remapped to 0x25
 constexpr auto  PORTAMENTO_UP                    = 0x1;

@@ -98,10 +98,10 @@ public:
     unsigned        getMinPeriod()        const { return minPeriod_;            }
     unsigned        getMaxPeriod()        const { return maxPeriod_;            }
     unsigned        getPanningStyle()     const { return panningStyle_;         }
-    unsigned        getnChannels()        const { return nChannels_;            }
-    unsigned        getnInstruments()     const { return nInstruments_;         }
-    unsigned        getnSamples()         const { return nSamples_;             }
-    unsigned        getnPatterns()        const { return nPatterns_;            }
+    unsigned        getnChannels()        const { return nrChannels_;           }
+    unsigned        getnInstruments()     const { return nrInstruments_;        }
+    unsigned        getnSamples()         const { return nrSamples_;            }
+    unsigned        getnPatterns()        const { return nrPatterns_;           }
     unsigned        getDefaultTempo()     const { return defaultTempo_;         }
     unsigned        getDefaultBpm()       const { return defaultBpm_;           }
     unsigned        getSongLength()       const { return songLength_;           }
@@ -147,10 +147,10 @@ private:
     unsigned        minPeriod_ = 14;
     unsigned        maxPeriod_ = 27392;
     unsigned        panningStyle_ = PANNING_STYLE_IT;
-    unsigned        nChannels_ = 0;
-    unsigned        nInstruments_ = 1;
-    unsigned        nSamples_ = 1;
-    unsigned        nPatterns_ = 1;
+    unsigned        nrChannels_ = 0;
+    unsigned        nrInstruments_ = 1;
+    unsigned        nrSamples_ = 1;
+    unsigned        nrPatterns_ = 1;
     unsigned        defaultTempo_ = 6;
     unsigned        defaultBpm_ = 125;
     unsigned        songLength_ = 1;
