@@ -110,7 +110,7 @@ public:
 
     unsigned        getDefaultPanPosition( unsigned i ) 
     { 
-        assert( i < nChannels_ );
+        assert( i < nrChannels_ );
         return defaultPanPositions_[i];
     }
     unsigned        getPatternTable( unsigned i )
@@ -131,7 +131,7 @@ public:
     }
     Pattern&        getPattern( unsigned pattern )
     { 
-        assert( pattern < MAX_PATTERN );
+        assert( pattern < MAX_PATTERNS );
         return (patterns_[pattern] ? *(patterns_[pattern]) : emptyPattern_);
     }
 

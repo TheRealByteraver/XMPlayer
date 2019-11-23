@@ -365,7 +365,7 @@ int main( int argc, char *argv[] )
                     << "\n" << i << ":" 
                     << moduleFile.getInstrument( i ).getName();
             }
-            std::cout << "\n";
+            std::cout << "\n\n";
             mixer.initialize( &moduleFile );  
             mixer.startReplay();
 

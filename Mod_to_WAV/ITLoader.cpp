@@ -156,6 +156,11 @@ struct ItNoteSampleMap {
     unsigned char   sampleNr;
 };
 
+struct ItOldEnvelopeNodePoint {
+    unsigned char   tickIndex;      // 0 .. 255
+    unsigned char   magnitude;      // 0..64 
+};
+
 struct ItOldInstHeader {
     char            tag[4];         // "IMPI"
     char            fileName[IT_DOS_FILENAME_LENGTH];
@@ -176,7 +181,7 @@ struct ItOldInstHeader {
     unsigned char   reserved3[6];
     ItNoteSampleMap sampleForNote[120];
     unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
-    unsigned char   nodes[IT_MAX_ENVELOPE_NODES * 2];       // ?
+    ItOldEnvelopeNodePoint nodes[IT_MAX_ENVELOPE_NODES];
 };
 
 struct ItNewEnvelopeNodePoint {
@@ -430,51 +435,53 @@ int Module::loadItInstrument(
             instrumentHeader.sampleForNote[n].sampleNr =
                 itInstHeader.sampleForNote[n].sampleNr;
         }
-
         // take care of the volume envelope:
         instrumentHeader.volumeEnvelope.loopStart       = itInstHeader.volumeLoopStart;
         instrumentHeader.volumeEnvelope.loopEnd         = itInstHeader.volumeLoopEnd;
         instrumentHeader.volumeEnvelope.sustainStart    = itInstHeader.sustainLoopStart;
         instrumentHeader.volumeEnvelope.sustainEnd      = itInstHeader.sustainLoopEnd;
 
-        /*
-        //    Volume envelope: Values from 0->64, 0FFh indicating end of envelope.
+        // copy envelope node points:
+        unsigned char& nrNodes = instrumentHeader.volumeEnvelope.nrNodes = 0;
+        for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ ) {
+            instrumentHeader.volumeEnvelope.nodes[i].x =
+                itInstHeader.nodes[i].tickIndex;
+            instrumentHeader.volumeEnvelope.nodes[i].y =
+                itInstHeader.nodes[i].magnitude;
+            if ( itInstHeader.nodes[i].tickIndex != 0xFF )
+                nrNodes++; // ??? To check!
+        }
+        nrNodes = std::min( nrNodes,(unsigned char)IT_MAX_ENVELOPE_NODES );
 
-        instrumentHeader.nVolumePoints = itInstHeader.
-        instrumentHeader.volumeEnvelope =
-        instrumentHeader.volumeFadeOut =
-        instrumentHeader.volumeLoopStart =
-        instrumentHeader.volumeLoopEnd =
-        instrumentHeader.volumeSustain =
-        instrumentHeader.volumeType =
-        instrumentHeader.nPanningPoints =
-        instrumentHeader.panningEnvelope =
-        instrumentHeader.panningLoopStart =
-        instrumentHeader.panningLoopEnd =
-        instrumentHeader.panningSustain =
-        instrumentHeader.panningType =
-        instrumentHeader.vibratoDepth =
-        instrumentHeader.vibratoRate =
-        instrumentHeader.vibratoSweep =
-        instrumentHeader.vibratoType =
-        */
+        // take care of flags:
+        unsigned char flags = 0;
+        if ( itInstHeader.flag & IT_ENVELOPE_ENABLED_FLAG )
+            flags |= ENVELOPE_IS_ENABLED_FLAG;
+
+        if ( itInstHeader.flag & IT_ENVELOPE_IS_LOOPED_FLAG )
+            flags |= ENVELOPE_IS_LOOPED_FLAG;
+
+        if ( itInstHeader.flag & IT_ENVELOPE_IS_SUSTAINED_FLAG )
+            flags |= ENVELOPE_IS_SUSTAINED_FLAG;
+
+        instrumentHeader.volumeEnvelope.setFlags( flags );
 
         // copy the rest of the instrument info
         instrumentHeader.name.assign( itInstHeader.name,IT_INST_NAME_LENGTH );
         instrumentHeader.nnaType = itInstHeader.NNA;
         instrumentHeader.dctType = itInstHeader.DNC;
         instrumentHeader.dcaType = DCA_CUT;
-        //instrumentHeader.initialFilterCutoff = itInstHeader.initialFilterCutOff;
-        //instrumentHeader.initialFilterResonance = itInstHeader.initialFilterResonance;
         instrumentHeader.volumeFadeOut = itInstHeader.fadeOut; // TO CHECK!
-        //instrumentHeader.pitchPanSeparation = itInstHeader.pitchPanSeparation;
-        //instrumentHeader.pitchPanCenter = itInstHeader.pitchPanCenter;
-        //instrumentHeader.globalVolume = itInstHeader.globalVolume;
-        //instrumentHeader.defaultPanning = itInstHeader.defaultPanning;
-        //instrumentHeader.randVolumeVariation = itInstHeader.randVolumeVariation;
-        //instrumentHeader.randPanningVariation = itInstHeader.randPanningVariation;
 
-        instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
+        // not available in the old .IT format:
+        instrumentHeader.initialFilterCutoff = 0;
+        instrumentHeader.initialFilterResonance = 0;
+        instrumentHeader.pitchPanSeparation = 0; // ?
+        instrumentHeader.pitchPanCenter = 0; // ?
+        instrumentHeader.globalVolume = 128;
+        instrumentHeader.defaultPanning = 0; // ?
+        instrumentHeader.randVolumeVariation = 0;
+        instrumentHeader.randPanningVariation = 0;
     }
     else {
 
@@ -570,10 +577,9 @@ int Module::loadItInstrument(
         instrumentHeader.defaultPanning         = itInstHeader.defaultPanning;
         instrumentHeader.randVolumeVariation    = itInstHeader.randVolumeVariation;
         instrumentHeader.randPanningVariation   = itInstHeader.randPanningVariation;
-
-        // create the instrument
-        instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
     }
+    // create the instrument
+    instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
     return 0;
 }
 
@@ -1129,8 +1135,8 @@ void ItDebugShow::oldInstHeader( ItOldInstHeader& itOldInstHeader )
     std::cout << "\n\nEnvelope node points (?): \n";
     for ( int i = 0; i < IT_MAX_ENVELOPE_NODES; i++ )
         std::cout
-        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2] << ","
-        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i * 2 + 1] << " ";
+        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i].tickIndex << ","
+        << std::setw( 2 ) << (unsigned)itOldInstHeader.nodes[i].magnitude << " ";
     std::cout << "\n\n";
 }
 

@@ -258,6 +258,104 @@ public:
             return y1 + ((framePos - x1) * (y2 - y1)) / (x2 - x1);
         }
     }
+
+
+    int         getPrecedingNode( unsigned frameNr ) {
+        // safety (a single node envelope is not really an envelope but ok):
+        if ( nrNodes <= 1 )
+            return 0;
+
+        int nodeNr = 0;
+        for ( ; nodeNr < nrNodes; nodeNr++ ) {
+
+            // find our position in the envelope
+            if ( frameNr >= nodes[nrNodes].x )
+                break;
+        }
+        // check if we went past the last node:
+        if ( nodeNr >= nrNodes )
+            nodeNr--;
+        return nodeNr;
+    }
+    int         getInterpolatedVal( unsigned frameNr ) 
+    {
+        int idx1 = getPrecedingNode( frameNr );
+
+        // check if we arrived at the last envelope node:
+        if ( idx1 == (nrNodes - 1) )
+            return nodes[idx1].x;
+
+        int idx2 = idx1 + 1;
+
+        // interpolate value based on prev. & next points:
+        int x1 = nodes[idx1].x;
+        int y1 = nodes[idx1].y;
+        int x2 = nodes[idx2].x;
+        int y2 = nodes[idx2].y;
+
+        if ( x2 == x1 ) // avoid division by zero :)
+            return y1;
+
+        return y1 + ((frameNr - x1) * (y2 - y1)) / (x2 - x1);
+    }
+    int         getXmEnvelopeVal( unsigned& frameNr,bool keyIsReleased )
+    {
+        // safety (a single node envelope is not really an envelope but ok):
+        if ( nrNodes <= 1 )
+            return nodes[0].y;
+
+        bool checkSustain = isSustained() && (!keyIsReleased);
+
+        // get the node we just passed:
+        int nodeNr = getPrecedingNode( frameNr );
+
+
+
+        if ( isLooped() ) { 
+
+            if ( !checkSustain ) { 
+
+                // loop the envelope before and after key off, till fade out
+                if ( nodeNr >= loopEnd )
+                    frameNr = nodes[loopStart].x + frameNr - nodes[loopEnd].x;
+                return getInterpolatedVal( frameNr );
+            }
+            // loop is sustained:
+            else { 
+                if ( nodeNr >= sustainStart ) { 
+                    frameNr = nodes[sustainStart].x;
+                    return nodes[sustainStart].y;
+                }
+
+                if ( nodeNr >= loopEnd )
+                    frameNr = nodes[loopStart].x + frameNr - nodes[loopEnd].x;
+                return getInterpolatedVal( frameNr );
+            }           
+        }
+        // no loop in envelope:
+        else { 
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    }
+
     void        setFlags( unsigned char flags ) 
     { 
         flags_ = flags & 
@@ -272,6 +370,16 @@ public:
     void        disable()
     {
         flags_ &= 0xFFFFFFFF - ENVELOPE_IS_ENABLED_FLAG;
+    }
+    void        disableLoop() 
+    {
+        if ( isLooped() )
+            flags_ ^= ENVELOPE_IS_LOOPED_FLAG;
+    }
+    void        disableSustain()
+    {
+        if ( isSustained() )
+            flags_ ^= ENVELOPE_IS_SUSTAINED_FLAG;
     }
     bool        isEnabled() const
     {

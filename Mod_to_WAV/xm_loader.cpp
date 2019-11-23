@@ -338,6 +338,11 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
         instHdr.volumeEnvelope.loopStart = xmInstHdr2.volumeLoopStart;
         instHdr.volumeEnvelope.loopEnd = xmInstHdr2.volumeLoopEnd;
 
+        // safety check: no sustain if after loop end
+        if ( instHdr.volumeEnvelope.isLooped() && 
+            (instHdr.volumeEnvelope.sustainStart > instHdr.volumeEnvelope.loopEnd) )
+            instHdr.volumeEnvelope.disableSustain();
+
         // copy panning envelope:
         for ( unsigned i = 0; i < xmInstHdr2.nrPanningNodes; i++ ) {
             instHdr.panningEnvelope.nodes[i].x = xmInstHdr2.panningEnvelope[i].x;
@@ -349,6 +354,11 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             instHdr.panningEnvelope.sustainEnd = xmInstHdr2.panningSustain;
         instHdr.panningEnvelope.loopStart = xmInstHdr2.panningLoopStart;
         instHdr.panningEnvelope.loopEnd = xmInstHdr2.panningLoopEnd;
+
+        // safety check: no sustain if after loop end
+        if ( instHdr.panningEnvelope.isLooped() &&
+            (instHdr.panningEnvelope.sustainStart > instHdr.panningEnvelope.loopEnd) )
+            instHdr.panningEnvelope.disableSustain();
 
         // copy some more miscellaneous parameters:
         instHdr.volumeFadeOut = xmInstHdr2.volumeFadeOut;
