@@ -17,7 +17,16 @@ unsigned char   randPanningVariation;// not implemented
 #include <string>
 #include <cassert>
 
+// both below are for debugging:
+#include <iostream>    
+#include <iomanip>
+
+
 #include "constants.h"
+
+
+const bool xmEnvelopeStyle = true;
+const bool itEnvelopeStyle = false;
 
 /*
     range of x is normally 16 bit
@@ -170,97 +179,33 @@ public:
     **********************
 
 */
+
 class Envelope {
 public:
-    // this function will modify framePos if needed (loop, sustain)
-    int         getEnvelopeVal( unsigned& framePos,bool keyIsReleased ) const
+    void        setEnvelopeStyle( bool envelopeStyle ) 
+    {
+        envelopeStyle_ = envelopeStyle;
+    }
+
+    // this function will modify frameNr if needed (loop, sustain)
+    int         getEnvelopeVal( unsigned& frameNr,bool keyIsReleased ) const
     {
         // exit if envelope is not used / enabled
         if ( !isEnabled() )
             return MAX_VOLUME;
 
-        unsigned xSustain = nodes[sustainStart].x;
-        unsigned xLoopStart = nodes[loopStart].x;
-        unsigned xLoopEnd = nodes[loopEnd].x;
-        unsigned xFinal = nodes[(nrNodes == 0) ? 0 : (nrNodes - 1)].x;
-
-        if ( keyIsReleased == false ) {
-
-            // if we reached the sustain point then hold it there:
-            if ( isSustained() && (framePos >= xSustain) ) {
-                framePos = xSustain;
-                return nodes[sustainStart].y;
-            }
-
-            // if not, check if we are past the envelope loop end.
-            // if so, go to the start of the loop:
-            if ( isLooped() && (framePos >= xLoopEnd) )  
-                framePos = xLoopStart + xLoopEnd - framePos;
-            
-            // now interpolate the envelope value based on the
-            // points before and after our position:
-            int idx1 = 0;
-            int idx2 = 0;
-            for ( int i = 0; i < nrNodes; i++ ) {
-                if ( framePos <= nodes[i].x )
-                    break;
-                idx1 = idx2;
-                idx2 = i;
-            }
-            // interpolate value based on prev. & next points:
-            int x1 = nodes[idx1].x;
-            int y1 = nodes[idx1].y;
-            int x2 = nodes[idx2].x;
-            int y2 = nodes[idx2].y;
-
-            if ( framePos > (unsigned)x2 ) { // avoid overshoot of last point
-                framePos = x2;
-                return y2;
-            }
-            if ( x2 == x1 ) // avoid division by zero :)
-                return y1;
-
-            return y1 + ((framePos - x1) * (y2 - y1)) / (x2 - x1);
-        }
-        else { // key was released
-            // check if we are past the envelope loop end.
-            // if so, go to the start of the loop, except if
-            // the sustain point coincides with the Loop end point,
-            // in which case we progress through the rest of the envelope
-            if ( isLooped() && (framePos >= xLoopEnd) ) {
-                if ( xSustain != xLoopStart )
-                    framePos = xLoopStart + xLoopEnd - framePos; // loop envelope
-            }
-
-            // now interpolate the envelope value based on the
-            // points before and after our position:
-            int idx1 = 0;
-            int idx2 = 0;
-            for ( int i = 0; i < nrNodes; i++ ) {
-                if ( framePos <= nodes[i].x )
-                    break;
-                idx1 = idx2;
-                idx2 = i;
-            }
-            // interpolate value based on prev. & next points:
-            int x1 = nodes[idx1].x;
-            int y1 = nodes[idx1].y;
-            int x2 = nodes[idx2].x;
-            int y2 = nodes[idx2].y;
-
-            if ( framePos > (unsigned)x2 ) { // avoid overshoot of last point
-                framePos = x2;
-                return y2;
-            }
-            if ( x2 == x1 ) // avoid division by zero :)
-                return y1;
-
-            return y1 + ((framePos - x1) * (y2 - y1)) / (x2 - x1);
-        }
+        if ( envelopeStyle_ == xmEnvelopeStyle )
+            return getXmEnvelopeVal( frameNr,keyIsReleased );
+        else 
+            return getItEnvelopeVal( frameNr,keyIsReleased );
     }
-
-
-    int         getPrecedingNode( unsigned frameNr ) {
+    bool        isLastNode( int nodeNr ) const  
+    {
+        if ( nrNodes <= 1 )
+            return true;
+        return nodeNr >= nrNodes - 1;
+    }
+    int         getPrecedingNode( unsigned frameNr ) const  {
         // safety (a single node envelope is not really an envelope but ok):
         if ( nrNodes <= 1 )
             return 0;
@@ -269,21 +214,26 @@ public:
         for ( ; nodeNr < nrNodes; nodeNr++ ) {
 
             // find our position in the envelope
-            if ( frameNr >= nodes[nrNodes].x )
+            if ( frameNr <= nodes[nodeNr].x )
                 break;
         }
+        // we need the preceding node:
+        if ( nodeNr )
+            nodeNr--;
+
         // check if we went past the last node:
         if ( nodeNr >= nrNodes )
             nodeNr--;
+
         return nodeNr;
     }
-    int         getInterpolatedVal( unsigned frameNr ) 
+    int         getInterpolatedVal( unsigned frameNr ) const   
     {
         int idx1 = getPrecedingNode( frameNr );
 
         // check if we arrived at the last envelope node:
-        if ( idx1 == (nrNodes - 1) )
-            return nodes[idx1].x;
+        if ( isLastNode( idx1 ) )
+            return nodes[idx1].y;
 
         int idx2 = idx1 + 1;
 
@@ -296,9 +246,83 @@ public:
         if ( x2 == x1 ) // avoid division by zero :)
             return y1;
 
-        return y1 + ((frameNr - x1) * (y2 - y1)) / (x2 - x1);
+        int retval = y1 + ((int)(frameNr - x1) * (y2 - y1)) / (x2 - x1);
+
+        //std::cout
+        //    << "\nframeNr - x1 = " << std::setw( 3 ) << (frameNr - x1)
+        //    << ", y1 = " << std::setw( 2 ) << y1
+        //    << ", y2 - y1 = " << std::setw( 2 ) << (y2 - y1)
+        //    << ", x2 - x1 = " << std::setw( 2 ) << (x2 - x1)
+        //    << ", retval = " << retval;
+
+        return retval;
     }
-    int         getXmEnvelopeVal( unsigned& frameNr,bool keyIsReleased )
+    int         getXmEnvelopeVal( unsigned& frameNr,bool keyIsReleased ) const
+    {
+        // safety (a single node envelope is not really an envelope but ok):
+        if ( nrNodes <= 1 )
+            return nodes[0].y;
+
+        bool checkSustain = isSustained() && (!keyIsReleased);
+        bool xmSustainRule = sustainStart == loopEnd;
+
+        // get the node we just passed:
+        int nodeNr = getPrecedingNode( frameNr );
+
+        if ( isLooped() ) { 
+            if ( !checkSustain ) { // no sustain OR key is released
+                // proceed after envelope loop if sustain point & loop end point coincide:
+                if ( xmSustainRule && isSustained() ) {
+
+                    // sustain is enabled but checkSustain == false means key is released
+                    if ( !isLastNode( nodeNr ) )
+                        return getInterpolatedVal( frameNr );
+                    else {
+                        frameNr = nodes[nodeNr].x;
+                        return nodes[nodeNr].y;
+                    }
+                }
+                // loop the envelope before and after key off, till fade out
+                if ( nodeNr >= loopEnd )
+                    frameNr = nodes[loopStart].x;
+                return getInterpolatedVal( frameNr );
+            }
+            // loop is sustained:
+            else { 
+                // sustain is only processed if located before loopEnd
+                // if sustain is located ON loopend, just loop the envelope
+                if ( (nodeNr >= sustainStart) && (!xmSustainRule) ) {
+                    frameNr = nodes[sustainStart].x;
+                    return nodes[sustainStart].y;
+                }
+                // loop before the sustain or sustain on loopend? -> just process the loop
+                if ( nodeNr >= loopEnd )
+                    frameNr = nodes[loopStart].x + frameNr - nodes[loopEnd].x;
+                return getInterpolatedVal( frameNr );
+            }           
+        }
+        // no loop in envelope:
+        else { 
+            if ( !checkSustain ) {
+
+                if ( !isLastNode( nodeNr ) )
+                    return getInterpolatedVal( frameNr );
+                else {
+                    frameNr = nodes[nodeNr].x;
+                    return nodes[nodeNr].y;
+                }            
+            }
+            // sustain is present in envelope:
+            else {               
+                if ( nodeNr >= sustainStart ) {
+                    frameNr = nodes[sustainStart].x;
+                    return nodes[sustainStart].y;
+                }
+            }
+        }
+        return 0; // to get rid of compiler warning
+    }
+    int         getItEnvelopeVal( unsigned& frameNr,bool keyIsReleased ) const
     {
         // safety (a single node envelope is not really an envelope but ok):
         if ( nrNodes <= 1 )
@@ -309,51 +333,20 @@ public:
         // get the node we just passed:
         int nodeNr = getPrecedingNode( frameNr );
 
-
-
-        if ( isLooped() ) { 
-
-            if ( !checkSustain ) { 
-
-                // loop the envelope before and after key off, till fade out
-                if ( nodeNr >= loopEnd )
-                    frameNr = nodes[loopStart].x + frameNr - nodes[loopEnd].x;
-                return getInterpolatedVal( frameNr );
+        if ( checkSustain ) { // sustain is on, ignore loop for now
+            
+            // check if we are past the sustain loop end
+            if ( nodeNr >= sustainEnd ) { 
+                frameNr = nodes[sustainStart].x;
             }
-            // loop is sustained:
-            else { 
-                if ( nodeNr >= sustainStart ) { 
-                    frameNr = nodes[sustainStart].x;
-                    return nodes[sustainStart].y;
-                }
-
-                if ( nodeNr >= loopEnd )
-                    frameNr = nodes[loopStart].x + frameNr - nodes[loopEnd].x;
-                return getInterpolatedVal( frameNr );
-            }           
         }
-        // no loop in envelope:
-        else { 
+        // sustain is finished or there is no sustain:
+        else {
+            // check if we need to loop
+            if ( isLooped() && (nodeNr >= loopEnd) ) 
+                frameNr = nodes[loopStart].x; 
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return getInterpolatedVal( frameNr );
     }
 
     void        setFlags( unsigned char flags ) 
@@ -396,16 +389,18 @@ public:
 
 public:
     EnvelopePoint   nodes[MAX_ENVELOPE_POINTS];
-    unsigned char   align = 0;            // 32bit-align the next values
+    unsigned char   align = 0;            // 4 byte align the next values
     unsigned char   nrNodes = 0;     
-    unsigned char   sustainStart = 0;     // sustainStart
+    unsigned char   sustainStart = 0;   
     unsigned char   sustainEnd = 0;
     unsigned char   loopStart = 0;
     unsigned char   loopEnd = 0;
 
 private:
     unsigned char   flags_ = 0;
+    static bool     envelopeStyle_;
 };
+
 
 class VibratoConfig {
 public:

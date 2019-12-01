@@ -6,7 +6,25 @@ Thanks must go to:
 - Tammo Hinrichs for the .IT sample decompression routines itsex.c which I
   used in my .IT loader. Thanks for explaining how the algorithm works! See 
   itsex.h for details.
+
+
+
+Notes from OpenMPT forums:
+
+Impulse Tracker will have issues with files exceeding its originally specified
+ranges, however most other players have no problems with the following:
+- 256 rows per pattern or more (OpenMPT and I think XMPlay cap this at 1024)
+- 240 distinct patterns (could in theory be 254, but is less for historical 
+  reasons, I guess)
+- 200 samples (could again be 255, but this is probably another historical 
+  limit)
+
 */
+
+#include <climits>
+#if CHAR_BIT != 8 
+This code requires a byte to be 8 bits wide
+#endif
 
 #define NOMINMAX
 #include <windows.h>
@@ -33,106 +51,106 @@ Thanks must go to:
 #include <bitset>
 #include <iomanip>
 
-constexpr auto IT_MAX_CHANNELS                       = 64;
-constexpr auto IT_MAX_PATTERNS                       = 200;
-constexpr auto IT_MAX_SONG_LENGTH                    = MAX_PATTERNS;
-constexpr auto IT_MIN_PATTERN_ROWS                   = 32;
-constexpr auto IT_MAX_PATTERN_ROWS                   = 200;
-constexpr auto IT_MAX_SAMPLES                        = 99;
-constexpr auto IT_MAX_INSTRUMENTS                    = 100; // ?
-constexpr auto IT_MAX_NOTE                           = 119; // 9 octaves: (C-0 -> B-9)
+const int IT_MAX_CHANNELS                       = 64;
+const int IT_MAX_PATTERNS                       = 200;
+const int IT_MAX_SONG_LENGTH                    = MAX_PATTERNS;
+const int IT_MIN_PATTERN_ROWS                   = 32;
+const int IT_MAX_PATTERN_ROWS                   = 200;
+const int IT_MAX_SAMPLES                        = 99;
+const int IT_MAX_INSTRUMENTS                    = 100; // ?
+const int IT_MAX_NOTE                           = 119; // 9 octaves: (C-0 -> B-9)
 
-constexpr auto IT_STEREO_FLAG                        = 1;
-constexpr auto IT_VOL0_OPT_FLAG                      = 2;
-constexpr auto IT_INSTRUMENT_MODE                    = 4;
-constexpr auto IT_LINEAR_FREQUENCIES_FLAG            = 8;
-constexpr auto IT_OLD_EFFECTS_MODE                   = 16;
-constexpr auto IT_GEF_LINKED_EFFECT_MEMORY           = 32;
-constexpr auto IT_USE_MIDI_PITCH_CONTROLLER          = 64;
-constexpr auto IT_REQUEST_MIDI_CONFIG                = 128;
+const int IT_STEREO_FLAG                        = 1;
+const int IT_VOL0_OPT_FLAG                      = 2;
+const int IT_INSTRUMENT_MODE                    = 4;
+const int IT_LINEAR_FREQUENCIES_FLAG            = 8;
+const int IT_OLD_EFFECTS_MODE                   = 16;
+const int IT_GEF_LINKED_EFFECT_MEMORY           = 32;
+const int IT_USE_MIDI_PITCH_CONTROLLER          = 64;
+const int IT_REQUEST_MIDI_CONFIG                = 128;
 
-constexpr auto IT_SONG_MESSAGE_FLAG                  = 1;
-constexpr auto IT_MIDI_CONFIG_EMBEDDED               = 8;
+const int IT_SONG_MESSAGE_FLAG                  = 1;
+const int IT_MIDI_CONFIG_EMBEDDED               = 8;
 
-constexpr auto IT_DOS_FILENAME_LENGTH                = 12;
-constexpr auto IT_SONG_NAME_LENGTH                   = 26;
-constexpr auto IT_INST_NAME_LENGTH                   = 26;
-constexpr auto IT_MAX_ENVELOPE_NODES                 = 25;
-constexpr auto IT_ENVELOPE_END_MARKER                = 0xFF;
-constexpr auto IT_ENVELOPE_ENABLED_FLAG              = 1;
-constexpr auto IT_ENVELOPE_IS_LOOPED_FLAG            = 2;
-constexpr auto IT_ENVELOPE_IS_SUSTAINED_FLAG         = 4;
-constexpr auto IT_ENVELOPE_CARRY_ENABLED_FLAG        = 8;
-constexpr auto IT_ENVELOPE_IS_FOR_FILTER_FLAG        = 128;
+const int IT_DOS_FILENAME_LENGTH                = 12;
+const int IT_SONG_NAME_LENGTH                   = 26;
+const int IT_INST_NAME_LENGTH                   = 26;
+const int IT_MAX_ENVELOPE_NODES                 = 25;
+const int IT_ENVELOPE_END_MARKER                = 0xFF;
+const int IT_ENVELOPE_ENABLED_FLAG              = 1;
+const int IT_ENVELOPE_IS_LOOPED_FLAG            = 2;
+const int IT_ENVELOPE_IS_SUSTAINED_FLAG         = 4;
+const int IT_ENVELOPE_CARRY_ENABLED_FLAG        = 8;
+const int IT_ENVELOPE_IS_FOR_FILTER_FLAG        = 128;
 
 // sample flags
-constexpr auto IT_SMP_NAME_LENGTH                    = 26;
-constexpr auto IT_SMP_ASSOCIATED_WITH_HEADER         = 1;
-constexpr auto IT_SMP_IS_16_BIT                      = 2;
-constexpr auto IT_SMP_IS_STEREO                      = 4; // not supported by Impulse Trckr
-constexpr auto IT_SMP_IS_COMPRESSED                  = 8;
-constexpr auto IT_SMP_LOOP_ON                        = 16;
-constexpr auto IT_SMP_SUSTAIN_LOOP_ON                = 32;
-constexpr auto IT_SMP_PINGPONG_LOOP_ON               = 64;
-constexpr auto IT_SMP_PINGPONG_SUSTAIN_LOOP_ON       = 128;
-constexpr auto IT_SMP_USE_DEFAULT_PANNING            = 128;
-constexpr auto IT_SMP_MAX_GLOBAL_VOLUME              = 64;
-constexpr auto IT_SMP_MAX_VOLUME                     = 64;
-constexpr auto IT_SIGNED_SAMPLE_DATA                 = 1;
+const int IT_SMP_NAME_LENGTH                    = 26;
+const int IT_SMP_ASSOCIATED_WITH_HEADER         = 1;
+const int IT_SMP_IS_16_BIT                      = 2;
+const int IT_SMP_IS_STEREO                      = 4; // not supported by Impulse Trckr
+const int IT_SMP_IS_COMPRESSED                  = 8;
+const int IT_SMP_LOOP_ON                        = 16;
+const int IT_SMP_SUSTAIN_LOOP_ON                = 32;
+const int IT_SMP_PINGPONG_LOOP_ON               = 64;
+const int IT_SMP_PINGPONG_SUSTAIN_LOOP_ON       = 128;
+const int IT_SMP_USE_DEFAULT_PANNING            = 128;
+const int IT_SMP_MAX_GLOBAL_VOLUME              = 64;
+const int IT_SMP_MAX_VOLUME                     = 64;
+const int IT_SIGNED_SAMPLE_DATA                 = 1;
 
 // pattern flags
-constexpr auto IT_END_OF_SONG_MARKER                 = 255;
-constexpr auto IT_MARKER_PATTERN                     = 254;
-constexpr auto IT_PATTERN_CHANNEL_MASK_AVAILABLE     = 128;
-constexpr auto IT_PATTERN_END_OF_ROW_MARKER          = 0;
-constexpr auto IT_PATTERN_NOTE_PRESENT               = 1;
-constexpr auto IT_PATTERN_INSTRUMENT_PRESENT         = 2;
-constexpr auto IT_PATTERN_VOLUME_COLUMN_PRESENT      = 4;
-constexpr auto IT_PATTERN_COMMAND_PRESENT            = 8;
-constexpr auto IT_PATTERN_LAST_NOTE_IN_CHANNEL       = 16;
-constexpr auto IT_PATTERN_LAST_INST_IN_CHANNEL       = 32;
-constexpr auto IT_PATTERN_LAST_VOLC_IN_CHANNEL       = 64;
-constexpr auto IT_PATTERN_LAST_COMMAND_IN_CHANNEL    = 128;
-constexpr auto IT_NOTE_CUT                           = 254;
-constexpr auto IT_KEY_OFF                            = 255;
+const int IT_END_OF_SONG_MARKER                 = 255;
+const int IT_MARKER_PATTERN                     = 254;
+const int IT_PATTERN_CHANNEL_MASK_AVAILABLE     = 128;
+const int IT_PATTERN_END_OF_ROW_MARKER          = 0;
+const int IT_PATTERN_NOTE_PRESENT               = 1;
+const int IT_PATTERN_INSTRUMENT_PRESENT         = 2;
+const int IT_PATTERN_VOLUME_COLUMN_PRESENT      = 4;
+const int IT_PATTERN_COMMAND_PRESENT            = 8;
+const int IT_PATTERN_LAST_NOTE_IN_CHANNEL       = 16;
+const int IT_PATTERN_LAST_INST_IN_CHANNEL       = 32;
+const int IT_PATTERN_LAST_VOLC_IN_CHANNEL       = 64;
+const int IT_PATTERN_LAST_COMMAND_IN_CHANNEL    = 128;
+const int IT_NOTE_CUT                           = 254;
+const int IT_KEY_OFF                            = 255;
 
 // constants for decoding the volume column
-constexpr auto IT_VOLUME_COLUMN_UNDEFINED              = 213;
-constexpr auto IT_VOLUME_COLUMN_VIBRATO                = 203;
-constexpr auto IT_VOLUME_COLUMN_TONE_PORTAMENTO        = 193;
-constexpr auto IT_VOLUME_COLUMN_SET_PANNING            = 128;
-constexpr auto IT_VOLUME_COLUMN_PORTAMENTO_UP          = 114;
-constexpr auto IT_VOLUME_COLUMN_PORTAMENTO_DOWN        = 104;
-constexpr auto IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      = 94;
-constexpr auto IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        = 84;
-constexpr auto IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN = 74;
-constexpr auto IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   = 64;
-constexpr auto IT_VOLUME_COLUMN_SET_VOLUME             = 0;
+const int IT_VOLUME_COLUMN_UNDEFINED              = 213;
+const int IT_VOLUME_COLUMN_VIBRATO                = 203;
+const int IT_VOLUME_COLUMN_TONE_PORTAMENTO        = 193;
+const int IT_VOLUME_COLUMN_SET_PANNING            = 128;
+const int IT_VOLUME_COLUMN_PORTAMENTO_UP          = 114;
+const int IT_VOLUME_COLUMN_PORTAMENTO_DOWN        = 104;
+const int IT_VOLUME_COLUMN_VOLUME_SLIDE_DOWN      = 94;
+const int IT_VOLUME_COLUMN_VOLUME_SLIDE_UP        = 84;
+const int IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_DOWN = 74;
+const int IT_VOLUME_COLUMN_FINE_VOLUME_SLIDE_UP   = 64;
+const int IT_VOLUME_COLUMN_SET_VOLUME             = 0;
 
 #pragma pack (1) 
 struct ItFileHeader {
     char            tag[4];         // "IMPM"
     char            songName[IT_SONG_NAME_LENGTH];
-    unsigned short  phiLight;       // pattern row hilight info (ignore)
-    unsigned short  songLength;
-    unsigned short  nrInstruments;
-    unsigned short  nrSamples;
-    unsigned short  nrPatterns;
-    unsigned short  createdWTV;
-    unsigned short  compatibleWTV;
-    unsigned short  flags;
-    unsigned short  special;
-    unsigned char   globalVolume;   // 0..128
-    unsigned char   mixingAmplitude;// 0..128
-    unsigned char   initialSpeed;
-    unsigned char   initialBpm;     // tempo
-    unsigned char   panningSeparation;// 0..128, 128 == max separation
-    unsigned char   pitchWheelDepth;// for MIDI controllers
-    unsigned short  messageLength;
-    unsigned        messageOffset;
-    unsigned        reserved;
-    unsigned char   defaultPanning[IT_MAX_CHANNELS];// 0..64, 100 = surround, +128 == disabled channel
-    unsigned char   defaultVolume[IT_MAX_CHANNELS]; // 0..64
+    std::uint16_t   phiLight;       // pattern row hilight info (ignore)
+    std::uint16_t   songLength;
+    std::uint16_t   nrInstruments;
+    std::uint16_t   nrSamples;
+    std::uint16_t   nrPatterns;
+    std::uint16_t   createdWTV;
+    std::uint16_t   compatibleWTV;
+    std::uint16_t   flags;
+    std::uint16_t   special;
+    std::uint8_t    globalVolume;   // 0..128
+    std::uint8_t    mixingAmplitude;// 0..128
+    std::uint8_t    initialSpeed;
+    std::uint8_t    initialBpm;     // tempo
+    std::uint8_t    panningSeparation;// 0..128, 128 == max separation
+    std::uint8_t    pitchWheelDepth;// for MIDI controllers
+    std::uint16_t   messageLength;
+    std::uint32_t   messageOffset;
+    std::uint32_t   reserved;
+    std::uint8_t    defaultPanning[IT_MAX_CHANNELS];// 0..64, 100 = surround, +128 == disabled channel
+    std::uint8_t    defaultVolume[IT_MAX_CHANNELS]; // 0..64
 };
 
 /*
@@ -144,7 +162,7 @@ struct ItFileHeader {
 */
 
 /*
-    --> unsigned char   sampleForNote[240]:
+    --> std::uint8_t    sampleForNote[240]:
     Note-Sample/Keyboard Table.
     Each note of the instrument is first converted to a sample number
     and a note (C-0 -> B-9). These are stored as note/sample pairs
@@ -152,77 +170,77 @@ struct ItFileHeader {
     1-99, 0=no sample
 */
 struct ItNoteSampleMap {
-    unsigned char   note;
-    unsigned char   sampleNr;
+    std::uint8_t    note;
+    std::uint8_t    sampleNr;
 };
 
 struct ItOldEnvelopeNodePoint {
-    unsigned char   tickIndex;      // 0 .. 255
-    unsigned char   magnitude;      // 0..64 
+    std::uint8_t    tickIndex;      // 0 .. 255
+    std::uint8_t    magnitude;      // 0..64 
 };
 
 struct ItOldInstHeader {
     char            tag[4];         // "IMPI"
     char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
-    unsigned char   flag;
-    unsigned char   volumeLoopStart;// these are node numbers
-    unsigned char   volumeLoopEnd;
-    unsigned char   sustainLoopStart;
-    unsigned char   sustainLoopEnd;
-    unsigned short  reserved;
-    unsigned short  fadeOut;        // 0..64
-    unsigned char   NNA;            // New Note Action
-    unsigned char   DNC;            // duplicate Note Check
-    unsigned short  trackerVersion;
-    unsigned char   nrSamples;       // nr of samples in instrument
-    unsigned char   reserved2;
+    std::uint8_t    flag;
+    std::uint8_t    volumeLoopStart;// these are node numbers
+    std::uint8_t    volumeLoopEnd;
+    std::uint8_t    sustainLoopStart;
+    std::uint8_t    sustainLoopEnd;
+    std::uint16_t   reserved;
+    std::uint16_t   fadeOut;        // 0..64
+    std::uint8_t    NNA;            // New Note Action
+    std::uint8_t    DNC;            // duplicate Note Check
+    std::uint16_t   trackerVersion;
+    std::uint8_t    nrSamples;       // nr of samples in instrument
+    std::uint8_t    reserved2;
     char            name[IT_INST_NAME_LENGTH];
-    unsigned char   reserved3[6];
+    std::uint8_t    reserved3[6];
     ItNoteSampleMap sampleForNote[120];
-    unsigned char   volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
+    std::uint8_t    volumeEnvelope[200]; // format: tick,magnitude (0..64), FF == end
     ItOldEnvelopeNodePoint nodes[IT_MAX_ENVELOPE_NODES];
 };
 
 struct ItNewEnvelopeNodePoint {
     char            magnitude;      // 0..64 for volume, -32 .. +32 for panning or pitch
-    unsigned short  tickIndex;      // 0 .. 9999
+    std::uint16_t   tickIndex;      // 0 .. 9999
 };
 
 struct ItNewEnvelope {
-    unsigned char   flag;           // bit0: env on/off,bit1: loop on/off,bit2:susLoop on/off
-    unsigned char   nrNodes;        // nr of node points
-    unsigned char   loopStart;
-    unsigned char   loopEnd;
-    unsigned char   sustainLoopStart;
-    unsigned char   sustainLoopEnd;
+    std::uint8_t    flag;           // bit0: env on/off,bit1: loop on/off,bit2:susLoop on/off
+    std::uint8_t    nrNodes;        // nr of node points
+    std::uint8_t    loopStart;
+    std::uint8_t    loopEnd;
+    std::uint8_t    sustainLoopStart;
+    std::uint8_t    sustainLoopEnd;
     ItNewEnvelopeNodePoint  nodes[IT_MAX_ENVELOPE_NODES];
-    unsigned char   reserved;
+    std::uint8_t    reserved;
 };
 
 struct ItNewInstHeader {
     char            tag[4];         // "IMPI"
     char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
-    unsigned char   NNA;            // 0 = Cut,1 = continue, 2 = note off,3 = note fade
-    unsigned char   dupCheckType;   // 0 = off,1 = note,2 = Sample,3 = Instr.
-    unsigned char   dupCheckAction; // 0 = cut, 1 = note off,2 = note fade
-    unsigned short  fadeOut;        // 0..128
-    unsigned char   pitchPanSeparation; // -32 .. +32
-    unsigned char   pitchPanCenter; // C-0 .. B-9 <=> 0..119
-    unsigned char   globalVolume;   // 0..128
-    unsigned char   defaultPanning; // 0..64, don't use if bit 7 is set
-    unsigned char   randVolumeVariation; // expressed in percent
-    unsigned char   randPanningVariation;// not implemented
-    unsigned short  trackerVersion;
-    unsigned char   nrSamples;
-    unsigned char   reserved;
+    std::uint8_t    NNA;            // 0 = Cut,1 = continue, 2 = note off,3 = note fade
+    std::uint8_t    dupCheckType;   // 0 = off,1 = note,2 = Sample,3 = Instr.
+    std::uint8_t    dupCheckAction; // 0 = cut, 1 = note off,2 = note fade
+    std::uint16_t   fadeOut;        // 0..128
+    std::uint8_t    pitchPanSeparation; // -32 .. +32
+    std::uint8_t    pitchPanCenter; // C-0 .. B-9 <=> 0..119
+    std::uint8_t    globalVolume;   // 0..128
+    std::uint8_t    defaultPanning; // 0..64, don't use if bit 7 is set
+    std::uint8_t    randVolumeVariation; // expressed in percent
+    std::uint8_t    randPanningVariation;// not implemented
+    std::uint16_t   trackerVersion;
+    std::uint8_t    nrSamples;
+    std::uint8_t    reserved;
     char            name[IT_INST_NAME_LENGTH];
-    unsigned char   initialFilterCutOff;
-    unsigned char   initialFilterResonance;
-    unsigned char   midiChannel;
-    unsigned char   midiProgram;
-    unsigned short  midiBank;
+    std::uint8_t    initialFilterCutOff;
+    std::uint8_t    initialFilterResonance;
+    std::uint8_t    midiChannel;
+    std::uint8_t    midiProgram;
+    std::uint16_t   midiBank;
     ItNoteSampleMap sampleForNote[120];
     ItNewEnvelope   volumeEnvelope;
     ItNewEnvelope   panningEnvelope;
@@ -233,30 +251,30 @@ struct ItSampleHeader {
     char            tag[4];         // "IMPS"
     char            fileName[IT_DOS_FILENAME_LENGTH];
     char            asciiz;
-    unsigned char   globalVolume;   // 0..64
-    unsigned char   flag;
-    unsigned char   volume;         // 
+    std::uint8_t    globalVolume;   // 0..64
+    std::uint8_t    flag;
+    std::uint8_t    volume;         // 
     char            name[IT_SMP_NAME_LENGTH];
-    unsigned char   convert;        // bit0 set: signed smp data (off = unsigned)
-    unsigned char   defaultPanning; // 0..64, bit 7 set == use default panning
-    unsigned        length;
-    unsigned        loopStart;
-    unsigned        loopEnd;
-    unsigned        c5Speed;
-    unsigned        sustainLoopStart;
-    unsigned        sustainLoopEnd;
-    unsigned        samplePointer;
-    unsigned char   vibratoSpeed;   // 0..64
-    unsigned char   vibratoDepth;   // 0..64
-    unsigned char   vibratoWaveForm;// 0 = sine,1 = ramp down,2 = square,3 = random
-    unsigned char   vibratoRate;    // 0..64
+    std::uint8_t    convert;        // bit0 set: signed smp data (off = unsigned)
+    std::uint8_t    defaultPanning; // 0..64, bit 7 set == use default panning
+    std::uint32_t   length;
+    std::uint32_t   loopStart;
+    std::uint32_t   loopEnd;
+    std::uint32_t   c5Speed;
+    std::uint32_t   sustainLoopStart;
+    std::uint32_t   sustainLoopEnd;
+    std::uint32_t   samplePointer;
+    std::uint8_t    vibratoSpeed;   // 0..64
+    std::uint8_t    vibratoDepth;   // 0..64
+    std::uint8_t    vibratoWaveForm;// 0 = sine,1 = ramp down,2 = square,3 = random
+    std::uint8_t    vibratoRate;    // 0..64
 };
 
 struct ItPatternHeader {
-    unsigned short  dataSize;       // excluding this header
-    unsigned short  nRows;          // 32..200
-    unsigned        reserved;
-    //unsigned char   data[65536 - 8];
+    std::uint16_t   dataSize;       // excluding this header
+    std::uint16_t   nRows;          // 32..200
+    std::uint32_t   reserved;
+    //std::uint8_t    data[65536 - 8];
 };
 
 #pragma pack (8) 
@@ -534,9 +552,14 @@ int Module::loadItInstrument(
 
             // copy envelope node points:
             destEnv.nrNodes = std::min( (int)(srcEnv.nrNodes),IT_MAX_ENVELOPE_NODES );
-            for ( int i = 0; i < srcEnv.nrNodes; i++ ) {
+            for ( int i = 0; i < destEnv.nrNodes; i++ ) {
                 destEnv.nodes[i].x = srcEnv.nodes[i].tickIndex;
-                destEnv.nodes[i].y = srcEnv.nodes[i].magnitude;
+                if (envNr != 1 )
+                    destEnv.nodes[i].y = srcEnv.nodes[i].magnitude;
+                else
+                    // panning envelope in .IT has range of -32 .. +32
+                    destEnv.nodes[i].y = 
+                    (signed char)(srcEnv.nodes[i].magnitude) + 32;
             }
             // copy other envelope parameters:
             destEnv.sustainStart = srcEnv.sustainLoopStart;
@@ -578,6 +601,9 @@ int Module::loadItInstrument(
         instrumentHeader.randVolumeVariation    = itInstHeader.randVolumeVariation;
         instrumentHeader.randPanningVariation   = itInstHeader.randPanningVariation;
     }
+    // tell the envelope functions we want IT style envelope processing:
+    instrumentHeader.volumeEnvelope.setEnvelopeStyle( itEnvelopeStyle );
+
     // create the instrument
     instruments_[instrumentNr] = std::make_unique <Instrument>( instrumentHeader );
     return 0;
@@ -692,7 +718,8 @@ int Module::loadItSample(
         sample.dataType = SAMPLEDATA_SIGNED_8BIT;
     }
     itFile.absSeek( itSampleHeader.samplePointer );
-    std::unique_ptr<unsigned char[]> buffer = std::make_unique<unsigned char[]>( dataLength );
+    std::unique_ptr<unsigned char[]> buffer = 
+        std::make_unique<unsigned char[]>( dataLength );
 
     if ( !isCompressed ) {
         if ( itFile.read( buffer.get(),dataLength ) ) 

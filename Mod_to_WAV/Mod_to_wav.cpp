@@ -147,8 +147,10 @@ int main( int argc, char *argv[] )
     char        *modPaths[] = {
         //"D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
+        "D:\\MODS\\mod_to_wav\\cd2part4.mod",
+        "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
         "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\05-rocket.it",
+        "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
   //      "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\MYRIEH.XM",
@@ -322,7 +324,7 @@ int main( int argc, char *argv[] )
                 filePaths.push_back( modPaths[i] );
         } 
         else {
-            unsigned    slen = strlen( argv[0] );
+            unsigned    slen = (unsigned)strlen( argv[0] );
             char        *exeName = ( argv[0] + slen - 1 );
 
             while ( slen && (*exeName != '\\') ) { 
@@ -367,6 +369,27 @@ int main( int argc, char *argv[] )
             }
             std::cout << "\n\n";
             mixer.initialize( &moduleFile );  
+
+            /*
+            unsigned frameNr = 0;
+            for ( int i = 0; i < 220; i++ ) {
+
+                bool keyReleased = (i < 90) ? false : true;
+
+                std::cout
+                    << std::setw( 4 ) << i << ","
+                    << std::setw( 3 ) << frameNr;
+                    moduleFile.getInstrument( 10 ).getVolumeEnvelope().getEnvelopeVal( frameNr,keyReleased );
+                    ;
+                    //moduleFile.getInstrument( 10 ).getVolumeEnvelope().getInterpolatedVal( frameNr );
+                frameNr++;
+            }
+            std::cout << "\nHit a key to continue...\n";
+            _getch();
+            */
+
+
+
             mixer.startReplay();
 
             while ( !_kbhit() ) {

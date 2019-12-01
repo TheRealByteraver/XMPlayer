@@ -6,6 +6,11 @@ Thanks must go to:
   invaluable document, it was a hell of a lot easier.
 */
 
+#include <climits>
+#if CHAR_BIT != 8 
+This code requires a byte to be 8 bits wide
+#endif
+
 #include <conio.h>
 #include <windows.h>
 #include <mmsystem.h>
@@ -23,102 +28,102 @@ Thanks must go to:
 //#define debug_s3m_show_patterns
 //#define debug_s3m_play_samples
 
-constexpr auto S3M_MAX_CHANNELS                  = 32;
-constexpr auto S3M_MAX_INSTRUMENTS               = 100;
-constexpr auto S3M_MAX_PATTERNS                  = 200;
-constexpr auto S3M_CHN_UNUSED                    = 255;
-constexpr auto S3M_DEFAULT_PAN_LEFT              = 48;
-constexpr auto S3M_DEFAULT_PAN_RIGHT             = 207;
-constexpr auto S3M_DEFAULT_PAN_CENTER            = 128;
-constexpr auto S3M_MAX_SONGTITLE_LENGTH          = 28;
-constexpr auto S3M_MAX_SAMPLENAME_LENGTH         = 28;
-constexpr auto S3M_MAX_VOLUME                    = 64;
-constexpr auto S3M_TRACKER_TAG_LENGTH            = 4;
-constexpr auto S3M_MARKER_PATTERN                = 254;
-constexpr auto S3M_END_OF_SONG_MARKER            = 255;
-constexpr auto S3M_ST2VIBRATO_FLAG               = 1;
-constexpr auto S3M_ST2TEMPO_FLAG                 = 2;
-constexpr auto S3M_AMIGASLIDES_FLAG              = 4;
-constexpr auto S3M_VOLUME_ZERO_OPT_FLAG          = 8;
-constexpr auto S3M_AMIGA_LIMITS_FLAG             = 16;
-constexpr auto S3M_FILTER_ENABLE_FLAG            = 32;
-constexpr auto S3M_ST300_VOLSLIDES_FLAG          = 64;
-constexpr auto S3M_CUSTOM_DATA_FLAG              = 128;
-constexpr auto S3M_TRACKER_MASK                  = 0xF000;
-constexpr auto S3M_TRACKER_VERSION_MASK          = 0x0FFF;
-constexpr auto S3M_SIGNED_SAMPLE_DATA            = 1;
-constexpr auto S3M_UNSIGNED_SAMPLE_DATA          = 2;
-constexpr auto S3M_STEREO_FLAG                   = 128;
-constexpr auto S3M_DEFAULT_PANNING_PRESENT       = 0xFC;
-constexpr auto S3M_SAMPLE_NOTPACKED_FLAG         = 0;
-constexpr auto S3M_SAMPLE_PACKED_FLAG            = 1;   // DP30ADPCM, not supported
-constexpr auto S3M_SAMPLE_LOOP_FLAG              = 1;
-constexpr auto S3M_SAMPLE_STEREO_FLAG            = 2;   // not supported
-constexpr auto S3M_SAMPLE_16BIT_FLAG             = 4;   // not supported
-constexpr auto S3M_ROWS_PER_PATTERN              = 64;
-constexpr auto S3M_PTN_END_OF_ROW_MARKER         = 0;
-constexpr auto S3M_PTN_CHANNEL_MASK              = 31;
-constexpr auto S3M_PTN_NOTE_INST_FLAG            = 32;
-constexpr auto S3M_PTN_VOLUME_COLUMN_FLAG        = 64;
-constexpr auto S3M_PTN_EFFECT_PARAM_FLAG         = 128;
-constexpr auto S3M_KEY_NOTE_CUT                  = 254;
-constexpr auto S3M_MAX_NOTE                      = 9 * 12;
-constexpr auto S3M_INSTRUMENT_TYPE_SAMPLE        = 1;
-constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_MELODY  = 2;
-constexpr auto S3M_INSTRUMENT_TYPE_ADLIB_DRUM    = 3;
+const int S3M_MAX_CHANNELS                  = 32;
+const int S3M_MAX_INSTRUMENTS               = 100;
+const int S3M_MAX_PATTERNS                  = 200;
+const int S3M_CHN_UNUSED                    = 255;
+const int S3M_DEFAULT_PAN_LEFT              = 48;
+const int S3M_DEFAULT_PAN_RIGHT             = 207;
+const int S3M_DEFAULT_PAN_CENTER            = 128;
+const int S3M_MAX_SONGTITLE_LENGTH          = 28;
+const int S3M_MAX_SAMPLENAME_LENGTH         = 28;
+const int S3M_MAX_VOLUME                    = 64;
+const int S3M_TRACKER_TAG_LENGTH            = 4;
+const int S3M_MARKER_PATTERN                = 254;
+const int S3M_END_OF_SONG_MARKER            = 255;
+const int S3M_ST2VIBRATO_FLAG               = 1;
+const int S3M_ST2TEMPO_FLAG                 = 2;
+const int S3M_AMIGASLIDES_FLAG              = 4;
+const int S3M_VOLUME_ZERO_OPT_FLAG          = 8;
+const int S3M_AMIGA_LIMITS_FLAG             = 16;
+const int S3M_FILTER_ENABLE_FLAG            = 32;
+const int S3M_ST300_VOLSLIDES_FLAG          = 64;
+const int S3M_CUSTOM_DATA_FLAG              = 128;
+const int S3M_TRACKER_MASK                  = 0xF000;
+const int S3M_TRACKER_VERSION_MASK          = 0x0FFF;
+const int S3M_SIGNED_SAMPLE_DATA            = 1;
+const int S3M_UNSIGNED_SAMPLE_DATA          = 2;
+const int S3M_STEREO_FLAG                   = 128;
+const int S3M_DEFAULT_PANNING_PRESENT       = 0xFC;
+const int S3M_SAMPLE_NOTPACKED_FLAG         = 0;
+const int S3M_SAMPLE_PACKED_FLAG            = 1;   // DP30ADPCM, not supported
+const int S3M_SAMPLE_LOOP_FLAG              = 1;
+const int S3M_SAMPLE_STEREO_FLAG            = 2;   // not supported
+const int S3M_SAMPLE_16BIT_FLAG             = 4;   // not supported
+const int S3M_ROWS_PER_PATTERN              = 64;
+const int S3M_PTN_END_OF_ROW_MARKER         = 0;
+const int S3M_PTN_CHANNEL_MASK              = 31;
+const int S3M_PTN_NOTE_INST_FLAG            = 32;
+const int S3M_PTN_VOLUME_COLUMN_FLAG        = 64;
+const int S3M_PTN_EFFECT_PARAM_FLAG         = 128;
+const int S3M_KEY_NOTE_CUT                  = 254;
+const int S3M_MAX_NOTE                      = 9 * 12;
+const int S3M_INSTRUMENT_TYPE_SAMPLE        = 1;
+const int S3M_INSTRUMENT_TYPE_ADLIB_MELODY  = 2;
+const int S3M_INSTRUMENT_TYPE_ADLIB_DRUM    = 3;
 
 
 #pragma pack (1) 
 struct S3mFileHeader {
     char            songTitle[S3M_MAX_SONGTITLE_LENGTH];
-    unsigned char   id;             // 0x1A
-    unsigned char   fileType;       // 0x1D for ScreamTracker 3
-    unsigned short  reserved1;
-    unsigned short  songLength;     // 
-    unsigned short  nrInstruments;
-    unsigned short  nrPatterns;      // including marker (unsaved) patterns
-    unsigned short  flags;          // CWTV == 1320h -> ST3.20
-    unsigned short  CWTV;           // Created with tracker / version
-    unsigned short  sampleDataType; // 1 = signed, 2 = unsigned
+    std::uint8_t    id;             // 0x1A
+    std::uint8_t    fileType;       // 0x1D for ScreamTracker 3
+    std::uint16_t   reserved1;
+    std::uint16_t   songLength;     // 
+    std::uint16_t   nrInstruments;
+    std::uint16_t   nrPatterns;      // including marker (unsaved) patterns
+    std::uint16_t   flags;          // CWTV == 1320h -> ST3.20
+    std::uint16_t   CWTV;           // Created with tracker / version
+    std::uint16_t   sampleDataType; // 1 = signed, 2 = unsigned
     char            tag[4];         // SCRM
-    unsigned char   globalVolume;   // maximum volume == 64
-    unsigned char   defaultTempo;   // default == 6
-    unsigned char   defaultBpm;     // default == 125
-    unsigned char   masterVolume;   // SB PRO master vol, stereo flag
-    unsigned char   gusClickRemoval;// probably nChannels * 2, min = 16?
-    unsigned char   useDefaultPanning;// == 0xFC if def. chn pan pos. are present
-    unsigned char   reserved2[8];
-    unsigned short  customDataPointer;
-    unsigned char   channelsEnabled[32];
+    std::uint8_t    globalVolume;   // maximum volume == 64
+    std::uint8_t    defaultTempo;   // default == 6
+    std::uint8_t    defaultBpm;     // default == 125
+    std::uint8_t    masterVolume;   // SB PRO master vol, stereo flag
+    std::uint8_t    gusClickRemoval;// probably nChannels * 2, min = 16?
+    std::uint8_t    useDefaultPanning;// == 0xFC if def. chn pan pos. are present
+    std::uint8_t    reserved2[8];
+    std::uint16_t   customDataPointer;
+    std::uint8_t    channelsEnabled[32];
 };
 
 struct S3mInstHeader {
-    unsigned char   sampleType;
+    std::uint8_t    sampleType;
     char            dosFilename[12];// 12, not 13!
-    unsigned char   memSeg;
-    unsigned short  memOfs;
-    unsigned        length;
-    unsigned        loopStart;
-    unsigned        loopEnd;
-    unsigned char   volume;
-    unsigned char   reserved;       // should be 0x1D
-    unsigned char   packId;         // should be 0
-    unsigned char   flags;
-    unsigned        c4Speed;
-    unsigned char   reserved2[12];  // useless info for us
+    std::uint8_t    memSeg;
+    std::uint16_t   memOfs;
+    std::uint32_t   length;
+    std::uint32_t   loopStart;
+    std::uint32_t   loopEnd;
+    std::uint8_t    volume;
+    std::uint8_t    reserved;       // should be 0x1D
+    std::uint8_t    packId;         // should be 0
+    std::uint8_t    flags;
+    std::uint32_t   c4Speed;
+    std::uint8_t    reserved2[12];  // useless info for us
     char            name[S3M_MAX_SAMPLENAME_LENGTH];
     char            tag[4];         // "SCRS"
 };
 
-constexpr auto S3M_MIN_FILESIZE = (sizeof( S3mFileHeader ) + \
+const int S3M_MIN_FILESIZE = (sizeof( S3mFileHeader ) + \
                                    sizeof( S3mInstHeader ) + 64 + 16);
 
 struct S3mUnpackedNote {
-    unsigned char note;
-    unsigned char inst;
-    unsigned char volc;
-    unsigned char fx;
-    unsigned char fxp;
+    std::uint8_t    note;
+    std::uint8_t    inst;
+    std::uint8_t    volc;
+    std::uint8_t    fx;
+    std::uint8_t    fxp;
 };
 #pragma pack (8) 
 
@@ -365,7 +370,7 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
             // missing smpHdr data, see if we can salvage something ;)
             if ( smpHdr.data == nullptr ) {
                 int smpSize;
-                if ( smpDataPtrs[instrumentNr - 1] >= s3mFile.fileSize() )
+                if ( smpDataPtrs[instrumentNr - 1] >= (unsigned)s3mFile.fileSize() )
                     smpSize = 0;
                 else
                     smpSize = s3mFile.dataLeft();
@@ -378,9 +383,9 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
                         << "\nMissing smpHdr data for smpHdr nr "
                         << (instrumentNr - 1)
                         << "! Shortening smpHdr."
-                        << "\nsample.data:   " << (unsigned)smpHdr.data
+                        << "\nsample.data:   " << smpHdr.data
                         << "\nsample.length: " << smpHdr.length
-                        << "\ndata + length: " << (unsigned)(smpHdr.data + smpHdr.length)
+                        << "\ndata + length: " << (smpHdr.data + smpHdr.length)
                         << "\nfilesize:      " << fileSize
                         << "\novershoot:     " << (s3mInstHdr.length - smpHdr.length)
                         << "\n";

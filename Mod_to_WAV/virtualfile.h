@@ -1,4 +1,7 @@
 #pragma once
+
+#define NOMINMAX
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -163,23 +166,26 @@ public:
             ioError_ = VIRTFILE_READ_ERROR;
             return ioError_;
         }
-        ioError_ = VIRTFILE_NO_ERROR;
-        if ( (position < 0) &&
-            ((-position) > ( int )filePos_) )
-            filePos_ = 0;
-        else
-            filePos_ += position;
-        if ( filePos_ < data_.get() ) {
+        // check if we do not underrun or overrun the file begin / end position
+        int newRelPos = (int)((filePos_ - data_.get()) + position);
+        if ( newRelPos < 0 ) {
             filePos_ = data_.get();
             ioError_ = VIRTFILE_BUFFER_UNDERRUN;
+            return ioError_;
         }
-        else if ( filePos_ > fileEOF_ ) {
+        else if ( newRelPos == fileSize_ ) {
+            filePos_ = fileEOF_;
+            ioError_ = VIRTFILE_EOF;
+            return ioError_;
+        }
+        else if ( newRelPos > fileSize_ ) {
             filePos_ = fileEOF_;
             ioError_ = VIRTFILE_BUFFER_OVERRUN;
-        }
-        else if ( filePos_ == fileEOF_ ) {
-            ioError_ = VIRTFILE_EOF;
-        }
+            return ioError_;
+        }        
+        // no overrun or underrun, it's all good:
+        filePos_ = data_.get() + newRelPos; 
+        ioError_ = VIRTFILE_NO_ERROR;
         return ioError_;
     }
     IOError     absSeek( unsigned position )
@@ -195,34 +201,34 @@ public:
         }
         return ioError_;
     }
-    unsigned    getCurPos()
+    int         getCurPos()
     {
         if ( filePos_ > data_.get() ) {
             if ( filePos_ > fileEOF_ )
-                return fileEOF_ - data_.get();
+                return (int)(fileEOF_ - data_.get());
             else
-                return filePos_ - data_.get();
+                return (int)(filePos_ - data_.get());
         }
         else
             return 0;
     }
-    unsigned    fileSize()
+    int         fileSize()
     {
         ioError_ = VIRTFILE_NO_ERROR;
         if ( data_ == nullptr ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return 0;
         }
-        return (unsigned)fileSize_;
+        return (int)fileSize_;
     }
-    unsigned    dataLeft()
+    int         dataLeft()
     {
         ioError_ = VIRTFILE_NO_ERROR;
         if ( data_ == nullptr ) {
             ioError_ = VIRTFILE_READ_ERROR;
             return 0;
         }
-        return fileEOF_ - filePos_;
+        return (int)(fileEOF_ - filePos_);
     }
     template<class PTR> MemoryBlock<PTR> getPointer( unsigned nElements )
     {
@@ -252,13 +258,22 @@ public:
     }
 
 private:
-    std::string     fileName_;
-    IOError         ioError_ = VIRTFILE_READ_ERROR;
-    std::unique_ptr < char[] > data_;
-    char* filePos_;
-    char* fileEOF_;
-    std::ifstream::pos_type  fileSize_;
-    unsigned char   bitsLeft_;
-    unsigned char   lastBitContainer_; // last byte read with leftover bits 
+    std::string                 fileName_;
+    IOError                     ioError_ = VIRTFILE_READ_ERROR;
+    std::unique_ptr < char[] >  data_;
+    /*
+        filePos_ is a pointer to the current position in the file. It is NOT 
+        an offset from data_. 
+        fileEOF_ is a pointer but points to the first byte that comes right 
+        after the last byte of the file or the data that data_ points to. 
+        Because of that, dereferencing fileEOF_ will result in a runtime error.
+    */
+    char*                       filePos_;   
+    char*                       fileEOF_;   
+    std::ifstream::pos_type     fileSize_;
+    unsigned char               bitsLeft_;
+    
+    // last byte read with leftover bits
+    unsigned char               lastBitContainer_; 
 };
 

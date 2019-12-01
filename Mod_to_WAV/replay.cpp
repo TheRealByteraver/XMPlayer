@@ -72,6 +72,62 @@ Fixed / cleared up:
 --> should be ok now
 
 
+
+
+Volume calculations:
+
+.IT:
+
+Abbreviations:
+ FV = Final Volume (Ranges from 0 to 128). In versions 1.04+, mixed output
+      devices are reduced further to a range from 0 to 64 due to lack of
+      memory.
+ Vol = Volume at which note is to be played. (Ranges from 0 to 64)
+ SV = Sample Volume (Ranges from 0 to 64)
+ IV = Instrument Volume (Ranges from 0 to 128)
+ CV = Channel Volume (Ranges from 0 to 64)
+ GV = Global Volume (Ranges from 0 to 128)
+ VEV = Volume Envelope Value (Ranges from 0 to 64)
+
+In Sample mode, the following calculation is done:
+ FV = Vol * SV * CV * GV / 262144               ; Note that 262144 = 2^18
+                                                ; So bit shifting can be done.
+
+In Instrument mode the following procedure is used:
+
+ 1) Update volume envelope value. Check for loops / end of envelope.
+ 2) If end of volume envelope (ie. position >= 200 or VEV = 0FFh), then turn
+        on note fade.
+ 3) If notefade is on, then NoteFadeComponent (NFC) = NFC - FadeOut
+        ; NFC should be initialised to 1024 when a note is played.
+ 4) FV = Vol * SV * IV * CV * GV * VEV * NFC / 2^41
+
+
+.XM:
+
+FinalVol = (FadeOutVol/65536)*(EnvelopeVol/64)*(GlobalVol/64)*(Vol/64)*Scale;
+
+-> XM has no channel volume
+-> XM has no instrument volume
+-> XM has sample volume, but not like in .IT?
+
+
+This library will use following ranges:
+
+ FV = Final Volume (Ranges from 0 to 128). In versions 1.04+, mixed output
+      devices are reduced further to a range from 0 to 64 due to lack of
+      memory.
+ Vol = Volume at which note is to be played. (Ranges from 0 to 64)
+ SV = Sample Volume (Ranges from 0 to 64)
+ IV = Instrument Volume (Ranges from 0 to 128)
+ CV = Channel Volume (Ranges from 0 to 64)
+ GV = Global Volume (Ranges from 0 to 128)
+ VEV = Volume Envelope Value (Ranges from 0 to 64)
+
+
+
+
+
 */
 
 #include "Mixer.h"
@@ -102,8 +158,8 @@ int Mixer::updateNotes()
     patternLoopFlag_ = false;
 
 
-    for ( unsigned iChannel = 0; iChannel < nrChannels; iChannel++ ) {
-        Channel& channel = channels[iChannel];
+    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
+        Channel& channel = channels[channelNr];
         unsigned    note,instrument,sample;
         bool        isNewNote;
         bool        isNewInstrument;
@@ -111,7 +167,6 @@ int Mixer::updateNotes()
         bool        isDifferentInstrument;
         bool        isNoteDelayed = false;
         bool        replay = false;
-        //bool        keyedOff = false;
         unsigned    oldInstrument;
         int         finetune = 0;
 
@@ -121,12 +176,13 @@ int Mixer::updateNotes()
         if ( note ) {
             if ( note == KEY_OFF ) {
                 isNewNote = false;
-                //keyedOff
                 channel.keyIsReleased = true;
-            } else if ( note == KEY_NOTE_CUT ) {
+            } 
+            else if ( note == KEY_NOTE_CUT ) {
                 isNewNote = false;
-                stopChannelPrimary( iChannel ); // TEMP
-            } else {
+                stopChannelPrimary( channelNr ); // TEMP
+            } 
+            else {
                 if ( note > MAXIMUM_NOTES )
                     std::cout << "!" << (unsigned)note << "!"; // DEBUG
                 channel.lastNote = note;
@@ -139,7 +195,8 @@ int Mixer::updateNotes()
                     channel.sampleOffset = 0;  // ??
                 //if ( ft2StyleEffects_ ) std::cout << "ft2!";
             }
-        } else {
+        } 
+        else {
             isNewNote = false;
         }
         /*
@@ -155,7 +212,7 @@ int Mixer::updateNotes()
             frequency that was specified together with the invalid instrument.
         */
 
-        oldInstrument = channel.instrumentNo;
+        oldInstrument = channel.instrumentNr;
         if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
@@ -173,15 +230,15 @@ int Mixer::updateNotes()
                 } else {
                     isValidInstrument = false;
                     replay = false;
-                    stopChannelPrimary( iChannel ); // sundance.mod illegal sample
-                    std::cout << std::dec
+                    stopChannelPrimary( channelNr ); // sundance.mod illegal sample
+                    std::cout << std::dec            // DEBUG
                         << "Sample cut by illegal inst "
                         << std::setw( 2 ) << instrument
                         << " in pattern "
                         << std::setw( 2 ) << module->getPatternTable( iPatternTable )
                         << ", order " << std::setw( 3 ) << iPatternTable
                         << ", row " << std::setw( 2 ) << patternRow
-                        << ", channel " << std::setw( 2 ) << iChannel
+                        << ", channel " << std::setw( 2 ) << channelNr
                         << "\n";
                 }
             }
@@ -200,7 +257,7 @@ int Mixer::updateNotes()
         }
 
         if ( isNewInstrument )
-            channel.instrumentNo = instrument;
+            channel.instrumentNr = instrument;
 
         channel.oldNote = channel.newNote;
         channel.newNote = *iNote;
@@ -299,13 +356,13 @@ int Mixer::updateNotes()
                 (effect != FINE_VIBRATO) &&
                 (effect != VIBRATO_AND_VOLUME_SLIDE) ) {
                 //channel.vibratoCount = 0; // only on new note
-                setFrequency( iChannel,periodToFrequency( channel.period ) );
+                setFrequency( channelNr,periodToFrequency( channel.period ) );
             }
             if ( channel.oldNote.effects[fxloop].effect == ARPEGGIO ) {
                 if ( !
                     ((channel.newNote.effects[fxloop].effect == ARPEGGIO) &&
                         ft2StyleEffects_) )
-                    setFrequency( iChannel,periodToFrequency( channel.period ) );
+                    setFrequency( channelNr,periodToFrequency( channel.period ) );
             }
 
             switch ( effect ) {
@@ -363,13 +420,13 @@ int Mixer::updateNotes()
                                     channel.arpeggioCount = 0;
                                 /*
                                 playSample(
-                                    iChannel,
+                                    channelNr,
                                     channel.pSample,
                                     channel.sampleOffset,
                                     FORWARD );
                                 */
                                 setFrequency(
-                                    iChannel,
+                                    channelNr,
                                     periodToFrequency( arpeggioPeriod ) );
                                 //replay = false;
                             }
@@ -442,7 +499,7 @@ int Mixer::updateNotes()
                 case FINE_VIBRATO:
                 case VIBRATO:
                 {
-                    unsigned& lv = channel.lastVibrato;
+                    unsigned char& lv = channel.lastVibrato;
                     if ( argument & 0xF0 )
                         lv = (lv & 0xF) + (argument & 0xF0);
                     if ( argument & 0xF )
@@ -489,13 +546,13 @@ int Mixer::updateNotes()
                             period += vibAmp;
                         else
                             period -= vibAmp;
-                        setFrequency( iChannel,periodToFrequency( period ) );
+                        setFrequency( channelNr,periodToFrequency( period ) );
                     }
                     break;
                 }
                 case TREMOLO:
                 {
-                    unsigned& lt = channel.lastTremolo;
+                    unsigned char& lt = channel.lastTremolo;
                     if ( argument & 0xF0 )
                         lt = (lt & 0xF) + (argument & 0xF0);
                     if ( argument & 0xF )
@@ -577,7 +634,7 @@ int Mixer::updateNotes()
                                 tracker (.IT) ignores illegal volume slide
                                 altogether. --> to check!
                         */
-                        unsigned& lastSlide = channel.lastVolumeSlide;
+                        unsigned char& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
                         unsigned slide2 = lastSlide & 0xF;
                         if ( slide1 & slide2 ) {
@@ -585,7 +642,7 @@ int Mixer::updateNotes()
                             if ( (slide1 == 0xF) || (slide2 == 0xF) )
                                 break;
                         }
-                        unsigned& v = channel.volume;
+                        auto& v = channel.volume;
                         if ( slide2 ) { // slide down comes first
                             if ( slide2 > v )
                                 v = 0;
@@ -886,14 +943,14 @@ int Mixer::updateNotes()
         }
         // valid sample for replay ? -> replay sample if new note
         if ( replay && channel.pSample && (!isNoteDelayed) ) {
-            playSample( iChannel,channel.pSample,
+            playSample( channelNr,channel.pSample,
                 channel.sampleOffset,FORWARD );
             channel.period = noteToPeriod(
                 note + channel.pSample->getRelativeNote(),
                 finetune
             );
             setFrequency(
-                iChannel,
+                channelNr,
                 periodToFrequency( channel.period ) );
         }
         if ( !isNoteDelayed ) {
@@ -901,11 +958,11 @@ int Mixer::updateNotes()
                channel->panning = channel->newpanning;
                channel->volume  = channel->newvolume;
             */
-            //setPanning(iChannel, channel->panning);  // temp
-            //setVolume(iChannel, channel->volume);    // temp
+            //setPanning(channelNr, channel->panning);  // temp
+            //setVolume(channelNr, channel->volume);    // temp
         }
 #ifdef debug_mixer
-        if ( iChannel < 16 )
+        if ( channelNr < 16 )
         {
             // **************************************************
             // colors in console requires weird shit in windows
@@ -1078,8 +1135,8 @@ int Mixer::updateNotes()
 
 int Mixer::updateImmediateEffects()
 {
-    for ( unsigned iChannel = 0; iChannel < nrChannels; iChannel++ ) {
-        Channel& channel = channels[iChannel];
+    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
+        Channel& channel = channels[channelNr];
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
             Note& note = channel.newNote;
             unsigned    effect = note.effects[fxloop].effect;
@@ -1103,10 +1160,10 @@ int Mixer::updateImmediateEffects()
                     */
                     if ( st3StyleEffectMemory_ || itStyleEffects_ ) // itStyleEffects_ ??
                     {
-                        unsigned& lastSlide = channel.lastVolumeSlide;
+                        unsigned char& lastSlide = channel.lastVolumeSlide;
                         unsigned slide1 = lastSlide >> 4;
                         unsigned slide2 = lastSlide & 0xF;
-                        unsigned& v = channel.volume;
+                        auto& v = channel.volume;
                         if ( slide2 == 0xF ) {
                             v += slide1;
                             if ( v > MAX_VOLUME )
@@ -1136,7 +1193,7 @@ int Mixer::updateImmediateEffects()
                                 channel.period = module->getMinPeriod();
                             if ( channel.period < module->getMinPeriod() )
                                 channel.period = module->getMinPeriod();
-                            setFrequency( iChannel,
+                            setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1147,7 +1204,7 @@ int Mixer::updateImmediateEffects()
                             channel.period += argument;
                             if ( channel.period > module->getMaxPeriod() )
                                 channel.period = module->getMaxPeriod();
-                            setFrequency( iChannel,
+                            setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1190,7 +1247,7 @@ int Mixer::updateImmediateEffects()
                                 channel.period = module->getMinPeriod();
                             if ( channel.period < module->getMinPeriod() )
                                 channel.period = module->getMinPeriod();
-                            setFrequency( iChannel,
+                            setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1200,7 +1257,7 @@ int Mixer::updateImmediateEffects()
                             channel.period += argument;
                             if ( channel.period > module->getMaxPeriod() )
                                 channel.period = module->getMaxPeriod();
-                            setFrequency( iChannel,
+                            setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1214,8 +1271,8 @@ int Mixer::updateImmediateEffects()
 }
 
 int Mixer::updateEffects() {
-    for ( unsigned iChannel = 0; iChannel < nrChannels; iChannel++ ) {
-        Channel& channel = channels[iChannel];
+    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
+        Channel& channel = channels[channelNr];
 
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
             Note& note = channel.newNote;
@@ -1252,7 +1309,7 @@ int Mixer::updateEffects() {
                 case TONE_PORTAMENTO_AND_VOLUME_SLIDE:
                 case VIBRATO_AND_VOLUME_SLIDE:
                 {
-                    unsigned& lastSlide = channel.lastVolumeSlide;
+                    unsigned char& lastSlide = channel.lastVolumeSlide;
                     unsigned slide1 = lastSlide >> 4;
                     unsigned slide2 = lastSlide & 0xF;
                     if ( slide1 & slide2 ) {
@@ -1264,7 +1321,7 @@ int Mixer::updateEffects() {
                         if ( itStyleEffects_ )
                             break; // impulse tracker ignores illegal vol slides!
                     }
-                    unsigned& v = channel.volume;
+                    auto& v = channel.volume;
                     // slide down has priority in .s3m. 
                     // illegal volume slide effects are corrected 
                     // or removed in .mod, .xm and .it (?) loaders
@@ -1328,13 +1385,13 @@ int Mixer::updateEffects() {
                         */
                         /*
                         playSample(
-                            iChannel,
+                            channelNr,
                             channel.pSample,
                             channel.sampleOffset,
                             FORWARD );
                         */
                         setFrequency(
-                            iChannel,
+                            channelNr,
                             periodToFrequency( arpeggioPeriod ) );
                     }
                     break;
@@ -1349,7 +1406,7 @@ int Mixer::updateEffects() {
                             channel.period = module->getMinPeriod();
                     } else channel.period = module->getMinPeriod();
                     setFrequency(
-                        iChannel,
+                        channelNr,
                         periodToFrequency( channel.period ) );
                     break;
                 }
@@ -1359,7 +1416,7 @@ int Mixer::updateEffects() {
                     channel.period += argument;
                     if ( channel.period > module->getMaxPeriod() )
                         channel.period = module->getMaxPeriod();
-                    setFrequency( iChannel,
+                    setFrequency( channelNr,
                         periodToFrequency( channel.period ) );
                     break;
                 }
@@ -1386,7 +1443,7 @@ int Mixer::updateEffects() {
                                 if ( channel.period < channel.portaDestPeriod )
                                     channel.period = channel.portaDestPeriod;
                             }
-                            setFrequency( iChannel,
+                            setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                         }
 
@@ -1438,14 +1495,14 @@ int Mixer::updateEffects() {
                     //if ( channel.vibratoCount >= 0 )    frequency += vibAmp;
                     //else                                frequency -= vibAmp;
                     //std::cout << "F = " << frequency << "\n";
-                    //setFrequency( iChannel,frequency );
+                    //setFrequency( channelNr,frequency );
 
                     unsigned period = channel.period;
                     if ( channel.vibratoCount > 0 )
                         period += vibAmp;
                     else
                         period -= vibAmp;
-                    setFrequency( iChannel,periodToFrequency( period ) );
+                    setFrequency( channelNr,periodToFrequency( period ) );
 
                     break;
                 }
@@ -1537,7 +1594,7 @@ int Mixer::updateEffects() {
                                 channel.retrigCount++;
                                 if ( channel.retrigCount >= argument ) {
                                     channel.retrigCount = 0;
-                                    playSample( iChannel,
+                                    playSample( channelNr,
                                         channel.pSample,
                                         channel.sampleOffset,
                                         FORWARD );
@@ -1561,11 +1618,11 @@ int Mixer::updateEffects() {
                                 // valid sample for replay ? 
                                 //  -> replay sample if new note
                                 if ( channel.pSample ) {
-                                    playSample( iChannel,
+                                    playSample( channelNr,
                                         channel.pSample,
                                         channel.sampleOffset,
                                         FORWARD );
-                                    setFrequency( iChannel,
+                                    setFrequency( channelNr,
                                         periodToFrequency(
                                             noteToPeriod(
                                                 channel.lastNote +
@@ -1656,7 +1713,7 @@ int Mixer::updateEffects() {
                             if ( v > MAX_VOLUME )
                                 channel.volume = MAX_VOLUME;
                             playSample(
-                                iChannel,
+                                channelNr,
                                 channel.pSample,
                                 channel.sampleOffset,
                                 FORWARD );

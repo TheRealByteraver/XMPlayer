@@ -20,6 +20,11 @@
     PP20 compressed mod's, or other variants of compression
 */
 
+#include <climits>
+#if CHAR_BIT != 8 
+This code requires a byte to be 8 bits wide
+#endif
+
 #define NOMINMAX
 #include <windows.h>
 
@@ -41,19 +46,18 @@
 //#define debug_mod_show_patterns
 //#define debug_mod_play_samples
 
-constexpr auto MOD_DEBUG_SHOW_PATTERN_NO = 8; // pattern to be shown
+const int MOD_DEBUG_SHOW_PATTERN_NO = 8; // pattern to be shown
 
 // Constants for the .MOD Format:
-constexpr auto MOD_MAX_ILLEGAL_CHARS = 8;    // nr of illegal chars permitted in smp names
-constexpr auto MOD_ROWS = 64;   // always 64 rows in a MOD pattern
-constexpr auto MOD_MAX_SONGNAME_LENGTH = 20;
-constexpr auto MOD_MAX_SAMPLENAME_LENGTH = 22;
-constexpr auto MOD_MAX_PATTERNS = 128;
-constexpr auto MOD_MAX_CHANNELS = 32;
-constexpr auto MOD_DEFAULT_BPM = 125;
-constexpr auto MOD_DEFAULT_TEMPO = 6;
-constexpr auto MOD_MAX_PERIOD = 7248; // chosen a bit arbitrarily!;
-
+const int MOD_MAX_ILLEGAL_CHARS = 8;    // nr of illegal chars permitted in smp names
+const int MOD_ROWS = 64;                // always 64 rows in a MOD pattern
+const int MOD_MAX_SONGNAME_LENGTH = 20;
+const int MOD_MAX_SAMPLENAME_LENGTH = 22;
+const int MOD_MAX_PATTERNS = 128;
+const int MOD_MAX_CHANNELS = 32;
+const int MOD_DEFAULT_BPM = 125;
+const int MOD_DEFAULT_TEMPO = 6;
+const int MOD_MAX_PERIOD = 7248;        // chosen a bit arbitrarily!;
 
 // =============================================================================
 // These structures represent exactly the layout of a MOD file:
@@ -63,29 +67,29 @@ constexpr auto MOD_MAX_PERIOD = 7248; // chosen a bit arbitrarily!;
 #pragma pack (1) 
 struct ModSampleHeader { 
     char            name[MOD_MAX_SAMPLENAME_LENGTH];
-    AMIGAWORD       length;         // Big-End Word; * 2 = samplelength in bytes
+    std::uint16_t   length;         // Big-End Word; * 2 = samplelength in bytes
     char            finetune;       // This is in fact a signed nibble 
-    unsigned char   linearVolume;
-    AMIGAWORD       repeatOffset;   // Big-End Word; * 2 = RepeatOffset in bytes
-    AMIGAWORD       repeatLength;   // Big-End Word; * 2 = RepeatLength in bytes 
+    std::uint8_t    linearVolume;
+    std::uint16_t   repeatOffset;   // Big-End Word; * 2 = RepeatOffset in bytes
+    std::uint16_t   repeatLength;   // Big-End Word; * 2 = RepeatLength in bytes 
 };  // size == 30 bytes
 
 // NST header layout:
 struct HeaderNST {
     char            songTitle[MOD_MAX_SONGNAME_LENGTH];          
     ModSampleHeader samples[15];            // 15 * 30 = 450
-    unsigned char   songLength;             
-    unsigned char   restartPosition;        
-    unsigned char   patternTable[128];      
+    std::uint8_t    songLength;
+    std::uint8_t    restartPosition;
+    std::uint8_t    patternTable[128];
 }; // size ==  22 + 15 * 30 + 2 + 128 = 600
 
 // M.K. header layout:
 struct HeaderMK {
     char            songTitle[MOD_MAX_SONGNAME_LENGTH];
     ModSampleHeader samples[31];
-    unsigned char   songLength;
-    unsigned char   restartPosition;
-    unsigned char   patternTable[128];
+    std::uint8_t    songLength;
+    std::uint8_t    restartPosition;
+    std::uint8_t    patternTable[128];
     char            tag[4];     
 };  // size == 600 + 16 * 30 + 4 = 1084
 
@@ -93,7 +97,7 @@ struct HeaderMK {
 #pragma pack (8)                            
 
 // this fn swaps a 16 bit word's low and high order bytes
-inline AMIGAWORD SwapW( AMIGAWORD d ) {
+inline std::uint16_t SwapW( std::uint16_t d ) {
     return (d >> 8) | (d << 8);
 }
 
@@ -701,7 +705,7 @@ int ModHelperFn::getTagInfo( const std::string& tagID,bool& flt8Err,unsigned& tr
 // wow files are exactly like M.K. files except they can have 8 channels :s
 bool ModHelperFn::isWowFile( std::string fileName )
 {
-    int len = fileName.length();
+    int len = (int)fileName.length();
     assert( len > 4 );
     std::string strBuf( fileName );
 

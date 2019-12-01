@@ -4,33 +4,33 @@
 #include <windows.h> // for the color constants
 
 // color constants for functions that show debug info
-constexpr auto FOREGROUND_BLACK        = 0;
-constexpr auto FOREGROUND_CYAN         = (FOREGROUND_BLUE        | FOREGROUND_GREEN);              
-constexpr auto FOREGROUND_MAGENTA      = (FOREGROUND_BLUE        | FOREGROUND_RED);                
-constexpr auto FOREGROUND_BROWN        = (FOREGROUND_GREEN       | FOREGROUND_RED);               
-constexpr auto FOREGROUND_LIGHTGRAY    = (FOREGROUND_BLUE        | FOREGROUND_GREEN | FOREGROUND_RED);
-constexpr auto FOREGROUND_DARKGRAY     = (FOREGROUND_BLACK       | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_LIGHTBLUE    = (FOREGROUND_BLUE        | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_LIGHTGREEN   = (FOREGROUND_GREEN       | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_LIGHTCYAN    = (FOREGROUND_CYAN        | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_LIGHTRED     = (FOREGROUND_RED         | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_LIGHTMAGENTA = (FOREGROUND_MAGENTA     | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_YELLOW       = (FOREGROUND_BROWN       | FOREGROUND_INTENSITY);
-constexpr auto FOREGROUND_WHITE        = (FOREGROUND_LIGHTGRAY   | FOREGROUND_INTENSITY);
+const int FOREGROUND_BLACK        = 0;
+const int FOREGROUND_CYAN         = (FOREGROUND_BLUE        | FOREGROUND_GREEN);              
+const int FOREGROUND_MAGENTA      = (FOREGROUND_BLUE        | FOREGROUND_RED);                
+const int FOREGROUND_BROWN        = (FOREGROUND_GREEN       | FOREGROUND_RED);               
+const int FOREGROUND_LIGHTGRAY    = (FOREGROUND_BLUE        | FOREGROUND_GREEN | FOREGROUND_RED);
+const int FOREGROUND_DARKGRAY     = (FOREGROUND_BLACK       | FOREGROUND_INTENSITY);
+const int FOREGROUND_LIGHTBLUE    = (FOREGROUND_BLUE        | FOREGROUND_INTENSITY);
+const int FOREGROUND_LIGHTGREEN   = (FOREGROUND_GREEN       | FOREGROUND_INTENSITY);
+const int FOREGROUND_LIGHTCYAN    = (FOREGROUND_CYAN        | FOREGROUND_INTENSITY);
+const int FOREGROUND_LIGHTRED     = (FOREGROUND_RED         | FOREGROUND_INTENSITY);
+const int FOREGROUND_LIGHTMAGENTA = (FOREGROUND_MAGENTA     | FOREGROUND_INTENSITY);
+const int FOREGROUND_YELLOW       = (FOREGROUND_BROWN       | FOREGROUND_INTENSITY);
+const int FOREGROUND_WHITE        = (FOREGROUND_LIGHTGRAY   | FOREGROUND_INTENSITY);
 
-constexpr auto BACKGROUND_BLACK        = 0;
-constexpr auto BACKGROUND_CYAN         = (BACKGROUND_BLUE        | BACKGROUND_GREEN);              
-constexpr auto BACKGROUND_MAGENTA      = (BACKGROUND_BLUE        | BACKGROUND_RED);                
-constexpr auto BACKGROUND_BROWN        = (BACKGROUND_GREEN       | BACKGROUND_RED);               
-constexpr auto BACKGROUND_LIGHTGRAY    = (BACKGROUND_BLUE        | BACKGROUND_GREEN | BACKGROUND_RED);
-constexpr auto BACKGROUND_DARKGRAY     = (BACKGROUND_BLACK       | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_LIGHTBLUE    = (BACKGROUND_BLUE        | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_LIGHTGREEN   = (BACKGROUND_GREEN       | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_LIGHTCYAN    = (BACKGROUND_CYAN        | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_LIGHTRED     = (BACKGROUND_RED         | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_LIGHTMAGENTA = (BACKGROUND_MAGENTA     | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_YELLOW       = (BACKGROUND_BROWN       | BACKGROUND_INTENSITY);
-constexpr auto BACKGROUND_WHITE        = (BACKGROUND_LIGHTGRAY   | BACKGROUND_INTENSITY);
+const int BACKGROUND_BLACK        = 0;
+const int BACKGROUND_CYAN         = (BACKGROUND_BLUE        | BACKGROUND_GREEN);              
+const int BACKGROUND_MAGENTA      = (BACKGROUND_BLUE        | BACKGROUND_RED);                
+const int BACKGROUND_BROWN        = (BACKGROUND_GREEN       | BACKGROUND_RED);               
+const int BACKGROUND_LIGHTGRAY    = (BACKGROUND_BLUE        | BACKGROUND_GREEN | BACKGROUND_RED);
+const int BACKGROUND_DARKGRAY     = (BACKGROUND_BLACK       | BACKGROUND_INTENSITY);
+const int BACKGROUND_LIGHTBLUE    = (BACKGROUND_BLUE        | BACKGROUND_INTENSITY);
+const int BACKGROUND_LIGHTGREEN   = (BACKGROUND_GREEN       | BACKGROUND_INTENSITY);
+const int BACKGROUND_LIGHTCYAN    = (BACKGROUND_CYAN        | BACKGROUND_INTENSITY);
+const int BACKGROUND_LIGHTRED     = (BACKGROUND_RED         | BACKGROUND_INTENSITY);
+const int BACKGROUND_LIGHTMAGENTA = (BACKGROUND_MAGENTA     | BACKGROUND_INTENSITY);
+const int BACKGROUND_YELLOW       = (BACKGROUND_BROWN       | BACKGROUND_INTENSITY);
+const int BACKGROUND_WHITE        = (BACKGROUND_LIGHTGRAY   | BACKGROUND_INTENSITY);
 
 // for debugging only:
 const char* const noteStrings[] = { // 2 + MAXIMUM_NOTES entries
@@ -50,148 +50,148 @@ const char* const noteStrings[] = { // 2 + MAXIMUM_NOTES entries
 };
 
 // General constants for the player: 
-constexpr auto PAL_CALC         = 7093789.2;   // these values are
-constexpr auto NTSC_CALC        = 7159090.5;   // not used 
-constexpr auto NTSC_C4_SPEED    = 8363.42;
-constexpr auto PAL_C4_SPEED     = 8287.14;
+const double PAL_CALC         = 7093789.2;   // these values are
+const double NTSC_CALC        = 7159090.5;   // not used 
+const double NTSC_C4_SPEED    = 8363.42;
+const double PAL_C4_SPEED     = 8287.14;
 
-constexpr auto PANNING_STYLE_MOD    = 1;    // LRRL etc
-constexpr auto PANNING_STYLE_XM     = 2;    // ALL CENTER
-constexpr auto PANNING_STYLE_S3M    = 3;    // LRLR etc
-constexpr auto PANNING_STYLE_IT     = 4;
-constexpr auto MARKER_PATTERN       = 254;  // S3M/IT compatibility
-constexpr auto END_OF_SONG_MARKER   = 255;  // S3M/IT end of song marker
+const int PANNING_STYLE_MOD    = 1;    // LRRL etc
+const int PANNING_STYLE_XM     = 2;    // ALL CENTER
+const int PANNING_STYLE_S3M    = 3;    // LRLR etc
+const int PANNING_STYLE_IT     = 4;
+const int MARKER_PATTERN       = 254;  // S3M/IT compatibility
+const int END_OF_SONG_MARKER   = 255;  // S3M/IT end of song marker
 
-constexpr auto DEFAULT_NR_PATTERN_ROWS      = 64;
-constexpr auto MAX_VOLUME                   = 64;
-constexpr auto MAX_PATTERNS                 = 254; // 0 .. 253
-constexpr auto MAX_INSTRUMENTS              = 255; // 1 .. 255
-constexpr auto MAX_SAMPLES                  = 128 * 16 - 1; // FT2 compatibility
-constexpr auto SAMPLEDATA_EXTENSION         = 128; // add 128 samples to the data for noise reduction
-constexpr auto SAMPLEDATA_UNSIGNED_8BIT     = 0;   // 1st bit set == signed data
-constexpr auto SAMPLEDATA_SIGNED_8BIT       = 1;
-constexpr auto SAMPLEDATA_UNSIGNED_16BIT    = 2;   // 2nd bit set == 16bit data
-constexpr auto SAMPLEDATA_SIGNED_16BIT      = 3;
-constexpr auto SAMPLEDATA_TYPE_UNKNOWN      = 64;  // safety
-constexpr auto INTERPOLATION_SPACER         = 2;
-constexpr auto MAX_EFFECT_COLUMNS           = 2;
-constexpr auto MAXIMUM_NOTES                = 11 * 12;
-constexpr auto PLAYER_MAX_CHANNELS          = 32;
-constexpr auto PANNING_FULL_LEFT            = 0;
-constexpr auto PANNING_MAX_STEPS            = 256; // must be a power of two
-constexpr auto PANNING_SHIFT                = 8;   // divide by 256 <=> SHR 8
-constexpr auto PANNING_CENTER               = PANNING_MAX_STEPS / 2 - 1;
-constexpr auto PANNING_FULL_RIGHT           = PANNING_MAX_STEPS - 1;
+const int DEFAULT_NR_PATTERN_ROWS      = 64;
+const int MAX_VOLUME                   = 64;
+const int MAX_PATTERNS                 = 254; // 0 .. 253
+const int MAX_INSTRUMENTS              = 255; // 1 .. 255
+const int MAX_SAMPLES                  = 128 * 16 - 1; // FT2 compatibility
+const int SAMPLEDATA_EXTENSION         = 128; // add 128 samples to the data for noise reduction
+const int SAMPLEDATA_UNSIGNED_8BIT     = 0;   // 1st bit set == signed data
+const int SAMPLEDATA_SIGNED_8BIT       = 1;
+const int SAMPLEDATA_UNSIGNED_16BIT    = 2;   // 2nd bit set == 16bit data
+const int SAMPLEDATA_SIGNED_16BIT      = 3;
+const int SAMPLEDATA_TYPE_UNKNOWN      = 64;  // safety
+const int INTERPOLATION_SPACER         = 2;
+const int MAX_EFFECT_COLUMNS           = 2;
+const int MAXIMUM_NOTES                = 11 * 12;
+const int PLAYER_MAX_CHANNELS          = 32;
+const int PANNING_FULL_LEFT            = 0;
+const int PANNING_MAX_STEPS            = 256; // must be a power of two
+const int PANNING_SHIFT                = 8;   // divide by 256 <=> SHR 8
+const int PANNING_CENTER               = PANNING_MAX_STEPS / 2 - 1;
+const int PANNING_FULL_RIGHT           = PANNING_MAX_STEPS - 1;
 
 // constants for envelopes:
-constexpr auto MAX_ENVELOPE_POINTS          = 25;  // XM has 12, IT has 25
-constexpr auto ENVELOPE_IS_ENABLED_FLAG     = 1;
-constexpr auto ENVELOPE_IS_SUSTAINED_FLAG   = 2;
-constexpr auto ENVELOPE_IS_LOOPED_FLAG      = 4;
-constexpr auto ENVELOPE_CARRY_ENABLED_FLAG  = 8;
-constexpr auto ENVELOPE_FOR_FILTER_FLAG     = 128; // for IT, not supported
+const int MAX_ENVELOPE_POINTS          = 25;  // XM has 12, IT has 25
+const int ENVELOPE_IS_ENABLED_FLAG     = 1;
+const int ENVELOPE_IS_SUSTAINED_FLAG   = 2;
+const int ENVELOPE_IS_LOOPED_FLAG      = 4;
+const int ENVELOPE_CARRY_ENABLED_FLAG  = 8;
+const int ENVELOPE_FOR_FILTER_FLAG     = 128; // for IT, not supported
 
 // New Note Action constants
-constexpr auto  NNA_NOTE_CUT      = 0;
-constexpr auto  NNA_NOTE_CONTINUE = 1;
-constexpr auto  NNA_NOTE_OFF      = 2;
-constexpr auto  NNA_NOTE_FADE     = 3;
+const int NNA_NOTE_CUT      = 0;
+const int NNA_NOTE_CONTINUE = 1;
+const int NNA_NOTE_OFF      = 2;
+const int NNA_NOTE_FADE     = 3;
 
 // New Note Action constants - Duplicate Check Type
-constexpr auto  DCT_OFF           = 0;
-constexpr auto  DCT_NOTE          = 1;
-constexpr auto  DCT_SAMPLE        = 2;
-constexpr auto  DCT_INSTRUMENT    = 3;
+const int DCT_OFF           = 0;
+const int DCT_NOTE          = 1;
+const int DCT_SAMPLE        = 2;
+const int DCT_INSTRUMENT    = 3;
 
 // New Note Action constants - Duplicate Check Action
-constexpr auto  DCA_CUT           = 0;
-constexpr auto  DCA_NOTE_OFF      = 1;
-constexpr auto  DCA_NOTE_FADE     = 2;
+const int DCA_CUT           = 0;
+const int DCA_NOTE_OFF      = 1;
+const int DCA_NOTE_FADE     = 2;
 
 // direction indicating how the sample is being played in the mixer.
 // this is necessary for ping pong loops
-constexpr auto FORWARD = false;
-constexpr auto BACKWARD = true;
+const int FORWARD = false;
+const int BACKWARD = true;
 
 // differentiate trackers, for S3M compatibility mainly
-constexpr auto  TRACKER_PROTRACKER = 1;
-constexpr auto  TRACKER_ST300      = 2;
-constexpr auto  TRACKER_ST321      = 3;
-constexpr auto  TRACKER_FT2        = 4;
-constexpr auto  TRACKER_IT         = 5;
+const int TRACKER_PROTRACKER = 1;
+const int TRACKER_ST300      = 2;
+const int TRACKER_ST321      = 3;
+const int TRACKER_FT2        = 4;
+const int TRACKER_IT         = 5;
 
 // effect nrs:
-constexpr auto  NO_EFFECT                        = 0x0; // ARPEGGIO is remapped to 0x25
-constexpr auto  PORTAMENTO_UP                    = 0x1;
-constexpr auto  PORTAMENTO_DOWN                  = 0x2;
-constexpr auto  TONE_PORTAMENTO                  = 0x3;
-constexpr auto  VIBRATO                          = 0x4;
-constexpr auto  TONE_PORTAMENTO_AND_VOLUME_SLIDE = 0x5;
-constexpr auto  VIBRATO_AND_VOLUME_SLIDE         = 0x6;
-constexpr auto  TREMOLO                          = 0x7;
-constexpr auto  SET_FINE_PANNING                 = 0x8;
-constexpr auto  SET_SAMPLE_OFFSET                = 0x9;
-constexpr auto  VOLUME_SLIDE                     = 0xA;
-constexpr auto  POSITION_JUMP                    = 0xB;
-constexpr auto  SET_VOLUME                       = 0xC;
-constexpr auto  PATTERN_BREAK                    = 0xD;
-constexpr auto  EXTENDED_EFFECTS                 = 0xE; // extended effects
-constexpr auto  SET_FILTER                       = 0x0; // XM effect E0
-constexpr auto  FINE_PORTAMENTO_UP               = 0x1; // XM effect E1
-constexpr auto  FINE_PORTAMENTO_DOWN             = 0x2; // XM effect E2
-constexpr auto  SET_GLISSANDO_CONTROL            = 0x3; // XM effect E3
-constexpr auto  SET_VIBRATO_CONTROL              = 0x4; // XM effect E4
-constexpr auto  SET_FINETUNE                     = 0x5; // XM effect E5
-constexpr auto  SET_PATTERN_LOOP                 = 0x6; // XM effect E6
-constexpr auto  SET_TREMOLO_CONTROL              = 0x7; // XM effect E7
-constexpr auto  SET_ROUGH_PANNING                = 0x8; // XM effect E8, not used in player
-constexpr auto  NOTE_RETRIG                      = 0x9; // XM effect E9
-constexpr auto  FINE_VOLUME_SLIDE_UP             = 0xA; // XM effect EA
-constexpr auto  FINE_VOLUME_SLIDE_DOWN           = 0xB; // XM effect EB
-constexpr auto  NOTE_CUT                         = 0xC; // XM effect EC
-constexpr auto  NOTE_DELAY                       = 0xD; // XM effect ED
-constexpr auto  PATTERN_DELAY                    = 0xE; // XM effect EE
-constexpr auto  INVERT_LOOP                      = 0xF; // XM effect EF, end of XM extended effects
-constexpr auto  S3M_SET_GLISSANDO_CONTROL        = 0x1; // S3M effect S1
-constexpr auto  S3M_SET_FINETUNE                 = 0x2; // S3M effect S2
-constexpr auto  S3M_SET_VIBRATO_CONTROL          = 0x3; // S3M effect S3
-constexpr auto  S3M_SET_TREMOLO_CONTROL          = 0x4; // S3M effect S4
-constexpr auto  S3M_SET_PANBRELLO_CONTROL        = 0x5; // S3M effect S5
-constexpr auto  S3M_FINE_PATTERN_DELAY           = 0x6; // S3M effect S6
-constexpr auto  S3M_SET_ROUGH_PANNING            = 0x8; // S3M effect S8
-constexpr auto  S3M_SOUND_CONTROL                = 0x9; // S3M effect S9
-constexpr auto  S3M_SET_HIGH_SAMPLE_OFFSET       = 0xA; // S3M effect SA
-constexpr auto  S3M_SET_PATTERN_LOOP             = 0xB; // S3M effect SB
-constexpr auto  S3M_NOTE_CUT                     = 0xC; // S3M effect SC
-constexpr auto  S3M_NOTE_DELAY                   = 0xD; // S3M effect SD
-constexpr auto  S3M_PATTERN_DELAY                = 0xE; // S3M effect SE, end of S3M extended effects
-constexpr auto  SET_TEMPO                        = 0xF; 
-constexpr auto  SET_GLOBAL_VOLUME                = 0x10;// XM effect G
-constexpr auto  GLOBAL_VOLUME_SLIDE              = 0x11;// XM effect H
-constexpr auto  SET_ENVELOPE_POSITION            = 0x15;// XM effect L
-constexpr auto  PANNING_SLIDE                    = 0x19;// XM effect P
-constexpr auto  MULTI_NOTE_RETRIG                = 0x1B;// XM effect R
-constexpr auto  TREMOR                           = 0x1D;// XM effect T
-constexpr auto  EXTRA_FINE_PORTAMENTO            = 0x21;// XM effect X
-constexpr auto  EXTRA_FINE_PORTAMENTO_UP         = 0x1; // XM effect X1
-constexpr auto  EXTRA_FINE_PORTAMENTO_DOWN       = 0x2; // XM effect X2
-constexpr auto  PANBRELLO                        = 0x22;// S3M effect Y 
+const int NO_EFFECT                        = 0x0; // ARPEGGIO is remapped to 0x25
+const int PORTAMENTO_UP                    = 0x1;
+const int PORTAMENTO_DOWN                  = 0x2;
+const int TONE_PORTAMENTO                  = 0x3;
+const int VIBRATO                          = 0x4;
+const int TONE_PORTAMENTO_AND_VOLUME_SLIDE = 0x5;
+const int VIBRATO_AND_VOLUME_SLIDE         = 0x6;
+const int TREMOLO                          = 0x7;
+const int SET_FINE_PANNING                 = 0x8;
+const int SET_SAMPLE_OFFSET                = 0x9;
+const int VOLUME_SLIDE                     = 0xA;
+const int POSITION_JUMP                    = 0xB;
+const int SET_VOLUME                       = 0xC;
+const int PATTERN_BREAK                    = 0xD;
+const int EXTENDED_EFFECTS                 = 0xE; // extended effects
+const int SET_FILTER                       = 0x0; // XM effect E0
+const int FINE_PORTAMENTO_UP               = 0x1; // XM effect E1
+const int FINE_PORTAMENTO_DOWN             = 0x2; // XM effect E2
+const int SET_GLISSANDO_CONTROL            = 0x3; // XM effect E3
+const int SET_VIBRATO_CONTROL              = 0x4; // XM effect E4
+const int SET_FINETUNE                     = 0x5; // XM effect E5
+const int SET_PATTERN_LOOP                 = 0x6; // XM effect E6
+const int SET_TREMOLO_CONTROL              = 0x7; // XM effect E7
+const int SET_ROUGH_PANNING                = 0x8; // XM effect E8, not used in player
+const int NOTE_RETRIG                      = 0x9; // XM effect E9
+const int FINE_VOLUME_SLIDE_UP             = 0xA; // XM effect EA
+const int FINE_VOLUME_SLIDE_DOWN           = 0xB; // XM effect EB
+const int NOTE_CUT                         = 0xC; // XM effect EC
+const int NOTE_DELAY                       = 0xD; // XM effect ED
+const int PATTERN_DELAY                    = 0xE; // XM effect EE
+const int INVERT_LOOP                      = 0xF; // XM effect EF, end of XM extended effects
+const int S3M_SET_GLISSANDO_CONTROL        = 0x1; // S3M effect S1
+const int S3M_SET_FINETUNE                 = 0x2; // S3M effect S2
+const int S3M_SET_VIBRATO_CONTROL          = 0x3; // S3M effect S3
+const int S3M_SET_TREMOLO_CONTROL          = 0x4; // S3M effect S4
+const int S3M_SET_PANBRELLO_CONTROL        = 0x5; // S3M effect S5
+const int S3M_FINE_PATTERN_DELAY           = 0x6; // S3M effect S6
+const int S3M_SET_ROUGH_PANNING            = 0x8; // S3M effect S8
+const int S3M_SOUND_CONTROL                = 0x9; // S3M effect S9
+const int S3M_SET_HIGH_SAMPLE_OFFSET       = 0xA; // S3M effect SA
+const int S3M_SET_PATTERN_LOOP             = 0xB; // S3M effect SB
+const int S3M_NOTE_CUT                     = 0xC; // S3M effect SC
+const int S3M_NOTE_DELAY                   = 0xD; // S3M effect SD
+const int S3M_PATTERN_DELAY                = 0xE; // S3M effect SE, end of S3M extended effects
+const int SET_TEMPO                        = 0xF; 
+const int SET_GLOBAL_VOLUME                = 0x10;// XM effect G
+const int GLOBAL_VOLUME_SLIDE              = 0x11;// XM effect H
+const int SET_ENVELOPE_POSITION            = 0x15;// XM effect L
+const int PANNING_SLIDE                    = 0x19;// XM effect P
+const int MULTI_NOTE_RETRIG                = 0x1B;// XM effect R
+const int TREMOR                           = 0x1D;// XM effect T
+const int EXTRA_FINE_PORTAMENTO            = 0x21;// XM effect X
+const int EXTRA_FINE_PORTAMENTO_UP         = 0x1; // XM effect X1
+const int EXTRA_FINE_PORTAMENTO_DOWN       = 0x2; // XM effect X2
+const int PANBRELLO                        = 0x22;// S3M effect Y 
 
 // internal remapped effects for the player
-constexpr auto SET_BPM                          = 0x24; // after effect "Z" for XM safety
-constexpr auto ARPEGGIO                         = 0x25;
-constexpr auto FINE_VIBRATO                     = 0x26; // S3M fine vibrato
-constexpr auto SET_VIBRATO_SPEED                = 0x27; // XM Volc command
-constexpr auto KEY_OFF                          = 255;  //(12 * 11 + 1); // 11 octaves
-constexpr auto KEY_NOTE_CUT                     = 254;
-constexpr auto KEY_NOTE_FADE                    = 253;
+const int SET_BPM                          = 0x24; // after effect "Z" for XM safety
+const int ARPEGGIO                         = 0x25;
+const int FINE_VIBRATO                     = 0x26; // S3M fine vibrato
+const int SET_VIBRATO_SPEED                = 0x27; // XM Volc command
+const int KEY_OFF                          = 255;  //(12 * 11 + 1); // 11 octaves
+const int KEY_NOTE_CUT                     = 254;
+const int KEY_NOTE_FADE                    = 253;
 
 // different types of vibrato
-constexpr auto VIBRATO_SINEWAVE         = 0;
-constexpr auto VIBRATO_RAMPDOWN         = 1;
-constexpr auto VIBRATO_SQUAREWAVE       = 2;
-constexpr auto VIBRATO_RANDOM           = 3;
-constexpr auto VIBRATO_NO_RETRIG_FLAG   = 4;
+const int VIBRATO_SINEWAVE         = 0;
+const int VIBRATO_RAMPDOWN         = 1;
+const int VIBRATO_SQUAREWAVE       = 2;
+const int VIBRATO_RANDOM           = 3;
+const int VIBRATO_NO_RETRIG_FLAG   = 4;
 
 /*
     From MPT's test suite:
@@ -271,5 +271,5 @@ const unsigned amigaPeriodTable[] = {
 };
 
 // These type definitions come in handy when loading module files
-typedef unsigned __int16 AMIGAWORD;
-typedef signed   __int16 SHORT;
+typedef std::uint16_t AMIGAWORD;
+typedef std::int16_t SHORT;

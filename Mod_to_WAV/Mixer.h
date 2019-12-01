@@ -1,9 +1,19 @@
 #pragma once
 
+#include <climits>
+#if CHAR_BIT != 8 
+This code requires a byte to be 8 bits wide
+#endif
+
 #pragma comment (lib,"winmm.lib") 
 
 #define NOMINMAX
 #include <windows.h>
+#include <mmreg.h>
+
+// the following are only needed if you use the wave_format_extensible:
+//#include <ks.h>
+//#include <Ksmedia.h>
 
 #include <cstdio>
 #include <conio.h>
@@ -28,17 +38,19 @@
 
 #define LINEAR_INTERPOLATION  // this constant is not used
 
-constexpr auto MIXRATE              = 48000;          // in Hz
-constexpr auto BLOCK_SIZE           = 0x4000;         // normally 0x4000
-constexpr auto BLOCK_COUNT          = 20;             // should be at least 4
-#define        BITS_PER_SAMPLE        32              // can't use constexpr here
-constexpr auto SAMPLES_PER_BLOCK    = BLOCK_SIZE / 
-                    (BITS_PER_SAMPLE >> 3);           // 32 bit = 4 bytes / sample
+const int MIXRATE              = 48000;          // in Hz
+const int BLOCK_SIZE           = 0x4000;         // normally 0x4000
+const int BLOCK_COUNT          = 2;              // should be at least 2
+#define   BITS_PER_SAMPLE      32 //  (sizeof( MixBufferType ) / 8) // can't use constexpr here
+const int SAMPLES_PER_BLOCK    = BLOCK_SIZE /
+                    (BITS_PER_SAMPLE / 8);       // 32 bit = 4 bytes / sample
 
-typedef int MixBufferType;      // for internal mixing, 32 bit will do for now
+
+typedef std::int32_t MixBufferType;      // for internal mixing, 32 bit will do for now
 
 #if BITS_PER_SAMPLE == 32
-typedef std::int32_t DestBufferType;     // DestBufferType must be int for 32 bit mixing
+//typedef std::int32_t DestBufferType;     // DestBufferType must be int for 32 bit mixing
+typedef float DestBufferType;     // DestBufferType must be int or float for 32 bit mixing
 #elif BITS_PER_SAMPLE == 16
 typedef SHORT DestBufferType;   // DestBufferType must be SHORT for 16 bit mixing
 #else
@@ -59,65 +71,75 @@ Error! output buffer must be 16 bit or 32 bit!
 
 class Channel {
 public:
-    bool            isMuted;
     Instrument*     pInstrument;
     Sample*         pSample;
-    unsigned        volume;
-    unsigned        panning;
+    Note            oldNote;  
+    Note            newNote; // oldNote + NewNote = 12 bytes
 
-    unsigned        iVolumeEnvelope;
-    unsigned        iPanningEnvelope;
-    unsigned        iPitchFltrEnvelope;
+    bool            isMuted;
+    unsigned char   volume;
+    unsigned char   panning;
     bool            keyIsReleased;
 
-    Note            oldNote;
-    Note            newNote;
-    unsigned        lastNote;
-    unsigned        period;
-    unsigned        targetPeriod;
-    unsigned        instrumentNo;
-    unsigned        sampleNo;
+    unsigned short  iVolumeEnvelope;
+    unsigned short  iPanningEnvelope;
+
+    unsigned short  iPitchFltrEnvelope;
+    unsigned short  period;
+
+    unsigned short  targetPeriod;
+    unsigned char   instrumentNr;
+    unsigned char   lastNote;           
+
     unsigned        sampleOffset;
 
-    /*
-    effect memory & index counters:
-    */
+    // effect memory & index counters:
     bool            patternIsLooping;
-    unsigned        patternLoopStart;
-    unsigned        patternLoopCounter;
-    unsigned        lastArpeggio;
-    unsigned        arpeggioCount;
-    unsigned        arpeggioNote1;
-    unsigned        arpeggioNote2;
-    unsigned        vibratoWaveForm;
-    unsigned        tremoloWaveForm;
-    unsigned        panbrelloWaveForm;
-    int             vibratoCount;
-    int             tremoloCount;
-    int             panbrelloCount;
-    unsigned        retrigCount;
-    unsigned        delayCount;
-    unsigned        portaDestPeriod;
-    unsigned        lastPortamentoUp;
-    unsigned        lastPortamentoDown;
-    unsigned        lastTonePortamento;
-    unsigned        lastVibrato;
-    unsigned        lastTremolo;
-    unsigned        lastVolumeSlide;
-    unsigned        lastFinePortamentoUp;
-    unsigned        lastFinePortamentoDown;
-    unsigned        lastFineVolumeSlideUp;
-    unsigned        lastFineVolumeSlideDown;
-    unsigned        lastGlobalVolumeSlide;
-    unsigned        lastPanningSlide;
-    unsigned        lastBpmSLide;
-    unsigned        lastSampleOffset;
-    unsigned        lastMultiNoteRetrig;
-    unsigned        lastExtendedEffect;
-    unsigned        lastTremor;
-    unsigned        lastExtraFinePortamentoUp;
-    unsigned        lastExtraFinePortamentoDown;
-    unsigned        mixerChannelNr;
+    unsigned char   patternLoopStart;
+    unsigned char   patternLoopCounter;
+    unsigned char   lastArpeggio;
+
+    unsigned char   arpeggioCount;
+    unsigned char   arpeggioNote1;
+    unsigned char   arpeggioNote2;
+    unsigned char   vibratoWaveForm;
+
+    unsigned char   tremoloWaveForm;
+    unsigned char   panbrelloWaveForm;
+    signed char     vibratoCount;
+    signed char     tremoloCount;
+
+    signed char     panbrelloCount;
+    unsigned char   retrigCount;
+    unsigned char   delayCount;
+    unsigned char   lastPortamentoUp;
+
+    unsigned short  portaDestPeriod;
+    unsigned char   lastPortamentoDown;
+    unsigned char   lastTonePortamento;
+
+    unsigned char   lastVibrato;
+    unsigned char   lastTremolo;
+    unsigned char   lastVolumeSlide;
+    unsigned char   lastFinePortamentoUp;
+
+    unsigned char   lastFinePortamentoDown;
+    unsigned char   lastFineVolumeSlideUp;
+    unsigned char   lastFineVolumeSlideDown;
+    unsigned char   lastGlobalVolumeSlide;
+
+    unsigned char   lastPanningSlide;
+    unsigned char   lastBpmSLide;
+    unsigned char   lastSampleOffset;
+    unsigned char   lastMultiNoteRetrig;
+
+    unsigned char   lastExtendedEffect;
+    unsigned char   lastTremor;
+    unsigned char   lastExtraFinePortamentoUp;
+    unsigned char   lastExtraFinePortamentoDown;
+
+    unsigned short  mixerChannelNr;
+    unsigned short  alignDummy;
 public:
     void            init()
     {
@@ -131,7 +153,7 @@ public:
 
 class MixerChannel {
 public:
-    unsigned        masterChannel;     // 0..63
+    unsigned char   masterChannel;     // 0..63
     unsigned        age;
     bool            isActive;          // if not, mixer skips it
     bool            isMaster;          // false if it is a virtual channel
@@ -198,7 +220,9 @@ public: // debug
     static int                  waveCurrentBlock;
 
     HWAVEOUT        hWaveOut;
-    WAVEFORMATEX    waveFormatEx;
+
+    WAVEFORMATEXTENSIBLE    waveFormatExtensible;
+    WAVEFORMATEX            waveFormatEx;
 
 public: // debug
     DestBufferType* waveBuffers[BLOCK_COUNT];

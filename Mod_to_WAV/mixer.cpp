@@ -4,10 +4,10 @@
 #include "Mixer.h"
 
 // define static variables from the Mixer class:
-CRITICAL_SECTION     Mixer::waveCriticalSection;
-WAVEHDR* Mixer::waveBlocks;
-volatile int         Mixer::waveFreeBlockCount;
-int                  Mixer::waveCurrentBlock;
+CRITICAL_SECTION    Mixer::waveCriticalSection;
+WAVEHDR*            Mixer::waveBlocks;
+volatile int        Mixer::waveFreeBlockCount;
+int                 Mixer::waveCurrentBlock;
 
 Mixer::Mixer()
 {
@@ -34,7 +34,7 @@ Mixer::Mixer()
         side, followed by the data buffers - so the audio data will form
         one continuous block. Point to first data buffer:
     */
-    waveBlocks = (WAVEHDR*)buffer;
+    waveBlocks = (WAVEHDR *)buffer;
     buffer += sizeof( WAVEHDR ) * BLOCK_COUNT;
     for ( int i = 0; i < BLOCK_COUNT; i++ ) {
         waveBlocks[i].dwBufferLength = BLOCK_SIZE;
@@ -45,15 +45,30 @@ Mixer::Mixer()
     /*
         prepare the header for the windows WAVE functions
     */
-    waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
+    if ( BITS_PER_SAMPLE == 16 )
+        waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
+    else
+        waveFormatEx.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;//WAVE_FORMAT_PCM;// WAVE_FORMAT_EXTENSIBLE
     waveFormatEx.nChannels = 2;               // stereo
     waveFormatEx.nSamplesPerSec = MIXRATE;
     waveFormatEx.wBitsPerSample = BITS_PER_SAMPLE;
     waveFormatEx.nBlockAlign = waveFormatEx.nChannels *
-        (waveFormatEx.wBitsPerSample >> 3);
+        waveFormatEx.wBitsPerSample / 8;
     waveFormatEx.nAvgBytesPerSec = waveFormatEx.nSamplesPerSec *
         waveFormatEx.nBlockAlign;
     waveFormatEx.cbSize = 0;
+
+    /*
+    // not actually needed: the basic waveformatex supports float wave files
+    waveFormatEx.cbSize = sizeof( WAVEFORMATEXTENSIBLE ) - sizeof( WAVEFORMATEX );
+    waveFormatExtensible.dwChannelMask = KSAUDIO_SPEAKER_STEREO;
+    waveFormatExtensible.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+
+    //waveFormatExtensible.Samples.wSamplesPerBlock = BLOCK_SIZE / sizeof( DestBufferType );
+    waveFormatExtensible.Samples.wValidBitsPerSample = 32; // ????
+    //waveFormatExtensible.Samples.wReserved = 0;
+    waveFormatExtensible.Format = waveFormatEx;
+    */
 }
 
 Mixer::~Mixer()
@@ -105,15 +120,23 @@ void Mixer::startReplay()
         default wave device on the system (some people have 2 or
         more sound cards).
     */
-    if ( waveOutOpen(
+    MMRESULT mmrError = waveOutOpen(
         &hWaveOut,
         WAVE_MAPPER,
         &waveFormatEx,
+        //(const WAVEFORMATEX *)(&waveFormatExtensible),
         (DWORD_PTR)waveOutProc,
         (DWORD_PTR)&waveFreeBlockCount,
         CALLBACK_FUNCTION
-    ) != MMSYSERR_NOERROR ) {
-        std::cout << "\nUnable to open wave mapper device";
+    );
+    if( mmrError != MMSYSERR_NOERROR ) {
+        std::unique_ptr<wchar_t[]> buffer = std::make_unique<wchar_t[]>( 256 );
+        memset( buffer.get(), 0, sizeof( wchar_t ) * 256 );
+        waveOutGetErrorText( mmrError,(wchar_t *)buffer.get(),254 );
+        std::wcout 
+            << "\nUnable to open wave mapper device: " 
+            << buffer.get() 
+            << "\n";
         ExitProcess( 1 );
     }
 }
@@ -284,8 +307,10 @@ int Mixer::doMixBuffer( DestBufferType* buffer )
     switch ( BITS_PER_SAMPLE ) { 
         case 16:
         {
+            // 16 bit is fixed point, never floating point
             for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
                 MixBufferType tmp = src[i] >> 8;
+                //MixBufferType tmp = src[i] / 256;
                 if ( tmp < -32768 ) {
                     tmp = -32768;
                     saturation++;
@@ -294,14 +319,16 @@ int Mixer::doMixBuffer( DestBufferType* buffer )
                     tmp = 32767;
                     saturation++;
                 }
-                dst[i] = tmp;
+                dst[i] = (DestBufferType)tmp;
             }  
             break;
         }
         case 32:
         {
-            for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) 
-                dst[i] = src[i] << 6;
+            for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
+                //dst[i] = src[i] << 6; // PCM DATA
+                dst[i] = (float)(src[i]) / (32768.0f * 16.0f);
+            }
             break;
         }
     }

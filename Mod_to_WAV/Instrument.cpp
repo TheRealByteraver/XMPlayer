@@ -1,80 +1,11 @@
-/*
-    .XM
 
-    - No loop, no sustain:
-    ---> follow the envelope till the last point and hold. Key off causes fade
-    out, envelope vol remains that of the last point (nothing special here)
-
-    - No loop, sustain:
-    ---> follow the envelope till the sustain point. Hold till key off, then
-    follow rest of the envelope till the last point, and hold till fade out
-    kills the sound
-
-    - Loop, no sustain:
-    ---> loop the envelope before and after key off, till fade out
-
-    - Loop, sustain point before beginning of loop:
-    ---> Follow envelope till sustain, hold till key off, and continue till
-    envelope loop end, then loop to the envelope loop start till fade out
-
-    - Loop, sustain point at beginning of loop:
-    ---> see previous item
-
-    - Loop, sustain point in the middle of the loop:
-    ---> see previous item
-
-    - Loop, sustain point at end of loop:
-    ---> Loop the envelope normally, continue beyond the envelope loop end
-    after key off (key off disables loop of envelope)
-
-    - Loop, sustain point beyond end of loop:
-    ---> same as "Loop, no sustain" (ignore sustain)
-
-    Bottom line: process envelope and envelope loop normally, hold at sustain
-    and continue after key release, except if envelope loop end and sustain
-    point coincide, then continue with the envelope part that follows the
-    loop end / sustain (if any).
-
-    **********
-    **********
-    **********
-
-    .IT
-
-    - No loop, no sustain:
-    ---> follow the envelope till the end and execute fadeout. key off event
-    has no effect, the envelope is always processed fully (!)
-
-    - No loop, sustain point:
-    ---> Process envelope till sustain and hold till key off, then process rest
-    of envelope, start fadeout only at end of envelope
-
-    - No loop, sustain loop:
-    ---> Process envelope till sustain loop end and loop to sustain loop start
-    until key off, the proceed till end of envelope, only then start fade out
-
-    - Loop, sustain loop:
-    ---> Loop the envelope using the sustain loop point(s) until key off, then
-    immediately start fadeout AND jump to the envelope loop start position and
-    loop the envelope using the normal envelope loop points. This means
-    envelope points beyond the last loop point (sustain or normal) are never
-    used.
-
-    - Loop, no sustain:
-    ---> Loop envelope, key off event starts fadeout, envelope keeps looping.
-    Points beyond loop end are never used.
-
-
-    Bottom line: process envelope normally, hold / loop at sustain, fade out
-    only at the end of the envelope, unless an envelope loop is present, then
-    proceed to envelope loop and start fade out immediately (on key off event).
-
-*/
-
+#include <iostream>
 #include <cassert>
 
 #include "constants.h"
 #include "instrument.h"
+
+bool Envelope::envelopeStyle_;
 
 Instrument::Instrument( const InstrumentHeader &instrumentHeader ) 
 {
@@ -121,4 +52,16 @@ Instrument::Instrument( const InstrumentHeader &instrumentHeader )
     volumeEnvelope_         = instrumentHeader.volumeEnvelope;
     panningEnvelope_        = instrumentHeader.panningEnvelope;
     pitchFltrEnvelope_      = instrumentHeader.pitchFltrEnvelope;
+
+    if ( volumeEnvelope_.isEnabled() ) {
+        std::cout
+            << "\nVol env nodes: ";
+        for ( int i = 0; i < volumeEnvelope_.nrNodes; i++ )
+            std::cout << std::dec
+            << (unsigned)volumeEnvelope_.nodes[i].x
+            << ","
+            << (unsigned)volumeEnvelope_.nodes[i].y
+            << " ";
+    }
+
 }

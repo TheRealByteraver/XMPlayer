@@ -10,6 +10,11 @@
     - short name for sampleHeader: smpHdr
 
 */
+#include <climits>
+#if CHAR_BIT != 8 
+This code requires a byte to be 8 bits wide
+#endif
+
 #include <conio.h>
 #include <windows.h>
 #include <mmsystem.h>
@@ -28,41 +33,41 @@
 //#define debug_xm_show_patterns
 //#define debug_xm_play_samples
 
-constexpr auto XM_DEBUG_SHOW_PATTERN_NO      = 0;// pattern to be shown
-constexpr auto XM_DEBUG_SHOW_MAX_CHN         = 16;
+const int XM_DEBUG_SHOW_PATTERN_NO      = 0;// pattern to be shown
+const int XM_DEBUG_SHOW_MAX_CHN         = 16;
 
-constexpr auto XM_HEADER_SIZE_PART_ONE       = 60;
-constexpr auto XM_MAX_SONG_NAME_LENGTH       = 20;
-constexpr auto XM_TRACKER_NAME_LENGTH        = 20;
-constexpr auto XM_MAX_INSTRUMENT_NAME_LENGTH = 22;
-constexpr auto XM_MAX_SAMPLE_NAME_LENGTH     = 22;
-constexpr auto XM_MAX_SAMPLES_PER_INST       = 16;
-constexpr auto XM_MAX_PATTERNS               = 256;
-constexpr auto XM_MAX_INSTRUMENTS            = 128;
-constexpr auto XM_MAXIMUM_NOTES              = 8 * 12;
-constexpr auto XM_MAX_ENVELOPE_NODES         = 12;
-constexpr auto XM_ENVELOPE_IS_ENABLED_FLAG   = 1;
-constexpr auto XM_ENVELOPE_IS_SUSTAINED_FLAG = 2;
-constexpr auto XM_ENVELOPE_IS_LOOPED_FLAG    = 4;
-constexpr auto XM_MIN_CHANNELS               = 2;
-constexpr auto XM_MAX_CHANNELS               = 32;
-constexpr auto XM_MAX_SONG_LENGTH            = 256;
-constexpr auto XM_LINEAR_FREQUENCIES_FLAG    = 1;
-constexpr auto XM_MAX_BPM                    = 0xFF;
-constexpr auto XM_MAX_TEMPO                  = 0x1F;
-constexpr auto XM_MAX_PATTERN_ROWS           = 256;
-constexpr auto XM_NOTE_IS_PACKED             = 128;
-constexpr auto XM_NOTE_AVAIL                 = 1;
-constexpr auto XM_INSTRUMENT_AVAIL           = 2;
-constexpr auto XM_VOLUME_COLUMN_AVAIL        = 4;
-constexpr auto XM_EFFECT_AVAIL               = 8;
-constexpr auto XM_EFFECT_ARGUMENT_AVAIL      = 16;
-constexpr auto XM_SAMPLE_LOOP_MASK           = 3;  // 011b
-constexpr auto XM_PINGPONG_LOOP_FLAG         = 2;
-constexpr auto XM_SIXTEEN_BIT_SAMPLE_FLAG    = 16;
-constexpr auto XM_STANDARD_COMPRESSION       = 0;
-constexpr auto XM_ADPCM_COMPRESSION          = 0xAD;
-constexpr auto XM_KEY_OFF                    = 97; // 8 octaves, 1 based, plus 1
+const int XM_HEADER_SIZE_PART_ONE       = 60;
+const int XM_MAX_SONG_NAME_LENGTH       = 20;
+const int XM_TRACKER_NAME_LENGTH        = 20;
+const int XM_MAX_INSTRUMENT_NAME_LENGTH = 22;
+const int XM_MAX_SAMPLE_NAME_LENGTH     = 22;
+const int XM_MAX_SAMPLES_PER_INST       = 16;
+const int XM_MAX_PATTERNS               = 256;
+const int XM_MAX_INSTRUMENTS            = 128;
+const int XM_MAXIMUM_NOTES              = 8 * 12;
+const int XM_MAX_ENVELOPE_NODES         = 12;
+const int XM_ENVELOPE_IS_ENABLED_FLAG   = 1;
+const int XM_ENVELOPE_IS_SUSTAINED_FLAG = 2;
+const int XM_ENVELOPE_IS_LOOPED_FLAG    = 4;
+const int XM_MIN_CHANNELS               = 2;
+const int XM_MAX_CHANNELS               = 32;
+const int XM_MAX_SONG_LENGTH            = 256;
+const int XM_LINEAR_FREQUENCIES_FLAG    = 1;
+const int XM_MAX_BPM                    = 0xFF;
+const int XM_MAX_TEMPO                  = 0x1F;
+const int XM_MAX_PATTERN_ROWS           = 256;
+const int XM_NOTE_IS_PACKED             = 128;
+const int XM_NOTE_AVAIL                 = 1;
+const int XM_INSTRUMENT_AVAIL           = 2;
+const int XM_VOLUME_COLUMN_AVAIL        = 4;
+const int XM_EFFECT_AVAIL               = 8;
+const int XM_EFFECT_ARGUMENT_AVAIL      = 16;
+const int XM_SAMPLE_LOOP_MASK           = 3;  // 011b
+const int XM_PINGPONG_LOOP_FLAG         = 2;
+const int XM_SIXTEEN_BIT_SAMPLE_FLAG    = 16;
+const int XM_STANDARD_COMPRESSION       = 0;
+const int XM_ADPCM_COMPRESSION          = 0xAD;
+const int XM_KEY_OFF                    = 8 * 12 + 1; // 8 octaves, 1 based, plus 1
 
 #pragma pack (1)
 
@@ -70,78 +75,78 @@ constexpr auto XM_KEY_OFF                    = 97; // 8 octaves, 1 based, plus 1
 struct XmHeader {    
     char              fileTag[17];                        // = "Extended Module"
     char              songTitle[XM_MAX_SONG_NAME_LENGTH]; // Name of the XM
-    unsigned char     id;                                 // 0x1A
+    std::uint8_t      id;                                 // 0x1A
     char              trackerName[XM_TRACKER_NAME_LENGTH];// = "FastTracker v2.00"
-    unsigned short    version;                            // 0x01 0x04
-    unsigned short    headerSize;       // size of xmHeader from here: min. 20 + 1 bytes
-    unsigned short    reserved; 
-    unsigned short    songLength;
-    unsigned short    songRestartPosition;
-    unsigned short    nrChannels;
-    unsigned short    nPatterns;
-    unsigned short    nInstruments;
-    unsigned short    flags;            // 0 = Amiga frequency table 1 = Linear frequency table
-    unsigned short    defaultTempo;   
-    unsigned short    defaultBpm;     
-    unsigned char     patternTable[XM_MAX_SONG_LENGTH];
+    std::uint16_t     version;                            // 0x01 0x04
+    std::uint16_t     headerSize;       // size of xmHeader from here: min. 20 + 1 bytes
+    std::uint16_t     reserved; 
+    std::uint16_t     songLength;
+    std::uint16_t     songRestartPosition;
+    std::uint16_t     nrChannels;
+    std::uint16_t     nPatterns;
+    std::uint16_t     nInstruments;
+    std::uint16_t     flags;            // 0 = Amiga frequency table 1 = Linear frequency table
+    std::uint16_t     defaultTempo;   
+    std::uint16_t     defaultBpm;     
+    std::uint8_t      patternTable[XM_MAX_SONG_LENGTH];
 };                                 // sizeof == 336 bytes max (found in the wild)
 
 struct XmPatternHeader {           // typedef of the pattern xmHeader
-    unsigned short    headerSize;
-    unsigned short    reserved;    // !!!
-    unsigned char     pack;
-    unsigned short    nRows;
-    unsigned short    patternSize;
+    std::uint16_t     headerSize;
+    std::uint16_t     reserved;    // !!!
+    std::uint8_t      pack;
+    std::uint16_t     nRows;
+    std::uint16_t     patternSize;
 };                                 // sizeof == 9 bytes
 
 struct XmInstrumentHeader1 {
-    unsigned short    headerSize;  // size of the 2 headers
-    unsigned short    reserved;    // !!!
+    std::uint16_t     headerSize;  // size of the 2 headers
+    std::uint16_t     reserved;    // !!!
     char              name[22];
-    unsigned char     type;        // should be 0, but is sometimes 128,129,253
-    unsigned short    nSamples;
+    std::uint8_t      type;        // should be 0, but is sometimes 128,129,253
+    std::uint16_t     nSamples;
 };                                 // sizeof == 29 bytes
 
 struct XmEnvelopeNode {
-    unsigned short  x;
-    unsigned short  y;
+    std::uint16_t     x;
+    std::uint16_t     y;
 };
  
 struct XmInstrumentHeader2 {
-    unsigned short    sampleHeaderSize;
-    unsigned short    reserved;            // !!!
-    unsigned char     sampleForNote[XM_MAXIMUM_NOTES];
+    std::uint16_t     sampleHeaderSize;
+    std::uint16_t     reserved;            // !!!
+    std::uint8_t      sampleForNote[XM_MAXIMUM_NOTES];
     XmEnvelopeNode    volumeEnvelope[XM_MAX_ENVELOPE_NODES];
     XmEnvelopeNode    panningEnvelope[XM_MAX_ENVELOPE_NODES];
-    unsigned char     nrVolumeNodes;
-    unsigned char     nrPanningNodes;
-    unsigned char     volumeSustain;
-    unsigned char     volumeLoopStart;
-    unsigned char     volumeLoopEnd;
-    unsigned char     panningSustain;
-    unsigned char     panningLoopStart;
-    unsigned char     panningLoopEnd;
-    unsigned char     volumeType;
-    unsigned char     panningType;
-    unsigned char     vibratoType;
-    unsigned char     vibratoSweep;
-    unsigned char     vibratoDepth;
-    unsigned char     vibratoRate;
-    unsigned short    volumeFadeOut;
+    std::uint8_t      nrVolumeNodes;
+    std::uint8_t      nrPanningNodes;
+    std::uint8_t      volumeSustain;
+    std::uint8_t      volumeLoopStart;
+    std::uint8_t      volumeLoopEnd;
+    std::uint8_t      panningSustain;
+    std::uint8_t      panningLoopStart;
+    std::uint8_t      panningLoopEnd;
+    std::uint8_t      volumeType;
+    std::uint8_t      panningType;
+    std::uint8_t      vibratoType;
+    std::uint8_t      vibratoSweep;
+    std::uint8_t      vibratoDepth;
+    std::uint8_t      vibratoRate;
+    std::uint16_t     volumeFadeOut;
 };                                  
 
 struct XmSampleHeader {
-  unsigned          length;         // Sample length
-  unsigned          repeatOffset;   // Sample loop start
-  unsigned          repeatLength;   // Sample loop length
-  unsigned char     volume;         // Volume
-  signed char       finetune;       // Finetune (signed BYTE -128..+127)
-  unsigned char     type;           // 0=No loop 1=Forward loop 2=Ping-pong 4=16-bit sampledata
-  unsigned char     panning;        // Panning (0-255)
-  signed char       relativeNote;   // Relative note number (signed BYTE)
-  unsigned char     compression;    // Reserved
-  char              name[22];       // Sample name
-};                                  // size = 40
+  std::uint32_t       length;         // Sample length
+  std::uint32_t       repeatOffset;   // Sample loop start
+  std::uint32_t       repeatLength;   // Sample loop length
+  std::uint8_t        volume;         // Volume
+  std::int8_t         finetune;       // Finetune (signed BYTE -128..+127)
+  std::uint8_t        type;           // 0=No loop 1=Forward loop 2=Ping-pong 4=16-bit sampledata
+  std::uint8_t        panning;        // Panning (0-255)
+  std::int8_t         relativeNote;   // Relative note number (signed BYTE)
+  std::uint8_t        compression;    // Reserved
+  char                name[22];       // Sample name
+};                                    // size = 40
 
 #pragma pack (8) 
 
@@ -239,6 +244,9 @@ int Module::loadXmFile( VirtualFile& moduleFile )
             XmDebugShow::pattern( *(patterns_[patternNr]),nrChannels_ );
 #endif
     }
+    // Tell the envelopes which style they should follow:
+
+
     // Now read all the instruments & sample data
     for ( unsigned instrumentNr = 1; instrumentNr <= nrInstruments_; instrumentNr++ ) {
         if ( loadXmInstrument( xmFile,instrumentNr ) )
@@ -300,11 +308,14 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
         instHdr.name.assign(
             xmInstHdr1.name,XM_MAX_INSTRUMENT_NAME_LENGTH );
 
-        // take care of envelopes. First, range checking:
+        // take care of envelopes. First, sanity checking:
         if ( xmInstHdr2.nrVolumeNodes > XM_MAX_ENVELOPE_NODES )
             xmInstHdr2.nrVolumeNodes = XM_MAX_ENVELOPE_NODES;
         if ( xmInstHdr2.nrPanningNodes > XM_MAX_ENVELOPE_NODES )
             xmInstHdr2.nrPanningNodes = XM_MAX_ENVELOPE_NODES;
+
+        // tell the envelope functions we want XM style envelope processing:
+        instHdr.volumeEnvelope.setEnvelopeStyle( xmEnvelopeStyle );
 
         // initialize envelope parameters. First the volume envelope:
         unsigned char flags = 0;
@@ -849,6 +860,27 @@ void XmDebugShow::instHeader2( XmInstrumentHeader2& xmInstHdr2 )
         << "\nvibratoDepth     : " << (unsigned)xmInstHdr2.vibratoDepth
         << "\nvibratoRate      : " << (unsigned)xmInstHdr2.vibratoRate
         << "\nvibratoSweep     : " << (unsigned)xmInstHdr2.vibratoSweep;
+
+    if ( xmInstHdr2.volumeType & XM_ENVELOPE_IS_ENABLED_FLAG ) {
+        std::cout
+            << "\nVolume envelope nodes: ";
+        for ( int i = 0; i < xmInstHdr2.nrVolumeNodes; i++ )
+            std::cout << std::dec
+            << xmInstHdr2.volumeEnvelope[i].x
+            << ","
+            << xmInstHdr2.volumeEnvelope[i].y
+            << " ";
+    }
+    if ( xmInstHdr2.panningType & XM_ENVELOPE_IS_ENABLED_FLAG ) {
+        std::cout
+            << "\nPanning envelope nodes: ";
+        for ( int i = 0; i < xmInstHdr2.nrPanningNodes; i++ )
+            std::cout << std::dec
+            << xmInstHdr2.panningEnvelope[i].x
+            << ","
+            << xmInstHdr2.panningEnvelope[i].y
+            << " ";
+    }
 }
 
 void XmDebugShow::sampleHeader( int sampleNr,SampleHeader& smpHdr )
