@@ -147,7 +147,7 @@ int main( int argc, char *argv[] )
     char        *modPaths[] = {
         //"D:\\MODS\\dosprog\\dope.mod",
         //".\\global trash 3 v2.mod",
-        "D:\\MODS\\mod_to_wav\\cd2part4.mod",
+        //"D:\\MODS\\mod_to_wav\\cd2part4.mod",
         "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
         "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
@@ -192,7 +192,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
         //"D:\\MODS\\M2W_BUGTEST\\china1.it",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        "D:\\MODS\\M2W_BUGTEST\\menuralli.it",
+        //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
         //"D:\\MODS\\M2W_BUGTEST\\womeni.it",

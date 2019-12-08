@@ -201,7 +201,7 @@ void Mixer::resetSong()
     }
     globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
     globalVolume_ = 64;
-    gain = 64;              // max = 256
+    gain = 96;              // max = 256
 
     tempo = module->getDefaultTempo();
     bpm = module->getDefaultBpm();
@@ -311,6 +311,7 @@ int Mixer::doMixBuffer( DestBufferType* buffer )
             for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
                 MixBufferType tmp = src[i] >> 8;
                 //MixBufferType tmp = src[i] / 256;
+
                 if ( tmp < -32768 ) {
                     tmp = -32768;
                     saturation++;
@@ -321,18 +322,38 @@ int Mixer::doMixBuffer( DestBufferType* buffer )
                 }
                 dst[i] = (DestBufferType)tmp;
             }  
+            //std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
             break;
         }
         case 32:
         {
+            // next 3 values == debug
+            float min = 0.0f;
+            float max = 0.0f;
+            int saturation = 0;
+
             for ( unsigned i = 0; i < SAMPLES_PER_BLOCK; i++ ) {
-                //dst[i] = src[i] << 6; // PCM DATA
-                dst[i] = (float)(src[i]) / (32768.0f * 16.0f);
+                //dst[i] = src[i] << 6; // for 32 bit PCM DATA
+
+                float t = (float)(src[i]) / (32768.0f * 256.0f);
+                t = std::max( -1.0f,t );
+                t = std::min( 1.0f,t );
+
+                if ( t == -1.0f || t == 1.0f ) // debug
+                    saturation++;
+
+                dst[i] = t;
+
+                min = std::min( min,t ); // debug
+                max = std::max( max,t ); // debug
             }
-            break;
+            //std::cout                    // debug
+            //    << "\nmin: " << std::setw( 16 ) << min
+            //    << " max: " << std::setw( 16 ) << max
+            //    << " saturation: " << saturation;
+            //break;
         }
     }
-    //    std::cout << "\n\nSaturation = " << saturation << "\n"; // DEBUG
     return 0;
 }
 

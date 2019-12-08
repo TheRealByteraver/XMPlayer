@@ -40,7 +40,7 @@ This code requires a byte to be 8 bits wide
 
 const int MIXRATE              = 48000;          // in Hz
 const int BLOCK_SIZE           = 0x4000;         // normally 0x4000
-const int BLOCK_COUNT          = 2;              // should be at least 2
+const int BLOCK_COUNT          = 2;              // at least 2, or 4 (?) for float mixing
 #define   BITS_PER_SAMPLE      32 //  (sizeof( MixBufferType ) / 8) // can't use constexpr here
 const int SAMPLES_PER_BLOCK    = BLOCK_SIZE /
                     (BITS_PER_SAMPLE / 8);       // 32 bit = 4 bytes / sample
@@ -153,19 +153,20 @@ public:
 
 class MixerChannel {
 public:
-    unsigned char   masterChannel;     // 0..63
     unsigned        age;
+    Sample*         sample;
+
+    unsigned char   masterChannel;     // 0..63
     bool            isActive;          // if not, mixer skips it
     bool            isMaster;          // false if it is a virtual channel
-    Sample*         sample;
     unsigned        sampleOffset;      // samples can be up to 4 GB in theory
     unsigned        sampleOffsetFrac;
 
     unsigned        sampleIncrement;
-    unsigned        leftVolume;
-    unsigned        rightVolume;
-    bool            isPlayingBackwards;
+    unsigned        leftVolume;        // must be 32 bit!
+    unsigned        rightVolume;       // must be 32 bit!
 
+    bool            isPlayingBackwards;
     signed char     volumeRampDelta;   // if -1 -> ramping down 
     unsigned char   volumeRampCounter; // no ramp if zero
     signed char     volumeRampStart;   // VOLUME_RAMP_SPEED if ramping down, 0 if ramping up
