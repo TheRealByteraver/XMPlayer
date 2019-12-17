@@ -413,9 +413,16 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
             smpHdr[sampleNr].volume         = xmSampleHeader.volume;
             smpHdr[sampleNr].relativeNote   = xmSampleHeader.relativeNote;
             smpHdr[sampleNr].panning        = xmSampleHeader.panning;
-            smpHdr[sampleNr].dataType       =
-                xmSampleHeader.type & XM_SIXTEEN_BIT_SAMPLE_FLAG ?
-                SAMPLEDATA_SIGNED_16BIT : SAMPLEDATA_SIGNED_8BIT;
+
+            //smpHdr[sampleNr].dataType       =
+            //    xmSampleHeader.type & XM_SIXTEEN_BIT_SAMPLE_FLAG ?
+            //    SAMPLEDATA_SIGNED_16BIT : SAMPLEDATA_SIGNED_8BIT;
+
+            smpHdr[sampleNr].dataType = SAMPLEDATA_IS_SIGNED_FLAG;
+            if ( xmSampleHeader.type & XM_SIXTEEN_BIT_SAMPLE_FLAG )
+                smpHdr[sampleNr].dataType |= SAMPLEDATA_IS_16BIT_FLAG;
+
+
             smpHdr[sampleNr].isPingpongSample =
                 xmSampleHeader.type & XM_PINGPONG_LOOP_FLAG ? true : false;
             if ( xmSampleHeader.compression == XM_ADPCM_COMPRESSION ) {
@@ -492,12 +499,12 @@ int Module::loadXmInstrument( VirtualFile& xmFile,int instrumentNr )
 
 int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& smpHdr )
 {
-    SHORT           oldSample16 = 0;
-    SHORT           newSample16 = 0;
+    std::int16_t           oldSample16 = 0;
+    std::int16_t           newSample16 = 0;
     signed char     oldSample8 = 0;
     signed char     newSample8 = 0;
 
-    smpHdr.data = (SHORT *)xmFile.getSafePointer( smpHdr.length );
+    smpHdr.data = (std::int16_t *)xmFile.getSafePointer( smpHdr.length );
     xmFile.relSeek( smpHdr.length );
 
     if ( smpHdr.data == nullptr ) { // temp DEBUG:
@@ -507,9 +514,9 @@ int Module::loadXmSample( VirtualFile& xmFile,int sampleNr,SampleHeader& smpHdr 
         return 0;
     }
     // decode delta encoded sample data
-    if ( smpHdr.dataType == SAMPLEDATA_SIGNED_16BIT ) {
-        SHORT   *ps = (SHORT *)smpHdr.data;
-        SHORT   *pd = ps;
+    if ( smpHdr.dataType & SAMPLEDATA_IS_16BIT_FLAG ) {
+        std::int16_t   *ps = (std::int16_t *)smpHdr.data;
+        std::int16_t   *pd = ps;
         smpHdr.length >>= 1;
         smpHdr.repeatLength >>= 1;
         smpHdr.repeatOffset >>= 1;
@@ -646,6 +653,13 @@ void remapXmEffects( Effect& remapFx )
             break;
         }
         case SET_GLOBAL_VOLUME:
+        // scale up from 0..64 to 0..128 for .IT compatibility
+        {
+            remapFx.argument *= 2;
+            if ( remapFx.argument > MAX_GLOBAL_VOLUME )
+                remapFx.argument = MAX_GLOBAL_VOLUME;
+            break;
+        }
         case SET_VOLUME:
         {
             if ( remapFx.argument > MAX_VOLUME )
@@ -897,7 +911,7 @@ void XmDebugShow::sampleHeader( int sampleNr,SampleHeader& smpHdr )
         << "\n    Relative Note    : " << smpHdr.relativeNote
         << "\n    Panning          : " << smpHdr.panning
         << "\n    16 bit sample    : "
-        << ((smpHdr.dataType == SAMPLEDATA_SIGNED_16BIT) ? "Yes" : "No")
+        << (((smpHdr.dataType & SAMPLEDATA_IS_16BIT_FLAG) != 0) ? "Yes" : "No")
         << "\n    Ping Loop active : " 
         << (smpHdr.isPingpongSample ? "Yes" : "No");
 }

@@ -177,6 +177,7 @@
     <ClInclude Include="Instrument.h" />
     <ClInclude Include="itsex.h" />
     <ClInclude Include="Mixer.h" />
+    <ClInclude Include="Mixer2.h" />
     <ClInclude Include="Module.h" />
     <ClInclude Include="Pattern.h" />
     <ClInclude Include="Sample.h" />

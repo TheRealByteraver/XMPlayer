@@ -200,7 +200,7 @@ void Mixer::resetSong()
         channels[i].panning = module->getDefaultPanPosition( i );
     }
     globalPanning_ = 0x20;  // 0 means extreme LEFT & RIGHT, so no attenuation
-    globalVolume_ = 64;
+    globalVolume_ = 64;// MAX_GLOBAL_VOLUME;
     gain = 96;              // max = 256
 
     tempo = module->getDefaultTempo();
@@ -428,7 +428,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
                     /*
                     // original rolled code:   // 32 bit
-                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    std::int16_t *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                     for ( unsigned j2 = 0; j2 < nrLoops; j2++ ) {
                         int s1 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16)];
                         int s2 = SampleDataPTR[(mChn.sampleOffsetFrac >> 16) + 1];
@@ -448,13 +448,13 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
                     /*
                     // 32 bit frequency index:
-                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    std::int16_t *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                     int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
 
                     for ( int ofsFrac = mChn.sampleOffsetFrac;
                         ofsFrac < loopEnd; ofsFrac += chnInc ) {
                         int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 16)));
-                        int s1 = (SHORT)s2;
+                        int s1 = (std::int16_t)s2;
                         s2 >>= 16;
                         s2 -= s1;                          // sample delta
                         int xd = (ofsFrac & 0xFFFF) >> 1;  // time delta
@@ -468,13 +468,13 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                     /*
                     // lineaire interpolatie:
                     // 31 bit frequency index:
-                    SHORT *SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    std::int16_t *SampleDataPTR = sample.getData() + mChn.sampleOffset;
                     int loopEnd = nrLoops * mChn.sampleIncrement + mChn.sampleOffsetFrac;
 
                     for ( int ofsFrac = mChn.sampleOffsetFrac;
                         ofsFrac < loopEnd; ofsFrac += chnInc ) {
                         int s2 = *((int *)(SampleDataPTR + (ofsFrac >> 15)));
-                        int s1 = (SHORT)s2;
+                        int s1 = (std::int16_t)s2;
                         s2 >>= 16;
                         s2 -= s1;                             // sample delta
                         int xd = (ofsFrac & 0x7FFF);// >> 1;  // time delta
@@ -487,7 +487,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
                     // cubic interpolation:
                     // 31 bit frequency index:                        
-                    SHORT* SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    std::int16_t* SampleDataPTR = sample.getData() + mChn.sampleOffset;
 
                     // *********************
                     // added for volume ramp
@@ -533,6 +533,8 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                                     + c)* fract) >> FRAC_RES_SHIFT)
                                 + p1;
 
+                            f2 = p1; // disable interpolation
+
                             int lG = (leftGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
                             int rG = (rightGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
 
@@ -567,6 +569,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
 
                         int idx = ofsFrac >> 15;
                         int p0 = SampleDataPTR[idx - 1];
+
                         int p1 = SampleDataPTR[idx];
                         int p2 = SampleDataPTR[idx + 1];
                         int p3 = SampleDataPTR[idx + 2];
@@ -585,7 +588,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                                 + c)* fract) >> FRAC_RES_SHIFT)
                             + p1;
 
-                        //f2 = p1; // disable interpolation for testing
+                        f2 = p1; // disable interpolation for testing
 
                         *mixBufferPTR++ += (f2 * leftGain);
                         *mixBufferPTR++ += (f2 * rightGain);
@@ -648,7 +651,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                         mChn.sampleOffset = 0;
                         //std::cout << "underrun!" << std::endl;
                     } else mChn.sampleOffset -= smpDataShift;
-                    SHORT* SampleDataPTR = sample.getData() + mChn.sampleOffset;
+                    std::int16_t* SampleDataPTR = sample.getData() + mChn.sampleOffset;
 
                     for ( int j2 = 0; j2 < nrLoops; j2++ ) {
                         //int s1 = SampleDataPTR[     (mChn.sampleOffsetFrac >> 16)];

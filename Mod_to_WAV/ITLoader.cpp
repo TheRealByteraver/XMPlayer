@@ -593,7 +593,7 @@ int Module::loadItInstrument(
         instrumentHeader.dcaType                = itInstHeader.dupCheckAction;
         instrumentHeader.initialFilterCutoff    = itInstHeader.initialFilterCutOff;
         instrumentHeader.initialFilterResonance = itInstHeader.initialFilterResonance;
-        instrumentHeader.volumeFadeOut          = itInstHeader.fadeOut;
+        instrumentHeader.volumeFadeOut          = itInstHeader.fadeOut * 64; // scale it up
         instrumentHeader.pitchPanSeparation     = itInstHeader.pitchPanSeparation;
         instrumentHeader.pitchPanCenter         = itInstHeader.pitchPanCenter;
         instrumentHeader.globalVolume           = itInstHeader.globalVolume;
@@ -631,13 +631,13 @@ int Module::loadItSample(
     if ( !(itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER) )
         return 0; // nothing to load: a bit drastic maybe (song message lost)
 
-    if ( isStereoSample ) {
-        if ( showDebugInfo_ )
-            std::cout << "\n\n"
-                << "Sample header nr " << sampleNr << ": "
-                << "Stereo samples are not supported yet!";            
-        return -1;
-    }
+    //if ( isStereoSample ) {
+    //    if ( showDebugInfo_ )
+    //        std::cout << "\n\n"
+    //            << "Sample header nr " << sampleNr << ": "
+    //            << "Stereo samples are not supported yet!";            
+    //    return -1;
+    //}
     SampleHeader sample;
     //samples_[sampleNr] = new Sample;
     sample.name.append( itSampleHeader.name,IT_SMP_NAME_LENGTH );
@@ -710,13 +710,19 @@ int Module::loadItSample(
 
     // Now take care of the sample data:
     unsigned    dataLength = sample.length;
+    
+    //sample.dataType = SAMPLEDATA_IS_SIGNED_FLAG; 
     if ( is16BitSample ) {
-        sample.dataType = SAMPLEDATA_SIGNED_16BIT;
+        //sample.dataType = SAMPLEDATA_SIGNED_16BIT;
+        //sample.dataType |= SAMPLEDATA_IS_16BIT_FLAG;
         dataLength <<= 1;
     } 
-    else {
-        sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-    }
+    if( isStereoSample )
+        dataLength <<= 1;
+
+    //else {
+    //    sample.dataType = SAMPLEDATA_SIGNED_8BIT;
+    //}
     itFile.absSeek( itSampleHeader.samplePointer );
     std::unique_ptr<unsigned char[]> buffer = 
         std::make_unique<unsigned char[]>( dataLength );
@@ -732,12 +738,24 @@ int Module::loadItSample(
             itSex.decompress16( itFile,buffer.get(),sample.length );
         else
             itSex.decompress8( itFile,buffer.get(),sample.length );
+
+        if ( isStereoSample ) {
+            if ( is16BitSample )
+                itSex.decompress16( itFile,buffer.get() + dataLength / 2,sample.length );
+            else
+                itSex.decompress8( itFile,buffer.get() + dataLength / 2,sample.length );
+        }
     }
 
     // Load the sample:
-    sample.data = (SHORT *)buffer.get();
+    sample.data = (std::int16_t *)buffer.get();
     bool unsignedData = (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0;
-    sample.dataType = (unsignedData ? 0 : 1) | (is16BitSample ? 2 : 0);
+    
+
+    sample.dataType =   (unsignedData   ? 0 : SAMPLEDATA_IS_SIGNED_FLAG) |
+                        (is16BitSample  ? SAMPLEDATA_IS_16BIT_FLAG : 0) |
+                        (isStereoSample ? SAMPLEDATA_IS_STEREO_FLAG : 0);
+
     samples_[sampleNr] = std::make_unique<Sample>( sample );
 
     // if the file is in sample mode, convert it to instrument mode

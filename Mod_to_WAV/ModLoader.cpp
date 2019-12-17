@@ -367,11 +367,13 @@ int Module::loadModFile( VirtualFile& moduleFile )
         if ( smpHdr.length > 2 ) {
             nrSamples_++;
             modFile.absSeek( fileOffset );
-            smpHdr.data = (SHORT *)modFile.getSafePointer( smpHdr.length );
+            smpHdr.data = (std::int16_t *)modFile.getSafePointer( smpHdr.length );
             if ( smpHdr.data == nullptr )
                 return 0;            // temp DEBUG: exit on missing smpHdr data
 
-            smpHdr.dataType = SAMPLEDATA_SIGNED_8BIT;
+            //smpHdr.dataType = SAMPLEDATA_SIGNED_8BIT;
+            smpHdr.dataType = SAMPLEDATA_IS_SIGNED_FLAG; // 8 bit signed mono
+
             samples_[sampleNr] = std::make_unique<Sample>( smpHdr );
 
         }   

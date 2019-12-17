@@ -2,6 +2,7 @@
 
 #define NOMINMAX
 #include <windows.h> // for the color constants
+#include <cstdint>
 
 // color constants for functions that show debug info
 const int FOREGROUND_BLACK        = 0;
@@ -64,14 +65,16 @@ const int END_OF_SONG_MARKER   = 255;  // S3M/IT end of song marker
 
 const int DEFAULT_NR_PATTERN_ROWS      = 64;
 const int MAX_VOLUME                   = 64;
+const int MAX_GLOBAL_VOLUME            = 128;
 const int MAX_PATTERNS                 = 254; // 0 .. 253
 const int MAX_INSTRUMENTS              = 255; // 1 .. 255
-const int MAX_SAMPLES                  = 128 * 16 - 1; // FT2 compatibility
+const int MAX_SAMPLES                  = 128 * 16; // FT2 compatibility
 const int SAMPLEDATA_EXTENSION         = 128; // add 128 samples to the data for noise reduction
-const int SAMPLEDATA_UNSIGNED_8BIT     = 0;   // 1st bit set == signed data
-const int SAMPLEDATA_SIGNED_8BIT       = 1;
-const int SAMPLEDATA_UNSIGNED_16BIT    = 2;   // 2nd bit set == 16bit data
-const int SAMPLEDATA_SIGNED_16BIT      = 3;
+
+const int SAMPLEDATA_IS_SIGNED_FLAG    = 1;
+const int SAMPLEDATA_IS_16BIT_FLAG     = 2;
+const int SAMPLEDATA_IS_STEREO_FLAG    = 4;
+
 const int SAMPLEDATA_TYPE_UNKNOWN      = 64;  // safety
 const int INTERPOLATION_SPACER         = 2;
 const int MAX_EFFECT_COLUMNS           = 2;
@@ -269,7 +272,3 @@ const unsigned amigaPeriodTable[] = {
     538, 535, 532, 528, 524, 520, 516, 513, 508, 505, 502, 498,
     494, 491, 487, 484, 480, 477, 474, 470, 467, 463, 460, 457
 };
-
-// These type definitions come in handy when loading module files
-typedef std::uint16_t AMIGAWORD;
-typedef std::int16_t SHORT;

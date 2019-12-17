@@ -61,7 +61,7 @@ void Module::playSampleNr( int sampleNr )
         MMRESULT        result;
         WAVEHDR         waveHdr;
         waveFormatEx.wFormatTag = WAVE_FORMAT_PCM;
-        waveFormatEx.nChannels = 1;
+        waveFormatEx.nChannels = (samples_[sampleNr]->isStereo()) ? 2 : 1;
         waveFormatEx.nSamplesPerSec = 8363; // frequency
         waveFormatEx.wBitsPerSample = 16;
         waveFormatEx.nBlockAlign = waveFormatEx.nChannels *

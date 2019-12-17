@@ -404,15 +404,15 @@ private:
 
 class VibratoConfig {
 public:
-    unsigned        type = 0;
-    unsigned        sweep = 0;
-    unsigned        depth = 0;
-    unsigned        rate = 0;
+    unsigned char   type = 0;
+    unsigned char   sweep = 0;
+    unsigned char   depth = 0;
+    unsigned char   rate = 0;
 };
 
 struct NoteSampleMap {
     unsigned char   note = 0;
-    unsigned        sampleNr = 0;
+    unsigned short  sampleNr = 0;
 };
 
 class InstrumentHeader {

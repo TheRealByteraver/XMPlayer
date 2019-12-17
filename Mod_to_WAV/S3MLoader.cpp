@@ -4,6 +4,15 @@ Thanks must go to:
 - FireLight / Brett Paterson for writing a detailed document explaining how to
   parse .s3m files. Without fs3mdoc.txt this would have been hell. With his
   invaluable document, it was a hell of a lot easier.
+
+
+  Other sources:
+  http://www.shikadi.net/moddingwiki/S3M_Format
+  https://wiki.multimedia.cx/index.php?title=Scream_Tracker_3_Module
+  https://formats.kaitai.io/s3m/index.html
+
+
+
 */
 
 #include <climits>
@@ -59,7 +68,7 @@ const int S3M_SAMPLE_NOTPACKED_FLAG         = 0;
 const int S3M_SAMPLE_PACKED_FLAG            = 1;   // DP30ADPCM, not supported
 const int S3M_SAMPLE_LOOP_FLAG              = 1;
 const int S3M_SAMPLE_STEREO_FLAG            = 2;   // not supported
-const int S3M_SAMPLE_16BIT_FLAG             = 4;   // not supported
+const int S3M_SAMPLE_16BIT_FLAG             = 4;   
 const int S3M_ROWS_PER_PATTERN              = 64;
 const int S3M_PTN_END_OF_ROW_MARKER         = 0;
 const int S3M_PTN_CHANNEL_MASK              = 31;
@@ -108,7 +117,7 @@ struct S3mInstHeader {
     std::uint8_t    volume;
     std::uint8_t    reserved;       // should be 0x1D
     std::uint8_t    packId;         // should be 0
-    std::uint8_t    flags;
+    std::uint8_t    flags;          // 1 = loop on, 2 = stereo, 4 = 16 bit little endian sample
     std::uint32_t   c4Speed;
     std::uint8_t    reserved2[12];  // useless info for us
     char            name[S3M_MAX_SAMPLENAME_LENGTH];
@@ -365,18 +374,39 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
             (smpDataPtrs[instrumentNr - 1] != 0)) {
             nrSamples_++;
             s3mFile.absSeek( smpDataPtrs[instrumentNr - 1] );
-            smpHdr.data = (SHORT *)s3mFile.getSafePointer( smpHdr.length );
+
+            bool unsignedData = s3mFileHdr.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA;
+            bool is16BitSample = (s3mInstHdr.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
+            bool isStereoSample = (s3mInstHdr.flags & S3M_SAMPLE_STEREO_FLAG) != 0;
+
+            smpHdr.dataType = (unsignedData ? 0 : SAMPLEDATA_IS_SIGNED_FLAG) |
+                (is16BitSample ? SAMPLEDATA_IS_16BIT_FLAG : 0) |
+                (isStereoSample ? SAMPLEDATA_IS_STEREO_FLAG : 0);
+
+            unsigned datalength = smpHdr.length;
+            if ( is16BitSample )
+                datalength *= 2;
+            if( isStereoSample )
+                datalength *= 2;
+
+            smpHdr.data = (std::int16_t *)s3mFile.getSafePointer( datalength );
 
             // missing smpHdr data, see if we can salvage something ;)
             if ( smpHdr.data == nullptr ) {
-                int smpSize;
                 if ( smpDataPtrs[instrumentNr - 1] >= (unsigned)s3mFile.fileSize() )
-                    smpSize = 0;
+                    datalength = 0;
                 else
-                    smpSize = s3mFile.dataLeft();
-                smpHdr.length = smpSize;
+                    datalength = s3mFile.dataLeft();
+
+                smpHdr.length = datalength;
+                if ( is16BitSample )
+                    smpHdr.length /= 2;
+                if ( isStereoSample )
+                    smpHdr.length /= 2;
+
+
                 if ( smpHdr.length )
-                    smpHdr.data = (SHORT *)s3mFile.getSafePointer( smpHdr.length );
+                    smpHdr.data = (std::int16_t *)s3mFile.getSafePointer( datalength );
 
                 if ( showDebugInfo_ ) 
                     std::cout << std::dec
@@ -385,14 +415,13 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
                         << "! Shortening smpHdr."
                         << "\nsample.data:   " << smpHdr.data
                         << "\nsample.length: " << smpHdr.length
-                        << "\ndata + length: " << (smpHdr.data + smpHdr.length)
+                        << "\ndata + dataln: " << (smpHdr.data + datalength)
                         << "\nfilesize:      " << fileSize
                         << "\novershoot:     " << (s3mInstHdr.length - smpHdr.length)
                         << "\n";
             }
             // skip to next instHdr if there is no smpHdr data:
             if ( !smpHdr.length ) {
-                //smpHdr.repeatOffset = 0;
                 continue;
             }
 
@@ -436,9 +465,6 @@ int Module::loadS3mFile( VirtualFile& moduleFile ) {
                     << noteStrings[4 * 12 + smpHdr.relativeNote]
                     << "\nFinetune          : " << smpHdr.finetune;
             
-            bool is16BitSample = (s3mInstHdr.flags & S3M_SAMPLE_16BIT_FLAG) != 0;
-            bool unsignedData = s3mFileHdr.sampleDataType == S3M_UNSIGNED_SAMPLE_DATA;
-            smpHdr.dataType = (unsignedData ? 0 : 1) | (is16BitSample ? 2 : 0);
             if ( smpHdr.length ) 
                 samples_[instrumentNr] = std::make_unique<Sample>( smpHdr );
         }
@@ -811,10 +837,6 @@ void remapS3mEffects( Effect& remapFx )
         }
     }
 }
-
-
-
-
 
 // DEBUG helper functions that write verbose output to the screen:
 void S3mDebugShow::fileHeader( S3mFileHeader& s3mFileHeader )

@@ -222,12 +222,12 @@ int Mixer::updateNotes()
                     sample = channel.pInstrument->getSampleForNote
                     ( channel.lastNote - 1 );
                     channel.pSample = &(module->getSample( sample ));
-
                 }
                 if ( channel.pSample ) {
                     channel.volume = channel.pSample->getVolume();
                     isValidInstrument = true;
-                } else {
+                } 
+                else {
                     isValidInstrument = false;
                     replay = false;
                     stopChannelPrimary( channelNr ); // sundance.mod illegal sample
@@ -243,7 +243,8 @@ int Mixer::updateNotes()
                 }
             }
             channel.sampleOffset = 0;
-        } else {
+        } 
+        else {
             isNewInstrument = false;
             channel.pInstrument =
                 &(module->getInstrument( oldInstrument ));
@@ -1648,11 +1649,17 @@ int Mixer::updateEffects() {
                     unsigned    arg = channel.lastGlobalVolumeSlide;
                     unsigned    slide = (arg & 0xF0) >> 4;
                     if ( slide ) { // slide up
+                        if ( ft2StyleEffects_ )
+                            slide <<= 1;
                         globalVolume_ += slide;
+                        //if ( globalVolume_ > MAX_GLOBAL_VOLUME )
+                        //    globalVolume_ = MAX_GLOBAL_VOLUME;
                         if ( globalVolume_ > MAX_VOLUME )
                             globalVolume_ = MAX_VOLUME;
                     } else {     // slide down
                         slide = arg & 0x0F;
+                        if ( ft2StyleEffects_ )
+                            slide <<= 1;
                         if ( slide > globalVolume_ )
                             globalVolume_ = 0;
                         else

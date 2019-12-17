@@ -38,9 +38,9 @@ This code requires a byte to be 8 bits wide
 
 #define LINEAR_INTERPOLATION  // this constant is not used
 
-const int MIXRATE              = 48000;          // in Hz
+const int MIXRATE              = 44100;          // in Hz
 const int BLOCK_SIZE           = 0x4000;         // normally 0x4000
-const int BLOCK_COUNT          = 2;              // at least 2, or 4 (?) for float mixing
+const int BLOCK_COUNT          = 4;              // at least 2, or 4 (?) for float mixing
 #define   BITS_PER_SAMPLE      32 //  (sizeof( MixBufferType ) / 8) // can't use constexpr here
 const int SAMPLES_PER_BLOCK    = BLOCK_SIZE /
                     (BITS_PER_SAMPLE / 8);       // 32 bit = 4 bytes / sample
@@ -52,7 +52,7 @@ typedef std::int32_t MixBufferType;      // for internal mixing, 32 bit will do 
 //typedef std::int32_t DestBufferType;     // DestBufferType must be int for 32 bit mixing
 typedef float DestBufferType;     // DestBufferType must be int or float for 32 bit mixing
 #elif BITS_PER_SAMPLE == 16
-typedef SHORT DestBufferType;   // DestBufferType must be SHORT for 16 bit mixing
+typedef std::int16_t DestBufferType;   // DestBufferType must be std::int16_t for 16 bit mixing
 #else
 Error! output buffer must be 16 bit or 32 bit!
 #endif
