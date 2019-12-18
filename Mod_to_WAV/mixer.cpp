@@ -533,7 +533,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                                     + c)* fract) >> FRAC_RES_SHIFT)
                                 + p1;
 
-                            f2 = p1; // disable interpolation
+                            //f2 = p1; // disable interpolation
 
                             int lG = (leftGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
                             int rG = (rightGain * mChn.volumeRampStart) / VOLUME_RAMP_SPEED;
@@ -588,7 +588,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nSamples )
                                 + c)* fract) >> FRAC_RES_SHIFT)
                             + p1;
 
-                        f2 = p1; // disable interpolation for testing
+                        //f2 = p1; // disable interpolation for testing
 
                         *mixBufferPTR++ += (f2 * leftGain);
                         *mixBufferPTR++ += (f2 * rightGain);

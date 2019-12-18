@@ -26,11 +26,12 @@ public:
     bool            isSustainedSample = false;
     bool            isSustainedPingpongSample = false;
     bool            isUsed = false;   // if the sample is used in the song
-    unsigned        globalVolume = 64;
-    unsigned        volume = 64;
-    unsigned        relativeNote = 0;
+    int      globalVolume = 64;
+    int      volume = 64;
+    int      relativeNote = 0;
     unsigned        panning = PANNING_CENTER;
-    std::int8_t     finetune = 0;
+    //std::int8_t     finetune = 0; // because of buggy s3m loader
+    int             finetune = 0;
     int             dataType = SAMPLEDATA_TYPE_UNKNOWN; // 8 or 16 bit, (un)signed, stereo
     unsigned        sustainRepeatStart = 0;
     unsigned        sustainRepeatEnd = 0;

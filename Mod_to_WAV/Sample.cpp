@@ -27,6 +27,11 @@ Sample::Sample( const SampleHeader& sampleHeader )
     repeatOffset_ = sampleHeader.repeatOffset;
     repeatLength_ = sampleHeader.repeatLength;
 
+    // MUST BE HERE!!!!!!!!!!
+    repeatEnd_ = (sampleHeader.isRepeatSample ?
+        (repeatOffset_ + repeatLength_) : sampleHeader.length);
+    // !!!!!!!!!!!!!!!!!!
+
     if ( sampleHeader.isRepeatSample )
         flags_ |= SMP_REPEAT_FLAG;
 
@@ -56,7 +61,7 @@ Sample::Sample( const SampleHeader& sampleHeader )
         flags_ |= SMP_IS_STEREO_FLAG;
 
 
-    //if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n";
+    if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n";
 
     // allocate memory for 16 bit version of sample + some spare space
     datalength_ = length_ + 2 * INTERPOLATION_SPACER + SAMPLEDATA_EXTENSION;
