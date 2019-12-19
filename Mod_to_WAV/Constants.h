@@ -74,8 +74,8 @@ const int SAMPLEDATA_EXTENSION         = 128; // add 128 samples to the data for
 const int SAMPLEDATA_IS_SIGNED_FLAG    = 1;
 const int SAMPLEDATA_IS_16BIT_FLAG     = 2;
 const int SAMPLEDATA_IS_STEREO_FLAG    = 4;
-
 const int SAMPLEDATA_TYPE_UNKNOWN      = 64;  // safety
+
 const int INTERPOLATION_SPACER         = 2;
 const int MAX_EFFECT_COLUMNS           = 2;
 const int MAXIMUM_NOTES                = 11 * 12;
