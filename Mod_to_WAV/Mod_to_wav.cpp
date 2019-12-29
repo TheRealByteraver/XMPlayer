@@ -308,6 +308,49 @@ int main( int argc, char *argv[] )
         nullptr
     };
 
+
+    /*
+        working formula:    
+    
+        int range = (127 - globalPanning) * 2 + 1;
+
+        int attenuation = (256 - range) / 2;
+
+        int panning = globalPanning;
+
+        int finalPan = attenuation + (range * (panning + 1)) / 256;
+    
+    */
+
+    /*
+    std::cout
+        << "\nPanning        |Global Panning | Final Panning0| Final Pan 255 | Final Pan"
+        << "\n---------------+---------------+---------------+---------------|-----------|";
+    for ( int globalPanning = 0; globalPanning <= MXR_PANNING_FULL_RIGHT; globalPanning++ ) {
+
+        int range = (127 - globalPanning) * 2 + 1;
+
+        int attenuation = (256 - range) / 2;
+
+        int panning = globalPanning;
+
+        int finalPan    = attenuation + (range * (panning + 1)) / 256;
+        int finalPan0   = attenuation + (range * (0       + 1)) / 256;
+        int finalPan255 = attenuation + (range * (255     + 1)) / 256;
+
+        std::cout << "\n"
+            << std::setw( 4 ) << panning << "           |"
+            << std::setw( 4 ) << globalPanning << "           |"
+            << std::setw( 4 ) << finalPan0 << "           |"
+            << std::setw( 4 ) << finalPan255 << "           |"
+            << std::setw( 4 ) << finalPan 
+            ;
+    }
+    std::cout << "\n\nHit any key to continue...\n";
+    _getch();
+    */
+
+
     if (argc > 1) {
         for ( int i = 1; i < argc; i++ ) 
             filePaths.push_back( argv[i] );

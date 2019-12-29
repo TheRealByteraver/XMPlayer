@@ -19,6 +19,16 @@ Sample::Sample( const SampleHeader& sampleHeader )
         datalength_ &= 0xFFFFFFF0;
         data_ = std::make_unique<std::int16_t[]>( datalength_ );
         memset( data_.get(),0,datalength_ * sizeof( std::int16_t ) );
+
+        repeatLength_ = length_;
+        // these values are set by default and need no further initialization:
+        //repeatOffset_ = 0;
+        //flags_ = 0;
+        //globalVolume_ = sampleHeader.globalVolume;
+        //volume_ = sampleHeader.volume;
+        //relativeNote_ = sampleHeader.relativeNote;
+        //panning_ = sampleHeader.panning;
+        //finetune_ = sampleHeader.finetune;
         return;
     }
 
@@ -45,9 +55,10 @@ Sample::Sample( const SampleHeader& sampleHeader )
         flags_ |= SMP_PINGPONG_SUSTAIN_FLAG;
 
     if ( sampleHeader.isUsed )
-        flags_ |= SMP_ISUSED_FLAG; // not used
+        flags_ |= SMP_ISUSED_FLAG; // not supported by loaders
 
     volume_ = sampleHeader.volume;
+    globalVolume_ = sampleHeader.globalVolume;
     relativeNote_ = sampleHeader.relativeNote;
     panning_ = sampleHeader.panning;
     finetune_ = sampleHeader.finetune;
@@ -61,7 +72,7 @@ Sample::Sample( const SampleHeader& sampleHeader )
         flags_ |= SMP_IS_STEREO_FLAG;
 
 
-    if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n";
+    if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n"; // DEBUG
 
     // allocate memory for 16 bit version of sample + some spare space
     datalength_ = length_ + 2 * INTERPOLATION_SPACER + SAMPLEDATA_EXTENSION;

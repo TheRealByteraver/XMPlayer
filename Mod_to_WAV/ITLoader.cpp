@@ -489,7 +489,9 @@ int Module::loadItInstrument(
         instrumentHeader.nnaType = itInstHeader.NNA;
         instrumentHeader.dctType = itInstHeader.DNC;
         instrumentHeader.dcaType = DCA_CUT;
-        instrumentHeader.volumeFadeOut = itInstHeader.fadeOut; // TO CHECK!
+
+        // I believe the FadeOut starts at 512 in the old instrument format:
+        instrumentHeader.volumeFadeOut = itInstHeader.fadeOut * 128; // range: 0 .. 128 
 
         // not available in the old .IT format:
         instrumentHeader.initialFilterCutoff = 0;
@@ -593,7 +595,9 @@ int Module::loadItInstrument(
         instrumentHeader.dcaType                = itInstHeader.dupCheckAction;
         instrumentHeader.initialFilterCutoff    = itInstHeader.initialFilterCutOff;
         instrumentHeader.initialFilterResonance = itInstHeader.initialFilterResonance;
-        instrumentHeader.volumeFadeOut          = itInstHeader.fadeOut * 64; // scale it up
+
+        // I believe the FadeOut starts at 1024 in the new instrument format:
+        instrumentHeader.volumeFadeOut          = itInstHeader.fadeOut * 64;
         instrumentHeader.pitchPanSeparation     = itInstHeader.pitchPanSeparation;
         instrumentHeader.pitchPanCenter         = itInstHeader.pitchPanCenter;
         instrumentHeader.globalVolume           = itInstHeader.globalVolume;

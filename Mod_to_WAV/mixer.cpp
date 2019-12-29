@@ -65,7 +65,7 @@ Mixer::Mixer()
     waveFormatExtensible.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 
     //waveFormatExtensible.Samples.wSamplesPerBlock = BLOCK_SIZE / sizeof( DestBufferType );
-    waveFormatExtensible.Samples.wValidBitsPerSample = 32; // ????
+    waveFormatExtensible.Samples.wValidBitsPerSample = 32; 
     //waveFormatExtensible.Samples.wReserved = 0;
     waveFormatExtensible.Format = waveFormatEx;
     */
@@ -780,8 +780,10 @@ int Mixer::setMixerVolume( unsigned fromChannel )
 
         p = soften +
             ((p * (PANNING_MAX_STEPS - (soften << 1))) >> PANNING_SHIFT);
+
         if ( invchn )
             p = PANNING_FULL_RIGHT - p;
+
         pmc.leftVolume = ((PANNING_FULL_RIGHT - p) * v) >> PANNING_SHIFT;
         pmc.rightVolume = (p * v) >> PANNING_SHIFT;
         if ( balance_ < 0 ) {

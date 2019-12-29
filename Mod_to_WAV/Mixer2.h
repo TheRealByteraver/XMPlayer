@@ -1,6 +1,10 @@
 #pragma once
 // Floating point mixer
 
+
+#define NOMINMAX
+#include <algorithm>
+
 #include <climits>
 #if CHAR_BIT != 8 
 This code requires a byte to be 8 bits wide
@@ -48,6 +52,12 @@ const int MXR_MIXRATE = 44100;          // in Hz
 const int MXR_MAX_PHYSICAL_CHANNELS = 256;
 const int MXR_MAX_LOGICAL_CHANNELS = 64;
 
+/*
+    The physical mixer channels play a sample while taking into account the
+    volume, panning and pitch envelopes
+
+
+*/
 
 class Mixer2Channel {
 public:
@@ -75,13 +85,12 @@ public:
     bool            isActive() const { return (flags_ & MXR_CHANNEL_IS_ACTIVE_FLAG) != 0; }
     void            setVolumeRamp( bool direction, int leftVolume, int rightVolume )
     {
-        flags_ |= MXR_VOLUME_RAMP_IS_ACTIVE_FLAG;
+        setFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG );
         if( direction == MXR_VOLUME_RAMP_DOWN )
-            flags_ |= MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG;
+            setFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
         else 
-            flags_ &= 0xFFFFFFFF - MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG;
+            clearFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
     /*
-    
         volume ramps occur on:
         - start of sample 
         - end of sample
@@ -89,9 +98,6 @@ public:
         - panning change
     
     */
-
-        //if ( leftVolume )
-        //    return;
     }
 
     void            setVolume( float leftVolume, float rightVolume )
@@ -130,7 +136,10 @@ private:
     void            disableVolumeRamp()
     {
         clearFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG | MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
+        //Mixer2::globalPanning_ = 128;
     }
+
+    friend class Mixer2;
 
 private:
     std::uint16_t   flags_;
@@ -174,14 +183,64 @@ public:
 
 class Mixer2 {
 public:
-    void            setGlobalVolume() {}
-    void            setGlobalPanning() {}
-    void            setGlobalBalance() {}
+    Mixer2() 
+    {
+        globalVolume_ = 1.0;
+        globalPanning_ = 0x20;
+        leftGlobalBalance_ = 1.0;
+        rightGlobalBalance_ = 1.0;
+        gain_ = 0.5;
+        tempo_ = 125;
+        speed_ = 6;
+        updateVolumesFlag_ = true;
+    }
+
+    // global commands:
+    void            setGlobalVolume( float globalVolume ) 
+    {
+        globalVolume_ = std::min( 1.0f,globalVolume );
+        globalVolume_ = std::max( 0.0f,globalVolume_ );
+        updateVolumesFlag_ = true;
+    }
+    void            setGlobalPanning( int globalPanning )
+    {
+        globalPanning = std::min( MXR_PANNING_FULL_RIGHT,globalPanning );
+        globalPanning = std::max( MXR_PANNING_FULL_LEFT,globalPanning );
+        updateVolumesFlag_ = true;
+    }
+    void            setGlobalBalance( float globalBalance )
+    {
+        // calculate left & right balance multiplication factor (range 0 .. 1)
+        globalBalance = std::min( 100.0f,globalBalance );
+        globalBalance = std::max( -100.0f,globalBalance );
+        if ( globalBalance < 0 ) {
+            leftGlobalBalance_ = 1.0f;
+            rightGlobalBalance_ = (100 + globalBalance) / 100;
+        }
+        else {
+            if ( globalBalance > 0 ) {
+                leftGlobalBalance_ = (100 - globalBalance) / 100;
+                rightGlobalBalance_ = 1.0f;
+            } 
+            //else { // should never be necessary
+            //    leftGlobalBalance_ = 1.0f;
+            //    rightGlobalBalance_ = 1.0f;
+            //}
+        }
+        updateVolumesFlag_ = true;
+    }
+
     void            setInterpolationType() {}
     void            setTempo() {} // set BPM
     void            setSpeed() {} // set nr of ticks / beat
+    void            delaySpeed( int nrNticks ) {}
+
+    // channel commands:
     void            setNNAMode( int logicalChannel,int NNA,int DCT ) {}
-    void            setChannelVolume( int logicalChannel,int volume ) {}
+    void            setChannelVolume( int logicalChannel,int volume ) 
+    {
+
+    }
     void            setChannelGlobalVolume( int logicalChannel,int channelGlobalVolume ) {}
     void            setPanning( int logicalChannel,int panning )
     {
@@ -200,40 +259,117 @@ public:
 
         physicalChannels_[physChn].setVolume( leftVolume,rightVolume );
     }
+    void            setSurround( int logicalChannel ) {}
+    void            setFrequency( int logicalChannel,int frequency ) {}
 
     void            playSample(
         int logicalChannel,
         int sampleNr,
+        int instrumentNr,
         unsigned offset,
         unsigned frequency )
     {
+
     }
 
 
+
+    void            stopChannel( int logicalChannel )
+    {
+        int physChn = getPhysicalChannelNr( logicalChannel );
+        if ( physChn == MXR_NO_PHYSICAL_CHANNEL_ATTACHED )
+            return;
+
+    }
+
 private:
-    int             getFreeChannel() // returns -1 if no channel found
+    // returns -1 if no channel found
+    int             getFreeChannel() 
     {
         for ( int i = 0;i < MXR_MAX_PHYSICAL_CHANNELS;i++ )
             if ( !physicalChannels_[i].isActive() )
                 return i;
         return -1;
     }
-    int             getPhysicalChannel( int logicalChannel )
+    // Might return -1 i.e. MXR_NO_PHYSICAL_CHANNEL_ATTACHED
+    int             getPhysicalChannelNr( int logicalChannel )
     {
         assert( logicalChannel >=  0 );
         assert( logicalChannel < MXR_MAX_LOGICAL_CHANNELS );
         return logicalChannels_[logicalChannel].physicalChannelNr;
     }
 
+    void            calculatePhysicalChannelVolume( int physicalChannelNr )
+    {
+        /*
+            We need to take into account:
+            - Gain
+            - Global Volume
+            - Global Channel Volume
+            - Current Channel Volume
+            - Global Sample Volume
+
+            - Volume Envelope Value  // todo
+            - FadeOut Value          // todo
+
+            - Global Panning
+            - Global Balance
+        */
+        assert( physicalChannel >= 0 );
+        assert( physicalChannel < MXR_MAX_PHYSICAL_CHANNELS );
+        if ( !physicalChannels_[physicalChannelNr].isActive() )
+            return; // nothing to do here
+
+        assert( physicalChannels_[physicalChannelNr].pSample_ != nullptr );
+        assert( physicalChannels_[physicalChannelNr].pInstrument_ != nullptr );
+
+        int logicalChannelNr = physicalChannels_[physicalChannelNr].parentLogicalChannel;
+
+        assert( logicalChannelNr >= 0 );
+        assert( logicalChannelNr < MXR_MAX_LOGICAL_CHANNELS );
+
+        LogicalChannel& logicalChannel = logicalChannels_[logicalChannelNr];
+
+        float finalVolume =
+            gain_ *
+            globalVolume_ *
+            logicalChannel.globalVolume *
+            logicalChannel.volume *
+            (float)(physicalChannels_[physicalChannelNr].pSample_->getGlobalVolume()) / (float)64.0f;
+
+        int finalPanning = getFinalPanning( logicalChannel.panning );
+    
+        physicalChannels_[physicalChannelNr].leftVolume_ =
+            finalVolume *
+            leftGlobalBalance_ *
+            (float)(MXR_PANNING_FULL_RIGHT - finalPanning) / (float)MXR_PANNING_FULL_RIGHT;
+
+        physicalChannels_[physicalChannelNr].rightVolume_ =
+            finalVolume *
+            rightGlobalBalance_ *
+            (float)finalPanning / (float)MXR_PANNING_FULL_RIGHT;
+    }
+
+    int             getFinalPanning( int panning )
+    {
+        assert( panning >= MXR_PANNING_FULL_LEFT );
+        assert( panning <= MXR_PANNING_FULL_RIGHT );
+        int range = ((MXR_PANNING_CENTER - globalPanning_) << 1) + 1;
+        return ((256 - range) >> 1) + ((range * (panning + 1)) >> 8);
+    }
+
+
+
+
 private:
     float           globalVolume_;  // 0..1
 
     // Global panning: 0 = full stereo, 127 = mono, 255 = full reversed stereo
     int             globalPanning_; 
-
     // Setting the balance further right will only lower the left volume
     // and vice versa
-    int             globalBalance_; // -100 .. +100
+    float           leftGlobalBalance_;  // balance range: -100 .. +100
+    float           rightGlobalBalance_; // balance range: -100 .. +100
 
     float           gain_;          // 1.0 = full volume, no reduction
 
@@ -242,5 +378,8 @@ private:
 
     LogicalChannel  logicalChannels_[MXR_MAX_LOGICAL_CHANNELS];
     Mixer2Channel   physicalChannels_[MXR_MAX_PHYSICAL_CHANNELS];
+
+    // set to true if individual volumes need to be recalculated:
+    bool            updateVolumesFlag_; 
 };
 
