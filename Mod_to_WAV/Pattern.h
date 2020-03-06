@@ -44,11 +44,11 @@ public:
     {        
         assert( size_ > 0 );
     }
-    unsigned        getnRows() 
+    unsigned    getnRows() 
     { 
         return nRows_; 
     }
-    Note            getNote( unsigned n ) 
+    Note        getNote( unsigned n ) 
     { 
         assert( n < size_ );
         return data_[n]; 

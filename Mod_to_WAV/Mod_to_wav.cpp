@@ -1,6 +1,8 @@
-#include "Mixer2.h"
 #include "Module.h"
 #include "Mixer.h"
+
+#include "conio.h"
+#include "../../../../../../../Program Files (x86)/Windows Kits/10/Include/10.0.18362.0/ucrt/conio.h"
 
 // ****************************************************************************
 // ****************************************************************************
@@ -146,14 +148,14 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        //"D:\\MODS\\dosprog\\china1.mod",
         //"D:\\MODS\\dosprog\\dope.mod",
-        //".\\global trash 3 v2.mod",
         //"D:\\MODS\\mod_to_wav\\cd2part4.mod",
         //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
         //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
-        "D:\\MODS\\M2W_BUGTEST\\rs_stereo_sample.it",
+        //"D:\\MODS\\M2W_BUGTEST\\rs_stereo_sample.it",
   //      "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\MYRIEH.XM",
         //"D:\\MODS\\M2W_BUGTEST\\cd2part2b.mod",
@@ -389,8 +391,8 @@ int main( int argc, char *argv[] )
 
 	Mixer       mixer;
     for (unsigned i = 0; i < filePaths.size(); i++) {
-        Module      moduleFile;
 
+        Module      moduleFile;
         moduleFile.enableDebugMode();
         moduleFile.loadFile( filePaths[i] );
 
@@ -413,7 +415,7 @@ int main( int argc, char *argv[] )
                     << moduleFile.getInstrument( i ).getName();
             }
             std::cout << "\n\n";
-            mixer.initialize( &moduleFile );  
+            mixer.assignModule( &moduleFile );
 
             /*
             unsigned frameNr = 0;

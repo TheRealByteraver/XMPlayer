@@ -130,10 +130,11 @@ This library will use following ranges:
 
 */
 
-#include "Mixer.h"
+#include "mixer.h"
+#include "ModulePlayer.h"
 
 
-int Mixer::updateNotes()
+void ModulePlayer::updateNotes()
 {
     bool            patternBreak = false;
     unsigned        patternStartRow = 0;
@@ -141,14 +142,14 @@ int Mixer::updateNotes()
 
 #ifdef debug_mixer
     //char    hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    //unsigned p = module->getPatternTable( iPatternTable );
-    if ( nrChannels < 16 )
-        std::cout << std::setw( 2 ) << patternRow;
+    //unsigned p = module_->getPatternTable( patternTableIdx_ );
+    if ( nrChannels_ < 16 )
+        std::cout << std::setw( 2 ) << patternRow_;
     //std::cout << "\n";
     /*
-    if (iPatternTable < 10)    std::cout << " ";
-    else                       std::cout << (iPatternTable / 10);
-    std::cout << (iPatternTable % 10) << ":";
+    if (patternTableIdx_ < 10)    std::cout << " ";
+    else                       std::cout << (patternTableIdx_ / 10);
+    std::cout << (patternTableIdx_ % 10) << ":";
     if (p < 10) std::cout << " ";
     else        std::cout << (p / 10);
     std::cout << (p % 10) << "|";
@@ -158,8 +159,8 @@ int Mixer::updateNotes()
     patternLoopFlag_ = false;
 
 
-    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
-        Channel& channel = channels[channelNr];
+    for ( unsigned channelNr = 0; channelNr < nrChannels_; channelNr++ ) {
+        Channel& channel = channels_[channelNr];
         unsigned    note,instrument,sample;
         bool        isNewNote;
         bool        isNewInstrument;
@@ -170,8 +171,8 @@ int Mixer::updateNotes()
         unsigned    oldInstrument;
         int         finetune = 0;
 
-        note = iNote->note;
-        instrument = iNote->instrument;
+        note = iNote_->note;
+        instrument = iNote_->instrument;
 
         if ( note ) {
             if ( note == KEY_OFF ) {
@@ -180,7 +181,7 @@ int Mixer::updateNotes()
             } 
             else if ( note == KEY_NOTE_CUT ) {
                 isNewNote = false;
-                stopChannelPrimary( channelNr ); // TEMP
+                mixer_.stopChannelReplay( channelNr ); // TEMP
             } 
             else {
                 if ( note > MAXIMUM_NOTES )
@@ -216,12 +217,12 @@ int Mixer::updateNotes()
         if ( instrument ) {
             isNewInstrument = true;
             isDifferentInstrument = (oldInstrument != instrument);
-            channel.pInstrument = &(module->getInstrument( instrument ));
+            channel.pInstrument = &(module_->getInstrument( instrument ));
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                     ( channel.lastNote - 1 );
-                    channel.pSample = &(module->getSample( sample ));
+                    channel.pSample = &(module_->getSample( sample ));
                 }
                 if ( channel.pSample ) {
                     channel.volume = channel.pSample->getVolume();
@@ -230,14 +231,14 @@ int Mixer::updateNotes()
                 else {
                     isValidInstrument = false;
                     replay = false;
-                    stopChannelPrimary( channelNr ); // sundance.mod illegal sample
+                    mixer_.stopChannelReplay( channelNr ); // sundance.mod illegal sample
                     std::cout << std::dec            // DEBUG
                         << "Sample cut by illegal inst "
                         << std::setw( 2 ) << instrument
                         << " in pattern "
-                        << std::setw( 2 ) << module->getPatternTable( iPatternTable )
-                        << ", order " << std::setw( 3 ) << iPatternTable
-                        << ", row " << std::setw( 2 ) << patternRow
+                        << std::setw( 2 ) << module_->getPatternTable( patternTableIdx_ )
+                        << ", order " << std::setw( 3 ) << patternTableIdx_
+                        << ", row " << std::setw( 2 ) << patternRow_
                         << ", channel " << std::setw( 2 ) << channelNr
                         << "\n";
                 }
@@ -247,12 +248,12 @@ int Mixer::updateNotes()
         else {
             isNewInstrument = false;
             channel.pInstrument =
-                &(module->getInstrument( oldInstrument ));
+                &(module_->getInstrument( oldInstrument ));
             if ( channel.pInstrument ) {
                 if ( channel.lastNote ) {
                     sample = channel.pInstrument->getSampleForNote
                     ( channel.lastNote - 1 );
-                    channel.pSample = &(module->getSample( sample ));
+                    channel.pSample = &(module_->getSample( sample ));
                 }
             }
         }
@@ -261,7 +262,7 @@ int Mixer::updateNotes()
             channel.instrumentNr = instrument;
 
         channel.oldNote = channel.newNote;
-        channel.newNote = *iNote;
+        channel.newNote = *iNote_;
 
         /*
             Start effect handling
@@ -273,22 +274,22 @@ int Mixer::updateNotes()
             /*
             if ( fxloop == 0 )
             {
-                iNote->effects[fxloop].effect = 0;
-                iNote->effects[fxloop].argument = 0;
+                iNote_->effects[fxloop].effect = 0;
+                iNote_->effects[fxloop].argument = 0;
             }
 
             if ( fxloop == 1 )
             {
-                iNote->effects[fxloop].effect = 0;
-                iNote->effects[fxloop].argument = 0;
+                iNote_->effects[fxloop].effect = 0;
+                iNote_->effects[fxloop].argument = 0;
             }
             */
 
 
 
 
-            const unsigned char& effect = iNote->effects[fxloop].effect;
-            const unsigned char& argument = iNote->effects[fxloop].argument;
+            const unsigned char& effect = iNote_->effects[fxloop].effect;
+            const unsigned char& argument = iNote_->effects[fxloop].argument;
             if ( (effect == TONE_PORTAMENTO) ||
                 (effect == TONE_PORTAMENTO_AND_VOLUME_SLIDE) ) {
 
@@ -318,14 +319,14 @@ int Mixer::updateNotes()
         }
 
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
-            const unsigned& effect = iNote->effects[fxloop].effect;
-            const unsigned& argument = iNote->effects[fxloop].argument;
+            const unsigned& effect = iNote_->effects[fxloop].effect;
+            const unsigned& argument = iNote_->effects[fxloop].argument;
             /*
                 ScreamTracker uses very little effect memory. The following
                 commands will take the previous non-zero effect argument as
                 their argument if their argument is zero, even if that previous
                 effect has its own effect memory or no effect memory (such as
-                the set tempo command):
+                the set ticksPerRow_ command):
 
                 Dxy: volume slide
                 Exx: portamento down
@@ -357,13 +358,13 @@ int Mixer::updateNotes()
                 (effect != FINE_VIBRATO) &&
                 (effect != VIBRATO_AND_VOLUME_SLIDE) ) {
                 //channel.vibratoCount = 0; // only on new note
-                setFrequency( channelNr,periodToFrequency( channel.period ) );
+                mixer_.setFrequency( channelNr,periodToFrequency( channel.period ) );
             }
             if ( channel.oldNote.effects[fxloop].effect == ARPEGGIO ) {
                 if ( !
                     ((channel.newNote.effects[fxloop].effect == ARPEGGIO) &&
                         ft2StyleEffects_) )
-                    setFrequency( channelNr,periodToFrequency( channel.period ) );
+                    mixer_.setFrequency( channelNr,periodToFrequency( channel.period ) );
             }
 
             switch ( effect ) {
@@ -420,13 +421,13 @@ int Mixer::updateNotes()
                                 if ( channel.arpeggioCount >= 3 )
                                     channel.arpeggioCount = 0;
                                 /*
-                                playSample(
+                                mixer_.playSample(
                                     channelNr,
                                     channel.pSample,
                                     channel.sampleOffset,
                                     FORWARD );
                                 */
-                                setFrequency(
+                                mixer_.setFrequency(
                                     channelNr,
                                     periodToFrequency( arpeggioPeriod ) );
                                 //replay = false;
@@ -547,7 +548,7 @@ int Mixer::updateNotes()
                             period += vibAmp;
                         else
                             period -= vibAmp;
-                        setFrequency( channelNr,periodToFrequency( period ) );
+                        mixer_.setFrequency( channelNr,periodToFrequency( period ) );
                     }
                     break;
                 }
@@ -668,7 +669,7 @@ int Mixer::updateNotes()
                     */
                     /*if ( ft2StyleEffects_ && patternBreak )*/ patternStartRow = 0;
                     patternBreak = true;
-                    nextPatternDelta = (int)argument - (int)iPatternTable;
+                    nextPatternDelta = (int)argument - (int)patternTableIdx_;
                     break;
                 }
                 case SET_VOLUME:
@@ -811,7 +812,7 @@ int Mixer::updateNotes()
                         case SET_PATTERN_LOOP:
                         {
                             if ( !xfxArg )
-                                channel.patternLoopStart = patternRow;
+                                channel.patternLoopStart = patternRow_;
                             else {
                                 if ( !channel.patternIsLooping ) {
                                     channel.patternLoopCounter = xfxArg;
@@ -849,7 +850,7 @@ int Mixer::updateNotes()
                         }
                         case NOTE_DELAY:
                         {
-                            if ( xfxArg < tempo ) {
+                            if ( xfxArg < ticksPerRow_ ) {
                                 channel.delayCount = xfxArg;
                                 isNoteDelayed = true;
                             }
@@ -880,13 +881,13 @@ int Mixer::updateNotes()
                 } // end of S3M / XM extended effects
                 case SET_TEMPO:
                 {
-                    tempo = argument;
+                    ticksPerRow_ = argument;
                     break;
                 }
                 case SET_BPM:
                 {
-                    bpm = argument;
-                    setBpm();
+                    bpm_ = argument;
+                    setBpm( bpm_ );
                     break;
                 }
                 case SET_GLOBAL_VOLUME:
@@ -944,13 +945,21 @@ int Mixer::updateNotes()
         }
         // valid sample for replay ? -> replay sample if new note
         if ( replay && channel.pSample && (!isNoteDelayed) ) {
-            playSample( channelNr,channel.pSample,
-                channel.sampleOffset,FORWARD );
+
+            mixer_.playSample( 
+                channelNr,
+                channel.pSample,
+                channel.sampleOffset,
+                FORWARD 
+            );
+
+
+
             channel.period = noteToPeriod(
                 note + channel.pSample->getRelativeNote(),
                 finetune
             );
-            setFrequency(
+            mixer_.setFrequency(
                 channelNr,
                 periodToFrequency( channel.period ) );
         }
@@ -992,10 +1001,10 @@ int Mixer::updateNotes()
             /*
             // display volume column
             SetConsoleTextAttribute( hStdout,FOREGROUND_GREEN | FOREGROUND_INTENSITY );
-            if ( iNote->effects[0].effect )
+            if ( iNote_->effects[0].effect )
                 std::cout << std::hex << std::uppercase
-                    << std::setw( 1 ) << iNote->effects[0].effect
-                    << std::setw( 2 ) << iNote->effects[0].argument;
+                    << std::setw( 1 ) << iNote_->effects[0].effect
+                    << std::setw( 2 ) << iNote_->effects[0].argument;
             else std::cout << "   ";
             */
             // display volume:
@@ -1009,15 +1018,15 @@ int Mixer::updateNotes()
             // effect & argument
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
             for ( unsigned fxloop = 1; fxloop < 2; fxloop++ ) {
-                if ( iNote->effects[fxloop].effect )
+                if ( iNote_->effects[fxloop].effect )
                     std::cout
                     << std::hex << std::uppercase
-                    << std::setw( 2 ) << (unsigned)iNote->effects[fxloop].effect;
+                    << std::setw( 2 ) << (unsigned)iNote_->effects[fxloop].effect;
                 else std::cout << "--";
                 SetConsoleTextAttribute( hStdout,FOREGROUND_BROWN );
-                if ( iNote->effects[fxloop].argument )
+                if ( iNote_->effects[fxloop].argument )
                     std::cout
-                    << std::setw( 2 ) << ((unsigned)iNote->effects[fxloop].argument)
+                    << std::setw( 2 ) << ((unsigned)iNote_->effects[fxloop].argument)
                     << std::dec;
                 else std::cout << "--";
             }
@@ -1025,10 +1034,10 @@ int Mixer::updateNotes()
             SetConsoleTextAttribute( hStdout,FOREGROUND_LIGHTGRAY );
         }
 #endif
-        iNote++;
+        iNote_++;
     } // end of effect processing
 #ifdef debug_mixer
-    if ( nrChannels < 16 )
+    if ( nrChannels_ < 16 )
         std::cout << "\n";
 #endif
     /*
@@ -1071,73 +1080,72 @@ int Mixer::updateNotes()
     */
 
     if ( patternLoopFlag_ ) {
-        patternRow = patternLoopStartRow_;
-        iNote = pattern->getRow( patternRow );
+        patternRow_ = patternLoopStartRow_;
+        iNote_ = pattern_->getRow( patternRow_ );
     } 
     else {
         // prepare for next row / next function call
         if ( !patternBreak )
-            patternRow++;
+            patternRow_++;
         else {
             patternLoopStartRow_ = 0;
-            patternRow = pattern->getnRows();
+            patternRow_ = pattern_->getnRows();
         }
     }
-    if ( patternRow >= pattern->getnRows() ) {
+    if ( patternRow_ >= pattern_->getnRows() ) {
 #ifdef debug_mixer
         std::cout << "\n";
         //_getch();
 #endif
-        patternRow = patternStartRow;
+        patternRow_ = patternStartRow;
         /*
             FT2 starts the pattern on the same row that the pattern loop
             started in the pattern before it
         */
         if ( ft2StyleEffects_ ) {
-            patternRow = patternLoopStartRow_;
+            patternRow_ = patternLoopStartRow_;
             patternLoopStartRow_ = 0;
         }
-        int iPtnTable = (int)iPatternTable + nextPatternDelta;
+        int iPtnTable = (int)patternTableIdx_ + nextPatternDelta;
         if ( iPtnTable < 0 )
-            iPatternTable = 0; // should be impossible
+            patternTableIdx_ = 0; // should be impossible
         else
-            iPatternTable = iPtnTable;
+            patternTableIdx_ = iPtnTable;
         // skip marker patterns:
         for ( ;
-            (iPatternTable < module->getSongLength()) &&
-            (module->getPatternTable( iPatternTable ) == MARKER_PATTERN)
-            ; iPatternTable++
+            (patternTableIdx_ < module_->getSongLength()) &&
+            (module_->getPatternTable( patternTableIdx_ ) == MARKER_PATTERN)
+            ; patternTableIdx_++
             );
-        if ( (iPatternTable >= module->getSongLength()) ||
-            (module->getPatternTable( iPatternTable ) == END_OF_SONG_MARKER) ) {
-            iPatternTable = module->getSongRestartPosition(); // repeat song
+        if ( (patternTableIdx_ >= module_->getSongLength()) ||
+            (module_->getPatternTable( patternTableIdx_ ) == END_OF_SONG_MARKER) ) {
+            patternTableIdx_ = module_->getSongRestartPosition(); // repeat song
             // skip marker patterns:
             for ( ;
-                (iPatternTable < module->getSongLength()) &&
-                (module->getPatternTable( iPatternTable ) == MARKER_PATTERN)
-                ; iPatternTable++
+                (patternTableIdx_ < module_->getSongLength()) &&
+                (module_->getPatternTable( patternTableIdx_ ) == MARKER_PATTERN)
+                ; patternTableIdx_++
                 );
         }
 
-        pattern = &(module->getPattern( module->getPatternTable( iPatternTable ) ));
-        if ( patternRow >= pattern->getnRows() )
-            patternRow = 0;
-        iNote = pattern->getRow( patternRow );
+        pattern_ = &(module_->getPattern( module_->getPatternTable( patternTableIdx_ ) ));
+        if ( patternRow_ >= pattern_->getnRows() )
+            patternRow_ = 0;
+        iNote_ = pattern_->getRow( patternRow_ );
 #ifdef debug_mixer
         std::cout 
             << "Playing pattern # "
-            << module->getPatternTable( iPatternTable )
-            << ", order # " << iPatternTable
+            << module_->getPatternTable( patternTableIdx_ )
+            << ", order # " << patternTableIdx_
             << "\n";
 #endif
     }
-    return 0;
 }
 
-int Mixer::updateImmediateEffects()
+void ModulePlayer::updateImmediateEffects()
 {
-    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
-        Channel& channel = channels[channelNr];
+    for ( unsigned channelNr = 0; channelNr < nrChannels_; channelNr++ ) {
+        Channel& channel = channels_[channelNr];
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
             Note& note = channel.newNote;
             unsigned    effect = note.effects[fxloop].effect;
@@ -1191,10 +1199,10 @@ int Mixer::updateImmediateEffects()
                             if ( argument < channel.period )
                                 channel.period -= argument;
                             else
-                                channel.period = module->getMinPeriod();
-                            if ( channel.period < module->getMinPeriod() )
-                                channel.period = module->getMinPeriod();
-                            setFrequency( channelNr,
+                                channel.period = module_->getMinPeriod();
+                            if ( channel.period < module_->getMinPeriod() )
+                                channel.period = module_->getMinPeriod();
+                            mixer_.setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1203,9 +1211,9 @@ int Mixer::updateImmediateEffects()
                             argument = channel.lastFinePortamentoDown;
                             argument <<= 2;
                             channel.period += argument;
-                            if ( channel.period > module->getMaxPeriod() )
-                                channel.period = module->getMaxPeriod();
-                            setFrequency( channelNr,
+                            if ( channel.period > module_->getMaxPeriod() )
+                                channel.period = module_->getMaxPeriod();
+                            mixer_.setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1245,10 +1253,10 @@ int Mixer::updateImmediateEffects()
                             if ( argument < channel.period )
                                 channel.period -= argument;
                             else
-                                channel.period = module->getMinPeriod();
-                            if ( channel.period < module->getMinPeriod() )
-                                channel.period = module->getMinPeriod();
-                            setFrequency( channelNr,
+                                channel.period = module_->getMinPeriod();
+                            if ( channel.period < module_->getMinPeriod() )
+                                channel.period = module_->getMinPeriod();
+                            mixer_.setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1256,9 +1264,9 @@ int Mixer::updateImmediateEffects()
                         {
                             argument = channel.lastExtraFinePortamentoDown;
                             channel.period += argument;
-                            if ( channel.period > module->getMaxPeriod() )
-                                channel.period = module->getMaxPeriod();
-                            setFrequency( channelNr,
+                            if ( channel.period > module_->getMaxPeriod() )
+                                channel.period = module_->getMaxPeriod();
+                            mixer_.setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                             break;
                         }
@@ -1268,12 +1276,11 @@ int Mixer::updateImmediateEffects()
             }
         }
     }
-    return 0;
 }
 
-int Mixer::updateEffects() {
-    for ( unsigned channelNr = 0; channelNr < nrChannels; channelNr++ ) {
-        Channel& channel = channels[channelNr];
+void ModulePlayer::updateEffects() {
+    for ( unsigned channelNr = 0; channelNr < nrChannels_; channelNr++ ) {
+        Channel& channel = channels_[channelNr];
 
         for ( unsigned fxloop = 0; fxloop < MAX_EFFECT_COLUMNS; fxloop++ ) {
             Note& note = channel.newNote;
@@ -1385,13 +1392,13 @@ int Mixer::updateEffects() {
                             channel.arpeggioCount = 0;
                         */
                         /*
-                        playSample(
+                        mixer_.playSample(
                             channelNr,
                             channel.pSample,
                             channel.sampleOffset,
                             FORWARD );
                         */
-                        setFrequency(
+                        mixer_.setFrequency(
                             channelNr,
                             periodToFrequency( arpeggioPeriod ) );
                     }
@@ -1403,10 +1410,10 @@ int Mixer::updateEffects() {
                     if ( channel.period > argument )
                     {
                         channel.period -= argument;
-                        if ( channel.period < module->getMinPeriod() )
-                            channel.period = module->getMinPeriod();
-                    } else channel.period = module->getMinPeriod();
-                    setFrequency(
+                        if ( channel.period < module_->getMinPeriod() )
+                            channel.period = module_->getMinPeriod();
+                    } else channel.period = module_->getMinPeriod();
+                    mixer_.setFrequency(
                         channelNr,
                         periodToFrequency( channel.period ) );
                     break;
@@ -1415,9 +1422,9 @@ int Mixer::updateEffects() {
                 {
                     argument = channel.lastPortamentoDown << 2;
                     channel.period += argument;
-                    if ( channel.period > module->getMaxPeriod() )
-                        channel.period = module->getMaxPeriod();
-                    setFrequency( channelNr,
+                    if ( channel.period > module_->getMaxPeriod() )
+                        channel.period = module_->getMaxPeriod();
+                    mixer_.setFrequency( channelNr,
                         periodToFrequency( channel.period ) );
                     break;
                 }
@@ -1444,7 +1451,7 @@ int Mixer::updateEffects() {
                                 if ( channel.period < channel.portaDestPeriod )
                                     channel.period = channel.portaDestPeriod;
                             }
-                            setFrequency( channelNr,
+                            mixer_.setFrequency( channelNr,
                                 periodToFrequency( channel.period ) );
                         }
 
@@ -1496,14 +1503,14 @@ int Mixer::updateEffects() {
                     //if ( channel.vibratoCount >= 0 )    frequency += vibAmp;
                     //else                                frequency -= vibAmp;
                     //std::cout << "F = " << frequency << "\n";
-                    //setFrequency( channelNr,frequency );
+                    //mixer_.setFrequency( channelNr,frequency );
 
                     unsigned period = channel.period;
                     if ( channel.vibratoCount > 0 )
                         period += vibAmp;
                     else
                         period -= vibAmp;
-                    setFrequency( channelNr,periodToFrequency( period ) );
+                    mixer_.setFrequency( channelNr,periodToFrequency( period ) );
 
                     break;
                 }
@@ -1590,12 +1597,12 @@ int Mixer::updateEffects() {
                                 row
                             */
                             if ( channel.pSample ) {
-                                if ( ft2StyleEffects_ && (argument >= tempo) )
+                                if ( ft2StyleEffects_ && (argument >= ticksPerRow_) )
                                     break;
                                 channel.retrigCount++;
                                 if ( channel.retrigCount >= argument ) {
                                     channel.retrigCount = 0;
-                                    playSample( channelNr,
+                                    mixer_.playSample( channelNr,
                                         channel.pSample,
                                         channel.sampleOffset,
                                         FORWARD );
@@ -1606,7 +1613,7 @@ int Mixer::updateEffects() {
                         case NOTE_CUT:
                         {
                             //std::cout << "vv"; // DEBUG
-                            if ( tick >= argument ) {
+                            if ( tickNr_ >= argument ) {
                                 channel.volume = 0;
                                 note.effects[fxloop].effect = 0;
                                 note.effects[fxloop].argument = 0;
@@ -1615,15 +1622,15 @@ int Mixer::updateEffects() {
                         }
                         case NOTE_DELAY:
                         {
-                            if ( channel.delayCount <= tick ) {
+                            if ( channel.delayCount <= tickNr_ ) {
                                 // valid sample for replay ? 
                                 //  -> replay sample if new note
                                 if ( channel.pSample ) {
-                                    playSample( channelNr,
+                                    mixer_.playSample( channelNr,
                                         channel.pSample,
                                         channel.sampleOffset,
                                         FORWARD );
-                                    setFrequency( channelNr,
+                                    mixer_.setFrequency( channelNr,
                                         periodToFrequency(
                                             noteToPeriod(
                                                 channel.lastNote +
@@ -1719,7 +1726,7 @@ int Mixer::updateEffects() {
                                 channel.volume = 0;
                             if ( v > MAX_VOLUME )
                                 channel.volume = MAX_VOLUME;
-                            playSample(
+                            mixer_.playSample(
                                 channelNr,
                                 channel.pSample,
                                 channel.sampleOffset,
@@ -1735,5 +1742,72 @@ int Mixer::updateEffects() {
             }
         }
     }
-    return 0;
 }
+
+void ModulePlayer::updateBpm()
+{
+    tickNr_++;
+    if ( tickNr_ < ticksPerRow_ ) {
+        updateEffects();
+    } else {
+        tickNr_ = 0;
+        if ( !patternDelay_ )
+            updateNotes();
+        else
+            patternDelay_--;
+        updateImmediateEffects();
+    }
+    //setVolumes();
+}
+
+/*
+
+AMIGA calculations:
+
+period = (1712 / 128) * 2 ^ [ ( 132 - (note - 1) - finetune / 128 ) / 12 ]
+
+frequency = (8363 * 1712) / period
+
+Ex:
+note == 48 => amiga period should be = 1712
+calculated period: 1813,8 (previous note's period actually == 1812)
+
+frequency -->  7893,6
+
+Frequency if calculated by:
+
+PAL Value                     NTSC Value
+===========                   ============
+
+7093789.2                     7159090.5
+----------- = 11745 Hz        ----------- = 11853 Hz
+period * 2                    period * 2
+
+
+PAL  freq * 4 = 7822
+NTSC freq * 4 = 7894
+
+*/
+unsigned ModulePlayer::noteToPeriod( unsigned note,int finetune )
+{
+    if ( module_->useLinearFrequencies() ) {
+        return (7680 - ((note - 1) << 6) - (finetune >> 1));
+    } 
+    else {
+        return (unsigned)(
+            pow( 2.0,
+            ((11.0 * 12.0) - ((double)(note - 1) + ((double)finetune / 128.0))) / 12.0
+            )
+            * (1712.0 / 128.0)
+            );
+    }
+}
+
+unsigned ModulePlayer::periodToFrequency( unsigned period )
+{
+    return module_->useLinearFrequencies() ?
+        (unsigned)(8363 * pow( 2,((4608.0 - (double)period) / 768.0) ))
+        :
+        (period ? ((8363 * 1712) / period) : 0);
+}
+
