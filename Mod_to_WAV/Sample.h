@@ -56,6 +56,7 @@ public:
     bool            isPingpongSample()  const { return (flags_ & SMP_PINGPONG_FLAG) != 0; }
     bool            isSustained()       const { return (flags_ & SMP_SUSTAIN_FLAG) != 0; }
     bool            isPingpongSustained() const { return (flags_ & SMP_PINGPONG_SUSTAIN_FLAG) != 0; }
+    bool            isMono()            const { return !isStereo(); }
     bool            isStereo()          const { return (flags_ & SMP_IS_STEREO_FLAG) != 0; }
     bool            isUsed()            const { return (flags_ & SMP_ISUSED_FLAG) != 0; }
     int             getVolume()         const { return volume_; }
