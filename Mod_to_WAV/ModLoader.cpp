@@ -355,7 +355,7 @@ int Module::loadModFile( VirtualFile& moduleFile )
 
         if ( showDebugInfo_ )
             std::cout
-            << "\nSample " << sampleNr << " data:"
+            << "\n\nSample " << sampleNr << " data:"
             << "\nRepeatOffset                 : " << smpHdr.repeatOffset
             << "\nRepeatLength                 : " << smpHdr.repeatLength
             << "\nRepeat Offset + Repeat Length: " << (smpHdr.repeatOffset + smpHdr.repeatLength)

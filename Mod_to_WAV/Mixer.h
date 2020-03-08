@@ -791,11 +791,20 @@ private:
 
 
     int             doMixBuffer( DestBufferType* buffer );
-    int             doMixSixteenbitStereo( unsigned nrSamples );
+    void            doMixAllChannels( unsigned nrSamples );
+    void            doMixChannel(
+        DestBufferType* pBuffer,
+        std::int16_t* pSmpData,
+        int nrSamples,
+        float leftGain,
+        float rightGain,
+        float fracOffset,
+        float freqInc,
+        bool isMono
+        );
 
-    // forwards playing mixing routines:
-    void            doMixChannelForward( int channelNr,int nrSamples );
-    void            MixMonoSampleForwardNoInterpolation(
+    // Core mixing routines:
+    void            MixMonoSampleNoInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -804,7 +813,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixMonoSampleForwardLinearInterpolation(
+    void            MixMonoSampleLinearInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -813,7 +822,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixMonoSampleForwardCubicInterpolation(
+    void            MixMonoSampleCubicInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -822,7 +831,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixMonoSampleForwardSincInterpolation(
+    void            MixMonoSampleSincInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -831,7 +840,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixStereoSampleForwardNoInterpolation(
+    void            MixStereoSampleNoInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -840,7 +849,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixStereoSampleForwardLinearInterpolation(
+    void            MixStereoSampleLinearInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -849,7 +858,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixStereoSampleForwardCubicInterpolation(
+    void            MixStereoSampleCubicInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -858,7 +867,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    void            MixStereoSampleForwardSincInterpolation(
+    void            MixStereoSampleSincInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
         int nrSamples,
@@ -867,79 +876,7 @@ private:
         float fracOffset,
         float freqInc
     );
-    // backwards playing mixing routines:
-    void            MixMonoSampleBackwardNoInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixMonoSampleBackwardLinearInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixMonoSampleBackwardCubicInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixMonoSampleBackwardSincInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixStereoSampleBackwardNoInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixStereoSampleBackwardLinearInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixStereoSampleBackwardCubicInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
-    void            MixStereoSampleBackwardSincInterpolation(
-        DestBufferType* pBuffer,
-        std::int16_t* pSmpData,
-        int nrSamples,
-        float leftGain,
-        float rightGain,
-        float fracOffset,
-        float freqInc
-    );
+
 
     /**************************************************************************
     *                                                                         *
@@ -996,7 +933,7 @@ private:
         cubic interpolation
         sinc interpolation
     */
-    int             mxr_interpolationType_ = MXR_CUBIC_INTERPOLATION;
+    int             mxr_interpolationType_ = MXR_LINEAR_INTERPOLATION;
 
     std::uint16_t   tempo_;
     std::uint16_t   ticksPerRow_;
