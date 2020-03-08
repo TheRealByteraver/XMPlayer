@@ -38,8 +38,8 @@ Sample::Sample( const SampleHeader& sampleHeader )
     repeatLength_ = sampleHeader.repeatLength;
 
     // MUST BE HERE!!!!!!!!!!
-    repeatEnd_ = (sampleHeader.isRepeatSample ?
-        (repeatOffset_ + repeatLength_) : sampleHeader.length);
+    repeatEnd_ = sampleHeader.isRepeatSample ?
+        (repeatOffset_ + repeatLength_) : (sampleHeader.length);
     // !!!!!!!!!!!!!!!!!!
 
     if ( sampleHeader.isRepeatSample )
@@ -139,7 +139,7 @@ Sample::Sample( const SampleHeader& sampleHeader )
         }
     }
 
-    // TO review (stereo samples):
+    // TO review (for stereo samples):
 
     if ( INTERPOLATION_SPACER ) {
         std::int16_t* iData = data_.get() + INTERPOLATION_SPACER;

@@ -346,19 +346,16 @@ int Mixer::doMixSixteenbitStereo( unsigned nrSamples )
     //std::cout << "\nLog. Chn. : ";
     //for ( unsigned i = 0; i < 8; i++ )
     //    std::cout << "  " << i << "     ";
-
-    std::cout << "\nPhys. Chn.: ";
-    for ( unsigned i = 0; i < 16; i++ ) {
-        if ( isPhysicalChannelAttached( i ) ) {
-            std::cout << std::setw( 4 ) << logicalChannels_[i].physicalChannelNr;
-        } else
-            std::cout << "  - ";
-    }
-
+    //std::cout << "\nPhys. Chn.: ";
+    //for ( unsigned i = 0; i < 16; i++ ) {
+    //    if ( isPhysicalChannelAttached( i ) ) {
+    //        std::cout << std::setw( 4 ) << logicalChannels_[i].physicalChannelNr;
+    //    } else
+    //        std::cout << "    ";
+    //}
     //std::cout << "\nActive    : ";
     //for ( unsigned i = 0; i < 8; i++ ) 
     //    std::cout << (physicalChannels_[i].isActive() ? "Yes     " : " No     ");
-
     //std::cout << "\nLVol, RVol: ";
     //for ( unsigned i = 0; i < 8; i++ )
     //    std::cout
@@ -368,7 +365,6 @@ int Mixer::doMixSixteenbitStereo( unsigned nrSamples )
     //    << std::setw( 2 )
     //    << (int)((physicalChannels_[logicalChannels_[i].physicalChannelNr].getRightVolume()) * 64)
     //    << "  ";
-
     //std::cout << "\nPanning   : ";
     //for ( unsigned i = 0; i < 8; i++ )
     //    std::cout
@@ -400,8 +396,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nrSamples )
 
                     float offset = (float)mChn.getOffset() + mChn.getFracOffset();
                     float nrSamplesLeft = ((float)sample.getRepeatEnd() - offset) / mChn.getfrequencyInc();
-                    
-                    if ( nrSamplesLeft >= smpToMix )
+                    if ( nrSamplesLeft > smpToMix )
                         nrSamplesLeft = (float)smpToMix;
 
                     if ( sample.isMono() ) {
@@ -417,8 +412,7 @@ int Mixer::doMixSixteenbitStereo( unsigned nrSamples )
                             offset,
                             mChn.getfrequencyInc()
                         );
-                    }
-                    else { 
+                    } else {
                         //MixStereoSampleForwardNoInterpolation
                         //MixStereoSampleForwardLinearInterpolation
                         MixStereoSampleForwardCubicInterpolation
@@ -442,81 +436,71 @@ int Mixer::doMixSixteenbitStereo( unsigned nrSamples )
                             if ( sample.isPingpongSample() ) {
                                 offset = sample.getRepeatEnd() - (offset - (int)offset);
                                 mChn.setPlayBackwards();
-                            } 
-                            else {
+                            } else {
                                 offset = sample.getRepeatOffset() +
                                     (offset - (int)offset);
                             }
-                        } 
-                        else {
+                        } else {
                             mChn.deactivate();
                             break;
                         }
                     }
 
-
                     if ( mChn.isActive() ) {
                         mChn.setOffset( (int)offset );
                         mChn.setFracOffset( offset - (int)offset );
                     }
-                // *********** Backwards playing code *********************
+                    // *********** Backwards playing code *********************
                 } else {
-                    float offset = (float)mChn.getOffset() - mChn.getFracOffset();
+                    float offset = (float)mChn.getOffset() + mChn.getFracOffset();
+                    float nrSamplesLeft = (offset - (float)sample.getRepeatOffset()) / mChn.getfrequencyInc();
+                    if ( nrSamplesLeft > smpToMix )
+                        nrSamplesLeft = (float)smpToMix;
 
-                    int s = 0;
+                    //DestBufferType* pMixBuffer = mixBufferPTR + chnMixIdx;
+
                     if ( sample.isMono() ) {
-                        for ( ; s < smpToMix; s++ ) {
-                            float p1 = (float)SampleDataPTR[(int)offset];
-                            float p2 = (float)SampleDataPTR[(int)offset - 1];
-                            float f = p1 + (p2 - p1) * (1.0f - (offset - (float)((int)offset)));
-
-                            *(mixBufferPTR + chnMixIdx) += ((float)f * leftGain);
-                            chnMixIdx++;
-                            *(mixBufferPTR + chnMixIdx) += ((float)f * rightGain);
-                            chnMixIdx++;
-                            offset -= mChn.getfrequencyInc();
-                            if ( offset <= (float)sample.getRepeatOffset() ) {
-                                /*
-                                    Backwards playing samples are always looping
-                                    samples.
-                                */
-                                offset = (float)sample.getRepeatOffset() + (offset - (float)((int)offset));
-                                mChn.setPlayForwards();
-                                break;
-                            }
-                        }
+                        //MixMonoSampleBackwardNoInterpolation
+                        MixMonoSampleBackwardLinearInterpolation
+                        //MixMonoSampleBackwardCubicInterpolation
+                            (
+                                mixBufferPTR + chnMixIdx,
+                                SampleDataPTR,
+                                (int)nrSamplesLeft,
+                                leftGain,
+                                rightGain,
+                                offset,
+                                mChn.getfrequencyInc()
+                            );
+                    } 
+                    else {
+                        //MixStereoSampleBackwardNoInterpolation
+                        //MixStereoSampleBackwardLinearInterpolation
+                        MixStereoSampleBackwardCubicInterpolation
+                                (
+                                    mixBufferPTR + chnMixIdx,
+                                    SampleDataPTR,
+                                    (int)nrSamplesLeft,
+                                    leftGain,
+                                    rightGain,
+                                    offset,
+                                    mChn.getfrequencyInc()
+                                );
                     }
-                    else { 
-                        for ( ; s < smpToMix; s++ ) {
-                            float left1 = (float)SampleDataPTR[(int)offset << 1];
-                            float right1 = (float)SampleDataPTR[((int)offset << 1) + 1];
-                            float left2 = (float)SampleDataPTR[((int)offset << 1) + 2];
-                            float right2 = (float)SampleDataPTR[((int)offset << 1) + 3];
 
-                            float fract = 1.0f - (offset - ((int)offset));
-                            float left = left1 + (left2 - left1) * fract;
-                            float right = right1 + (right2 - right1) * fract;
+                    chnMixIdx += (unsigned)nrSamplesLeft * 2;
+                    smpToMix -= (int)nrSamplesLeft;
+                    offset -= nrSamplesLeft * mChn.getfrequencyInc(); // to re- add after we put it in fn!
 
-                            *(mixBufferPTR + chnMixIdx) += ((float)left * leftGain);
-                            chnMixIdx++;
-                            *(mixBufferPTR + chnMixIdx) += ((float)right * rightGain);
-                            chnMixIdx++;
-
-                            offset -= mChn.getfrequencyInc();
-                            if ( (int)offset <= (int)sample.getRepeatOffset() ) {
-                                /*
-                                    Backwards playing samples are always looping
-                                    samples.
-                                */
-                                offset = sample.getRepeatOffset() + (offset - (int)offset);
-                                mChn.setPlayForwards();
-                                break;
-                            }
-                        }
+                    if ( (int)offset <= (int)sample.getRepeatOffset() ) {
+                        // Backwards playing samples are always looping samples
+                        offset = (float)sample.getRepeatOffset() + (offset - (int)offset);
+                        mChn.setPlayForwards();
+                        break;
                     }
-                    smpToMix -= s + 1; // s counts from zero, so we add 1!
+                    // the channel is active because this is a looping sample
                     mChn.setOffset( (int)offset );
-                    mChn.setFracOffset( offset - (float)((int)offset) );
+                    mChn.setFracOffset( offset - (int)offset );
                 }
             }
         }
@@ -571,6 +555,30 @@ void Mixer::MixMonoSampleForwardNoInterpolation(
         fracOffset += freqInc;
     }
 }
+
+/*
+
+void Mixer::MixMonoSampleBackwardNoInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+)
+{
+    for ( int s = 0; s < nrSamples; s++ ) {
+        float f = (float)pSmpData[(int)fracOffset];
+        *pBuffer++ += ((float)f * leftGain);
+        *pBuffer++ += ((float)f * rightGain);
+        fracOffset -= freqInc;
+    }
+}
+
+*/
+
+
 
 void Mixer::MixMonoSampleForwardLinearInterpolation(
     DestBufferType* pBuffer,
@@ -736,7 +744,77 @@ void Mixer::MixStereoSampleForwardSincInterpolation(
     float freqInc
 ) {}
 
-void Mixer::MixMonoSampleBackWardNoInterpolation(
+// ***************
+// BACKWARD mixers
+// ***************
+
+void Mixer::MixMonoSampleBackwardNoInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) 
+{
+    for ( int s = 0; s < nrSamples; s++ ) {
+        float f = (float)pSmpData[(int)fracOffset];
+        *pBuffer++ += ((float)f * leftGain);
+        *pBuffer++ += ((float)f * rightGain);
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixMonoSampleBackwardLinearInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) {
+    for ( int s = 0; s < nrSamples; s++ ) {
+        float p1 = (float)pSmpData[(int)fracOffset - 1];
+        float p2 = (float)pSmpData[(int)fracOffset];
+        float f = p1 + (p2 - p1) * (fracOffset - (int)fracOffset);
+
+        *pBuffer++ += ((float)f * leftGain);
+        *pBuffer++ += ((float)f * rightGain);
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixMonoSampleBackwardCubicInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) 
+{
+    for ( int s = 0; s < nrSamples; s++ ) {
+        int p0 = pSmpData[(int)fracOffset - 1];
+        int p1 = pSmpData[(int)fracOffset];
+        int p2 = pSmpData[(int)fracOffset + 1];
+        int p3 = pSmpData[(int)fracOffset + 2];
+
+        float fract = fracOffset - (int)fracOffset;
+        int t = p1 - p2;
+        float a = (float)(((t << 1) + t - p0 + p3) >> 1);
+        float b = (float)((p2 << 1) + p0 - (((p1 << 2) + p1 + p3) >> 1));
+        float c = (float)((p2 - p0) >> 1);
+        float f = ((a * fract + b) * fract + c) * fract + (float)p1;
+        *pBuffer++ += f * leftGain;
+        *pBuffer++ += f * rightGain;
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixMonoSampleBackwardSincInterpolation(
     DestBufferType* pBuffer,
     std::int16_t* pSmpData,
     int nrSamples,
@@ -746,7 +824,91 @@ void Mixer::MixMonoSampleBackWardNoInterpolation(
     float freqInc
 ) {}
 
-void Mixer::MixMonoSampleBackWardLinearInterpolation(
+void Mixer::MixStereoSampleBackwardNoInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) 
+{
+    for ( int s = 0; s < nrSamples; s++ ) {
+        float left = (float)pSmpData[(int)fracOffset << 1];
+        float right = (float)pSmpData[((int)fracOffset << 1) + 1];
+        *pBuffer++ += ((float)left * leftGain);
+        *pBuffer++ += ((float)right * rightGain);
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixStereoSampleBackwardLinearInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) {
+    for ( int s = 0; s < nrSamples; s++ ) {
+        float left1 = (float)pSmpData[((int)fracOffset << 1) - 2];
+        float right1 = (float)pSmpData[((int)fracOffset << 1) - 1];
+        float left2 = (float)pSmpData[((int)fracOffset << 1)];
+        float right2 = (float)pSmpData[((int)fracOffset << 1) + 1];
+
+        float fract = fracOffset - ((int)fracOffset);
+        float left = left1 + (left2 - left1) * fract;
+        float right = right1 + (right2 - right1) * fract;
+
+        *pBuffer++ += ((float)left * leftGain);
+        *pBuffer++ += ((float)right * rightGain);
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixStereoSampleBackwardCubicInterpolation(
+    DestBufferType* pBuffer,
+    std::int16_t* pSmpData,
+    int nrSamples,
+    float leftGain,
+    float rightGain,
+    float fracOffset,
+    float freqInc
+) 
+{
+    for ( int s = 0; s < nrSamples; s++ ) {
+        int offset = (int)fracOffset << 1;
+        int left0 = pSmpData[offset - 2];
+        int right0 = pSmpData[offset - 1];
+        int left1 = pSmpData[offset];
+        int right1 = pSmpData[offset + 1];
+        int left2 = pSmpData[offset + 2];
+        int right2 = pSmpData[offset + 3];
+        int left3 = pSmpData[offset + 4];
+        int right3 = pSmpData[offset + 5];
+
+        float fract = fracOffset - (int)fracOffset;
+        int t = left1 - left2;
+        float a = (float)(((t << 1) + t - left0 + left3) >> 1);
+        float b = (float)((left2 << 1) + left0 - (((left1 << 2) + left1 + left3) >> 1));
+        float c = (float)((left2 - left0) >> 1);
+        float f = ((a * fract + b) * fract + c) * fract + (float)left1;
+        *pBuffer++ += f * leftGain;
+
+        t = right1 - right2;
+        a = (float)(((t << 1) + t - right0 + right3) >> 1);
+        b = (float)((right2 << 1) + right0 - (((right1 << 2) + right1 + right3) >> 1));
+        c = (float)((right2 - right0) >> 1);
+        f = ((a * fract + b) * fract + c) * fract + (float)right1;
+        *pBuffer++ += f * rightGain;
+
+        fracOffset -= freqInc;
+    }
+}
+
+void Mixer::MixStereoSampleBackwardSincInterpolation(
     DestBufferType* pBuffer,
     std::int16_t* pSmpData,
     int nrSamples,
@@ -756,70 +918,8 @@ void Mixer::MixMonoSampleBackWardLinearInterpolation(
     float freqInc
 ) {}
 
-void Mixer::MixMonoSampleBackWardCubicInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
 
-void Mixer::MixMonoSampleBackWardSincInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
-
-void Mixer::MixStereoSampleBackWardNoInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
-
-void Mixer::MixStereoSampleBackWardLinearInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
-
-void Mixer::MixStereoSampleBackWardCubicInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
-
-void Mixer::MixStereoSampleBackWardSincInterpolation(
-    DestBufferType* pBuffer,
-    std::int16_t* pSmpData,
-    int nrSamples,
-    float leftGain,
-    float rightGain,
-    float fracOffset,
-    float freqInc
-) {}
-
-
-/*
-
-                    
+/*                   
                     // linear interpolation:
                     for ( unsigned s = 0; s < nSamples; s++ ) {
                         float p1 = (float)SampleDataPTR[(int)offset];
@@ -869,13 +969,8 @@ void Mixer::MixStereoSampleBackWardSincInterpolation(
                                 break;
                             }
                         }
-                    }
-                    
+                    }                    
 */
-
-
-
-
 
 
 /******************************************************************************

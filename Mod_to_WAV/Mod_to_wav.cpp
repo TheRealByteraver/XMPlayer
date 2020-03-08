@@ -150,7 +150,7 @@ int main( int argc, char *argv[] )
     char        *modPaths[] = {
         "D:\\MODS\\M2W_BUGTEST\\rs_stereo_sample.it",
         "D:\\MODS\\dosprog\\mods\\over2bg.xm",
-        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\chipmod\\crain.mod",
         "D:\\MODS\\dosprog\\chipmod\\toybox.mod",
         "D:\\MODS\\dosprog\\chipmod\\etanol.mod",

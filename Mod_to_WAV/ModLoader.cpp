@@ -352,6 +352,16 @@ int Module::loadModFile( VirtualFile& moduleFile )
         smpHdr.repeatLength = 
             ((unsigned)headerMK.samples[sampleNr - 1].repeatLength) << 1;
         smpHdr.volume       = headerMK.samples[sampleNr - 1].linearVolume;
+
+        if ( showDebugInfo_ )
+            std::cout
+            << "\nSample " << sampleNr << " data:"
+            << "\nRepeatOffset                 : " << smpHdr.repeatOffset
+            << "\nRepeatLength                 : " << smpHdr.repeatLength
+            << "\nRepeat Offset + Repeat Length: " << (smpHdr.repeatOffset + smpHdr.repeatLength)
+            << "\nLength                       : " << smpHdr.length
+            << "\nVolume                       : " << (unsigned)smpHdr.volume;
+
         if ( smpHdr.volume > MAX_VOLUME ) 
             smpHdr.volume = MAX_VOLUME;
         if ( smpHdr.repeatOffset > smpHdr.length ) 
@@ -359,6 +369,15 @@ int Module::loadModFile( VirtualFile& moduleFile )
         smpHdr.isRepeatSample = (smpHdr.repeatLength > 2);
         if ( (smpHdr.repeatOffset + smpHdr.repeatLength) > smpHdr.length )
             smpHdr.repeatLength = smpHdr.length - smpHdr.repeatOffset;
+
+        if ( showDebugInfo_ )
+            std::cout
+            << "\nAfter correction:"
+            << "\nRepeatOffset                 : " << smpHdr.repeatOffset
+            << "\nRepeatLength                 : " << smpHdr.repeatLength
+            << "\nRepeat Offset + Repeat Length: " << (smpHdr.repeatOffset + smpHdr.repeatLength)
+            << "\nLength                       : " << smpHdr.length << " (unchanged)"
+            << "\nVolume                       : " << (unsigned)smpHdr.volume;
 
         // convert signed nibble to int and scale it up
         smpHdr.finetune = 
