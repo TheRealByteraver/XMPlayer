@@ -148,9 +148,13 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\MODS\\M2W_BUGTEST\\rs_stereo_sample.it",
-        "D:\\MODS\\dosprog\\mods\\over2bg.xm",
-        //"D:\\MODS\\dosprog\\chipmod\\mental.mod",
+        "D:\\MODS\\M2W_BUGTEST\\ETANOLbiditest.xm",
+        //"D:\\MODS\\dosprog\\dope.mod",
+        //"C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
+        //"D:\\MODS\\S3M\\Karsten Koch\\blue_val.s3m",
+        //"D:\\MODS\\M2W_BUGTEST\\rs_stereo_sample.it",
+        "D:\\MODS\\dosprog\\mods\\over2bgloop.xm",
+        "D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\chipmod\\crain.mod",
         "D:\\MODS\\dosprog\\chipmod\\toybox.mod",
         "D:\\MODS\\dosprog\\chipmod\\etanol.mod",
@@ -161,11 +165,9 @@ int main( int argc, char *argv[] )
         "D:\\MODS\\dosprog\\chipmod\\4ma.mod",
         "D:\\MODS\\dosprog\\chipmod\\mental.mod",
         "D:\\MODS\\dosprog\\china1.mod",
-        "D:\\MODS\\dosprog\\dope.mod",
         //"D:\\MODS\\mod_to_wav\\cd2part4.mod",
         //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
         //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
-        "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
   //      "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
         "D:\\MODS\\dosprog\\MYRIEH.XM",

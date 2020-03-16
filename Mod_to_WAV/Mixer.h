@@ -41,7 +41,10 @@ const int   MXR_PANNING_FULL_LEFT   = 0;
 const int   MXR_PANNING_CENTER      = 127;
 const int   MXR_PANNING_FULL_RIGHT  = 255;
 const int   MXR_NO_PHYSICAL_CHANNEL_ATTACHED = -1;
-const float MXR_MIN_FREQUENCY_INC = 2.26757e-4f; // 20 Hz == 20 / (44100 * 2)
+
+// below is wrong, should be 44100, not * 2
+const float MXR_MIN_FREQUENCY_INC = 00002.26757e-4f; // 20 Hz == 20 / (44100 * 2)
+const float MXR_EPSILON = 1.0e-19f;
 
 /*
 possible flags:
@@ -234,7 +237,7 @@ public:
     Instrument*     getInstrumentPtr() const { return pInstrument_; }
     float           getLeftVolume() const { return leftVolume_; }
     float           getRightVolume() const { return rightVolume_; }
-    float           getfrequencyInc() const { return frequencyInc_; }
+    float           getFrequencyInc() const { return frequencyInc_; }
     unsigned        getOffset() const { return offset_; }
     float           getFracOffset() const { return fracOffset_; }
 
@@ -407,6 +410,8 @@ class Mixer {
     *                                                                         *
     **************************************************************************/
 public:
+    unsigned coutCnt = 0; // DEBUG!!!
+
     Mixer();
     ~Mixer();
 
@@ -933,7 +938,7 @@ private:
         cubic interpolation
         sinc interpolation
     */
-    int             mxr_interpolationType_ = MXR_LINEAR_INTERPOLATION;
+    int             mxr_interpolationType_ = MXR_CUBIC_INTERPOLATION;
 
     std::uint16_t   tempo_;
     std::uint16_t   ticksPerRow_;
@@ -945,7 +950,7 @@ private:
     std::unique_ptr < MixBufferType[] > mixBuffer_;
 
     static CRITICAL_SECTION     waveCriticalSection_;
-    static WAVEHDR* waveBlocks_;
+    static WAVEHDR*             waveBlocks_;
     static volatile int         waveFreeBlockCount_;
     static int                  waveCurrentBlock_;
 
