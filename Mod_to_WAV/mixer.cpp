@@ -375,7 +375,7 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
     //    << "    ";
     //_getch();
 
-    
+//#define showdebuginfo    
 
     for ( unsigned i = 0; i < MXR_MAX_PHYSICAL_CHANNELS; i++ ) {
         MixerChannel& mChn = physicalChannels_[i];
@@ -400,29 +400,54 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                 float mixBlockLength;
 
                 if ( mChn.isPlayingForwards() ) {
-                    mixBlockLength = (float)sample.getRepeatEnd() - (smpOffset + smpFracOffset) + freqInc - MXR_EPSILON;
+                    mixBlockLength = (float)sample.getRepeatEnd() - (smpOffset + smpFracOffset) + freqInc - MXR_EPSILON;  // ok
                 } else {
-                    mixBlockLength = smpOffset + smpFracOffset - (float)sample.getRepeatOffset() + freqInc - MXR_EPSILON;
+                    mixBlockLength = - (float)sample.getRepeatOffset() + smpOffset + smpFracOffset + freqInc - MXR_EPSILON;
                     freqInc = -freqInc;
                 }               
                 mixBlockLength = std::max( mixBlockLength,mChn.getFrequencyInc() ); // extra safety
-                int nrSamplesLeft = (int)(mixBlockLength / mChn.getFrequencyInc());
+                int nrSamplesLeft = (int)(mixBlockLength / mChn.getFrequencyInc()); 
                 nrSamplesLeft = std::min( nrSamplesLeft,smpToMix );
                 mixBlockLength = nrSamplesLeft * freqInc;
 
+#ifdef showdebuginfo
+                std::cout
+                    << "\nnrSamplesLeft * FreqInc       = mixBlockLength"
+                    << "\n" << std::setw( 13 ) << nrSamplesLeft << " * " << std::setw( 13 ) << freqInc << " = " << mixBlockLength
+                    << "\n";
+#endif
+
                 /*
-                    The below if statement is needed for interpolation, 
+                    The below "if" statement is needed for interpolation, 
                     otherwise the negative sample index get rounded to the 
-                    wrong side - this is so because backward interpolation uses
-                    the same sample points as forward interpolation
+                    wrong side - this is so because backward playing 
+                    interpolation uses the same sample points as forward 
+                    playing interpolation
                 */
                 if ( mChn.isPlayingBackwards() ) {
                     // substract mixBlockLength from the offset 
-                    // (mixBlockLength is negative here):
-                    smpOffset += (int)(mixBlockLength - 1.0f + MXR_EPSILON); 
-                    // add the same displacement to the fractional offset
-                    smpFracOffset -= mixBlockLength;                         
+                    double endPosition = smpOffset + smpFracOffset + mixBlockLength; // mixBlockLength < 0
+
+                    // prevent wrong integer truncation below 0:
+                    if ( endPosition >= 0 ) {
+                        smpOffset = (float)((int)endPosition);
+                        smpFracOffset = (float)endPosition - (float)((int)endPosition) - mixBlockLength;
+                    } else {
+                        smpOffset = (float)((int)(endPosition - 1.0 + MXR_EPSILON));
+                        smpFracOffset = (float)endPosition - smpOffset - mixBlockLength;
+                    }
+#ifdef showdebuginfo
+                    std::cout
+                        << "\nendPosition                    = " << endPosition
+                        << "\nsmpOffset                      = " << smpOffset
+                        << "\nsmpFracOffset                  = " << smpFracOffset
+                        << "\n"
+                        ;
+                    _getch();
+#endif
+
                 }
+
                 doMixChannel(
                     mixBufferPTR + chnMixIdx,
                     SampleDataPTR + (sample.isMono() ? (int)smpOffset : (int)smpOffset << 1), 
@@ -436,43 +461,43 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                 chnMixIdx += nrSamplesLeft << 1;
                 smpToMix -= nrSamplesLeft;
 
-                float displacement = mixBlockLength + smpFracOffset;
-                smpOffset += displacement;
+                float displacement = mixBlockLength + smpFracOffset; // ok
+                smpOffset += (float)((int)displacement);
                 smpFracOffset = displacement - (int)displacement;
 
-                double currentPosition = (double)smpOffset + smpFracOffset; // added
-
-                std::cout
-                    << "\ncurrentPosition = " << currentPosition
-                    << ", sample.getRepeatEnd() - 1 = " << (sample.getRepeatEnd() - 1)
-                    ;
+                double nextPosition = (double)smpOffset + smpFracOffset; // logical
 
                 if ( mChn.isPlayingForwards() ) {
-                    if ( currentPosition >= (double)(sample.getRepeatEnd() - 1) ) {
+                    if ( nextPosition >= (double)(sample.getRepeatEnd()) ) {
                         if ( sample.isRepeatSample() ) {
                             if ( sample.isPingpongSample() ) {
 
-                                double delta = currentPosition - (double)sample.getRepeatEnd() + 1.0f;
-
-                                double newPosition = (double)sample.getRepeatEnd() - 1.0f - delta
-                                    ;
-
+                                double newPosition = (double)(sample.getRepeatEnd() << 1) - nextPosition - 1.0;
                                 
-                                smpOffset = (float)(int)newPosition;
+                                smpOffset = (float)((int)newPosition);
                                 smpFracOffset = (float)(newPosition - (int)newPosition);
-
+#ifdef showdebuginfo
                                 std::cout 
-                                    << "\nCurrentPosition = " << currentPosition
-                                    << ", newPosition = " << newPosition 
-                                    << ", delta = " << delta
+                                    << "\nOld Position = " << nextPosition - (double)freqInc
+                                    << ", New Position = " << newPosition 
+                                    << " // at end of sample: bounce back"
                                     << "\n";
-
+#endif
                                 mChn.setPlayBackwards();
                             } else {
-                                double delta = currentPosition - (double)sample.getRepeatEnd();
+                                double newPosition = 
+                                    (double)sample.getRepeatOffset() 
+                                    + nextPosition - (double)(sample.getRepeatEnd()/* - 1*/);
 
-                                smpOffset = (float)sample.getRepeatOffset() + (int)delta;
-                                smpFracOffset = (float)(delta - (int)delta);
+                                smpOffset = (float)((int)newPosition);
+                                smpFracOffset = (float)(newPosition - (int)newPosition);
+#ifdef showdebuginfo
+                                std::cout
+                                    << "\nnextPosition = " << nextPosition
+                                    << ", newPosition = " << newPosition
+                                    << "   // at beginning of sample, normal repeat"
+                                    << "\n";
+#endif
                             }
                         } else {
                             mChn.deactivate();
@@ -480,69 +505,23 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                         }
                     }
                 } else {    
-                    if ( (int)smpOffset <= (int)sample.getRepeatOffset() ) {
+                    if ( nextPosition <= ((double)sample.getRepeatOffset()) ) {
                         // Backwards playing samples are always (pingpong) looping samples
 
-                        double delta = (double)sample.getRepeatOffset() - currentPosition;
-
-                        double newPosition = (double)sample.getRepeatOffset() + delta
-                            ;
-
-                        smpOffset = (float)(int)newPosition;
+                        double newPosition = (double)(sample.getRepeatOffset() << 1) - nextPosition;
+#ifdef showdebuginfo
+                        std::cout
+                            << "\nnextPosition = " << nextPosition
+                            << ", newPosition = " << newPosition
+                            << "   // at beginning of sample, bounceback"
+                            << "\n";
+                        _getch();
+#endif
+                        smpOffset = (float)((int)newPosition);
                         smpFracOffset = (float)(newPosition - (int)newPosition);
                         mChn.setPlayForwards();
                     }
                 }
-
-/*
-                if ( mChn.isPlayingForwards() ) {
-                    if ( (int)smpOffset >= (int)sample.getRepeatEnd() ) { 
-                        if ( sample.isRepeatSample() ) {
-                            if ( sample.isPingpongSample() ) {
-                                // sample.getRepeatEnd() is 1 past the index,
-                                // but we subtract the fractional part, meaning
-                                // when the value is truncated, it will point
-                                // to (sample.getRepeatEnd() - 1).
-
-                                double newPosition = (double)sample.getRepeatEnd() - 1 - 
-                                    ((double)smpOffset + smpFracOffset + freqInc - (double)sample.getRepeatEnd())
-                                    ;
-
-                                smpOffset = (int)newPosition;
-                                smpFracOffset = newPosition - (int)newPosition;
-
-                                mChn.setPlayBackwards();
-                            } else {
-                                smpOffset = (float)sample.getRepeatOffset();
-                            }
-                        } else {
-                            mChn.deactivate();
-                            break;
-                        }
-                    }
-                } else {     // TO DEBUG
-                    if ( (int)smpOffset <= (int)sample.getRepeatOffset() ) {
-                        // Backwards playing samples are always (pingpong) looping samples
-
-                        double newPosition = (double)sample.getRepeatOffset() +
-
-                            ((double)sample.getRepeatOffset() - 
-                                                              (double)smpOffset + smpFracOffset + freqInc)
-                            ;
-
-                        smpOffset = (int)newPosition;
-                        smpFracOffset = newPosition - (int)newPosition;
-
-
-
-                        //float overshoot = (float)sample.getRepeatOffset() - smpOffset + smpFracOffset;
-                        //smpOffset = (float)sample.getRepeatOffset() + (int)overshoot;
-                        //smpFracOffset = 1.0f - smpFracOffset;            // to be corrected
-                        mChn.setPlayForwards();
-                    }
-                }
-*/
-
                 if ( mChn.isActive() ) {
                     mChn.setOffset( (int)smpOffset );
                     mChn.setFracOffset( smpFracOffset );
@@ -740,10 +719,11 @@ void Mixer::MixMonoSampleCubicInterpolation(
         float f = ((a * fract + b) * fract + c) * fract + (float)p1;
         *pBuffer++ += f * leftGain;
         *pBuffer++ += f * rightGain;
-        fracOffset += freqInc;
-
+#ifdef showdebuginfo
         std::cout
             << std::setw(16) << fracOffset;
+#endif
+        fracOffset += freqInc;
     }
 }
 
