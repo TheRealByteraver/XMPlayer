@@ -72,12 +72,12 @@ Sample::Sample( const SampleHeader& sampleHeader )
         flags_ |= SMP_IS_STEREO_FLAG;
 
 
-    if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n"; // DEBUG
+    //if ( isStereo ) std::cout << "\n!!! STEREO SAMPLE !!!\n"; // DEBUG
 
     // allocate memory for 16 bit version of sample + some spare space
     datalength_ = length_ + 2 * INTERPOLATION_SPACER + SAMPLEDATA_EXTENSION;
     if ( isStereo )
-        datalength_ += length_ + 2 * INTERPOLATION_SPACER;
+        datalength_ <<= 1;
     datalength_ += 16;
     datalength_ &= 0xFFFFFFF0;
     data_ = std::make_unique<std::int16_t[]>( datalength_ );
@@ -141,35 +141,95 @@ Sample::Sample( const SampleHeader& sampleHeader )
 
     // TO review (for stereo samples):
 
+    /*
+    
+    -|----|----|----|----|----|----|----|----|----|----|----|----
+    -5   -4   -3   -2   -1    0    1    2    3    4    5    6
+     R    L    R    L    R    L    R    L    R    L    R
+    
+    */
+    // get pointer to beginning of sample data:
+    std::int16_t* iData = getData();
+
     if ( INTERPOLATION_SPACER ) {
-        std::int16_t* iData = data_.get() + INTERPOLATION_SPACER;
-        for ( unsigned iSamples = INTERPOLATION_SPACER; iSamples; iSamples-- ) {
-            data_[iSamples - 1] =
-                data_[INTERPOLATION_SPACER] -
-                iData[INTERPOLATION_SPACER - iSamples + 1];
-                //data_[INTERPOLATION_SPACER + INTERPOLATION_SPACER - iSamples + 1];
+        int spacer = std::min( (const unsigned)INTERPOLATION_SPACER,length_ );
+        
+        // mirror the beginning of the sample before the sample data start:
+        if ( isMono() ) {
+            for ( int i = 0; i < spacer; i++ )
+                iData[i - spacer] = iData[spacer - i];
+        } else { 
+            for ( int i = 0; i < spacer; i++ ) {
+                iData[((i - spacer) << 1)] = iData[((spacer - i) << 1)];
+                iData[((i - spacer) << 1) + 1] = iData[((spacer - i) << 1) + 1];
+            }
         }
 
-        for ( unsigned iSamples = 0; iSamples < INTERPOLATION_SPACER; iSamples++ ) {
-            if ( sampleHeader.isRepeatSample ) {
-                iData[repeatEnd_ + iSamples] = iData[repeatOffset_ + iSamples];
-            }  /*
-            else {
-                iData[length_ + iSamples] =
-                    iData[length_ - 1] - iData[length_ - 1 - iSamples];
-            }    */
+        // mirror sample data beyond the end or lengthen with data after rep. ofs.:
+        if ( isRepeatSample() ) {
+            if( !isPingpongSample() ) {
+                if ( isMono() ) {
+                    for ( int i = 0; i < INTERPOLATION_SPACER; i++ )
+                        iData[repeatEnd_ + i] = iData[repeatOffset_ + i];
+                } else { // stereo
+                    for ( int i = 0; i < INTERPOLATION_SPACER; i++ ) {
+                        iData[((repeatEnd_ + i) << 1)] = iData[((repeatOffset_ + i) << 1)];
+                        iData[((repeatEnd_ + i) << 1) + 1] = iData[((repeatOffset_ + i) << 1) + 1];
+                    }
+                } 
+            } else { // pingpong sample
+                if ( isMono() ) {
+                    for ( int i = 0; i < INTERPOLATION_SPACER; i++ )
+                        iData[repeatEnd_ + i] = iData[repeatEnd_ - 2 - i];
+                } else { // stereo
+                    for ( int i = 0; i < INTERPOLATION_SPACER; i++ ) {
+                        iData[((repeatEnd_ + i) << 1)] = iData[((repeatEnd_ - 2 - i) << 1)];
+                        iData[((repeatEnd_ + i) << 1) + 1] = iData[((repeatEnd_ - 2 - i) << 1) + 1];                       
+                    }
+                }
+            }
+        } else { // sample is not a repeat sample
+            if ( isMono() ) {
+                for ( int i = 0; i < INTERPOLATION_SPACER; i++ )
+                    iData[repeatEnd_ + i] = iData[repeatEnd_ - 2 - i];
+            } else { // stereo
+                for ( int i = 0; i < INTERPOLATION_SPACER; i++ ) {
+                    iData[((repeatEnd_ + i) << 1)] = iData[((repeatEnd_ - 2 - i) << 1)];
+                    iData[((repeatEnd_ + i) << 1) + 1] = iData[((repeatEnd_ - 2 - i) << 1) + 1];
+                }
+            }
         }
     }
+
     // Make the end of the waveform converge to 0 (click removal):
-    if ( !sampleHeader.isRepeatSample ) {
-        std::int16_t* iData = data_.get() + INTERPOLATION_SPACER;
-        for ( int i = 0; i < SAMPLEDATA_EXTENSION; i++ ) {
-            int s = iData[length_ - 1 + i];
-            s *= SAMPLEDATA_EXTENSION - 1 - i;
-            s /= SAMPLEDATA_EXTENSION;
-            iData[length_ + i] = ( abs( s ) < 128 ? 0 : s );
+    if ( !isRepeatSample() ) {
+        if ( isMono() ) {
+            int i = 0;
+            for ( ; i < SAMPLEDATA_EXTENSION; i++ ) {
+                int s = iData[length_ - 1 + i];
+                s *= SAMPLEDATA_EXTENSION - 1 - i;
+                s /= SAMPLEDATA_EXTENSION;
+                iData[length_ + i] = s;
+                if ( (s >> 7) == 0 )
+                    break;
+            }
+            length_ += i;
+        } else { // stereo sample
+            int i = 0;
+            for ( ; i < SAMPLEDATA_EXTENSION; i++ ) {
+                int sL = iData[((length_ - 1 + i) << 1)];
+                int sR = iData[((length_ - 1 + i) << 1) + 1];
+                sL *= SAMPLEDATA_EXTENSION - 1 - i;
+                sL /= SAMPLEDATA_EXTENSION;
+                sR *= SAMPLEDATA_EXTENSION - 1 - i;
+                sR /= SAMPLEDATA_EXTENSION;
+                iData[((length_ - 1 + i) << 1)] = sL;
+                iData[((length_ - 1 + i) << 1) + 1] = sR;
+                if ( ((sL >> 7) == 0) && ((sR >> 7) == 0) )
+                    break;
+            }
+            length_ += i;
         }
-        length_ += SAMPLEDATA_EXTENSION;
     }
 }
 

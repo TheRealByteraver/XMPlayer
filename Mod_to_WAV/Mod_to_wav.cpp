@@ -354,6 +354,18 @@ int main( int argc, char *argv[] )
     */
 
 
+    //for ( float i = -2.0; i < 2.2; i += 0.1 )
+    //    std::cout
+    //    << "\ni = " << std::setw( 4 ) << i << "  -> " 
+    //    << "(int)i = " << std::setw( 4 ) << (int)i
+    //    << "  but floor( i ) = " << std::floor( i );
+
+    //std::cout << "\n";
+    //getch();
+
+
+
+
     if (argc > 1) {
         for ( int i = 1; i < argc; i++ ) 
             filePaths.push_back( argv[i] );

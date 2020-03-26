@@ -18,9 +18,30 @@ This code requires a byte to be 8 bits wide
 #include <functional>
 #include <mmsystem.h>
 #include <mmreg.h>
-
 #include <ks.h>
 #include <Ksmedia.h>
+
+
+// FOR SSE 4.1 mixing routines:
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <emmintrin.h>
+#include <xmmintrin.h>
+#include <smmintrin.h>
+#include <immintrin.h>
+
+#define ALIGNED __declspec(align(16)) // for SSE mixing
+
+// Some helper macros: _mm_set_* functions pass arguments in reverse
+// order, which is really confusing.
+#define _mm_setr_ps(a,b,c,d) _mm_set_ps(d,c,b,a)
+#define _mm_setr_epi32(a,b,c,d) _mm_set_epi32(d,c,b,a)
+#define _mm_setr_epi16(a,b,c,d,e,f,g,h) _mm_set_epi16(h,g,f,e,d,c,b,a)
+#define _mm_broadcast_ps(a) _mm_set_ps(a,a,a,a)
+#define _mm_broadcast_epi32(a) _mm_set_epi32(a,a,a,a)
+
+// End of SSE additions
+
 
 #include "Constants.h"
 #include "Instrument.h"
@@ -35,12 +56,13 @@ This code requires a byte to be 8 bits wide
 *   CONSTANTS FOR THE MIXERCHANNEL:                                       *
 *                                                                         *
 **************************************************************************/
-const bool  MXR_VOLUME_RAMP_UP      = false;
-const bool  MXR_VOLUME_RAMP_DOWN    = true;
-const int   MXR_PANNING_FULL_LEFT   = 0;
-const int   MXR_PANNING_CENTER      = 127;
-const int   MXR_PANNING_FULL_RIGHT  = 255;
-const int   MXR_NO_PHYSICAL_CHANNEL_ATTACHED = -1;
+const bool  MXR_VOLUME_RAMP_UP                  = false;
+const bool  MXR_VOLUME_RAMP_DOWN                = true;
+const int   MXR_VOLUME_RAMP_MAX_STEPS           = 40;
+const int   MXR_PANNING_FULL_LEFT               = 0;
+const int   MXR_PANNING_CENTER                  = 127;
+const int   MXR_PANNING_FULL_RIGHT              = 255;
+const int   MXR_NO_PHYSICAL_CHANNEL_ATTACHED    = -1;
 
 // below is wrong, should be 44100, not * 2
 const float MXR_MIN_FREQUENCY_INC = 00002.26757e-4f; // 20 Hz == 20 / (44100 * 2)
@@ -139,21 +161,47 @@ public:
     void            makeSecondary() { clearFlags( MXR_IS_PRIMARY_CHANNEL_FLAG ); }
     bool            isPrimary() const { return isSet( MXR_IS_PRIMARY_CHANNEL_FLAG ); }
     bool            isSecondary() const { return !isPrimary(); }
-    void            setVolumeRamp( bool direction, int leftVolume, int rightVolume )
+    /*
+        volume ramps occur on:
+        - start of sample
+        - end of sample
+        - volume change
+        - panning change
+
+    */
+    void            setVolumeRamp( 
+        bool direction, 
+        float leftStartVolume, 
+        float rightStartVolume,
+        float leftEndVolume,
+        float rightEndVolume
+        )
     {
         setFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG );
         if( direction == MXR_VOLUME_RAMP_DOWN )
             setFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
         else 
             clearFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
-    /*
-        volume ramps occur on:
-        - start of sample 
-        - end of sample
-        - volume change
-        - panning change
-    
-    */
+
+        rampLeftVolume_ = leftStartVolume;    // current left side volume during ramp
+        rampRightVolume_ = rightStartVolume;   // current right side volume during ramp
+
+        leftVolume_ = leftEndVolume;   // ?
+        rightVolume_ = rightEndVolume; // ?
+
+        rampLeftInc_ = (leftEndVolume - leftStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
+        rampLeftInc_ = std::min( rampLeftInc_,1.0f );
+        rampRightInc_ = (rightEndVolume - rightStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
+        rampRightInc_ = std::min( rampRightInc_,1.0f );
+
+
+
+
+        rampRightInc_;      // -4 .. 4 (approximately)
+        rampIterCnt_;       // number of volume changes for this ramp
+
+        //MXR_VOLUME_RAMP_MAX_STEPS
+
     }
     bool            isVolumeRamping() const { return isSet( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG ); }
     bool            isVolumeRampingDown() const { return isSet( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG ); }
@@ -177,6 +225,10 @@ public:
         setFlags( MXR_SURROUND_IS_ACTIVE_FLAG );
         if ( rightVolume_ > 0 )
             rightVolume_ = -rightVolume_;
+    }
+    bool            isSurround() 
+    {
+        return isSet( MXR_SURROUND_IS_ACTIVE_FLAG );
     }
     bool            isPlayingForwards() const 
     {
@@ -240,7 +292,6 @@ public:
     float           getFrequencyInc() const { return frequencyInc_; }
     unsigned        getOffset() const { return offset_; }
     float           getFracOffset() const { return fracOffset_; }
-
     void            setOffset( unsigned offset )
     {
         assert( offset <= pSample_->getLength() );
@@ -256,8 +307,6 @@ private:
     void            clearFlags( const int flags ) { flags_ &= 0xFFFFFFFF - flags; }
     bool            isSet( const int flag ) const { return (flags_ & flag) != 0; }
 
-//    friend class Mixer;
-
 private:
     std::uint16_t   flags_;
     std::uint16_t   parentLogicalChannel_;// for a.o. IT effect S7x (NNA process changes)
@@ -265,7 +314,8 @@ private:
     float           rampRightVolume_;   // current right side volume during ramp
     float           rampLeftInc_;       // -4 .. 4 (approximately)
     float           rampRightInc_;      // -4 .. 4 (approximately)
-    float           leftVolume_;        // 0 .. 1
+    float           rampIterCnt_;       // number of volume changes for this ramp
+    float           leftVolume_;        //  0 .. 1
     float           rightVolume_;       // -1 .. 1: negative volume for surround
     float           frequencyInc_;      // frequency / mixRate
     std::uint16_t   fadeOut_;           // 65535 .. 0 // convert to float?
@@ -827,6 +877,15 @@ private:
         float fracOffset,
         float freqInc
     );
+    void MixMonoSampleLinearInterpolation_sse41_v2( 
+        DestBufferType* pBuffer,
+        std::int16_t* pSmpData,
+        int nrSamples,
+        float leftGain,
+        float rightGain,
+        float fracOffset,
+        float freqInc 
+    );
     void            MixMonoSampleCubicInterpolation(
         DestBufferType* pBuffer,
         std::int16_t* pSmpData,
@@ -938,7 +997,7 @@ private:
         cubic interpolation
         sinc interpolation
     */
-    int             mxr_interpolationType_ = MXR_CUBIC_INTERPOLATION;
+    int             mxr_interpolationType_ = MXR_LINEAR_INTERPOLATION;
 
     std::uint16_t   tempo_;
     std::uint16_t   ticksPerRow_;

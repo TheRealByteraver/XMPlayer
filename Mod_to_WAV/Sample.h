@@ -64,7 +64,12 @@ public:
     int             getRelativeNote()   const { return relativeNote_; }
     unsigned        getPanning()        const { return panning_; }
     int             getFinetune()       const { return finetune_; }
-    std::int16_t*   getData()           const { return data_.get() + INTERPOLATION_SPACER; }
+    std::int16_t*   getData()           const 
+    { 
+        return isMono() ?
+            (data_.get() + INTERPOLATION_SPACER) :
+            (data_.get() + (INTERPOLATION_SPACER << 1));
+    }
 private:
     std::string     name_;
     unsigned        length_ = 0;

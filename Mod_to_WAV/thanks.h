@@ -38,10 +38,18 @@
         - The whole OpenMPT team, Saga Musix especially!
         https://openmpt.org
 
-        - Albinopapa and Chili for reigniting my interest in C++
+        - Albinopapa and Chili for re-igniting my interest in C++
         https://planetchili.net
 
+        - The Cherno Project: same as above. You are a hardworking young man with 
+        a brain stuck in overdrive :) Super nice C++ videos, check them out:
+        https://www.youtube.com/user/TheChernoProject
+
         - My Music Heroes:
+
+            Karsten Koch
+            - Love your music, as I said elsewhere: Jean Michel Jarre 
+            would be proud!
 
             Henrik Sundberg aka fajser / RAGE PC 
             - you make some cruel tunes dude, love 'em!!!!!
@@ -87,6 +95,9 @@
             and so many others!!!
 
         - My friends:
+            - Bart Goossens / Ghent university for his expert help with SSE
+            instructions, mathematics and programming in general: you are a 
+            one man army!
             - Wodan, my programming buddy, bugging me to leave Pascal and to
             start with C, then to stop me on C++ ;) (failed on that one)
             http://www.caiman.us
