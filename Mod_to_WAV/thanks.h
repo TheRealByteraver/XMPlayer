@@ -38,7 +38,7 @@
         - The whole OpenMPT team, Saga Musix especially!
         https://openmpt.org
 
-        - Albinopapa and Chili for re-igniting my interest in C++
+        - Chili for re-igniting my interest in C++, Albinopapa for pulling me through :)
         https://planetchili.net
 
         - The Cherno Project: same as above. You are a hardworking young man with 
@@ -82,7 +82,8 @@
             And also: Gustaf Grefberg aka Lizardking, Jogeir 
             Liljedahl, Sidewinder / Megawatts, otis / inforcorner, Robin van 
             Nooy aka Cygnes / T-Matic: women.s3m is 
-            fantastic :), Necros / fm - that Unreal music is truly unreal! , 
+            fantastic :), Necros & Basehead / fm - that Unreal music is truly 
+            unreal!, same for the Crusader soundtrack!       
             Linus Elman aka probe / TBL - LOOOOOVE the JIZZ & STASH 
             soundtracks!!!!!, Dune / Orange, Leinad / TYO, Kenny Chou aka 
             C.C.Catch - beautiful melodies, same goes for Thomas Pytel 
@@ -94,7 +95,7 @@
             Zodiak / Cascada, Jesper Kyd, Volker Tripp aka Jester ...  
             and so many others!!!
 
-        - My friends:
+        - My friends and teachers:
             - Bart Goossens / Ghent university for his expert help with SSE
             instructions, mathematics and programming in general: you are a 
             one man army!
@@ -110,5 +111,5 @@
 
         - ... and last but definitely not least: my long time girlfriend Maryna
         for letting me spend as much hours behind my computer as I care for and 
-        for being generally supportive.Thank you my love <3 
+        for being generally supportive. Thank you my love <3 
 */

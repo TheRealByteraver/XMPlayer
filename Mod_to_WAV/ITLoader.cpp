@@ -289,11 +289,10 @@ public:
     static void pattern( Pattern& Pattern );
 };
 
+int getItActiveChannels( VirtualFile& itFile,bool( &channelIsUsed )[IT_MAX_CHANNELS] ); // fwd
+
 int Module::loadItFile( VirtualFile& moduleFile )
 {
-    //VirtualFile itFile( fileName_ );
-    //if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
-    //    return 0;
     moduleFile.absSeek( 0 );
     VirtualFile& itFile = moduleFile;
 
@@ -348,11 +347,11 @@ int Module::loadItFile( VirtualFile& moduleFile )
     unsigned smpHdrPtrs[IT_MAX_SAMPLES];
     unsigned ptnHdrPtrs[IT_MAX_PATTERNS];
     for ( unsigned i = 0; i < itFileHeader.nrInstruments; i++ )
-        itFile.read( &(instHdrPtrs[i]),sizeof( unsigned ) );
+        itFile.read( &(instHdrPtrs[i]),sizeof( std::uint32_t ) );
     for ( unsigned i = 0; i < itFileHeader.nrSamples; i++ )
-        itFile.read( &(smpHdrPtrs[i]),sizeof( unsigned ) );
+        itFile.read( &(smpHdrPtrs[i]),sizeof( std::uint32_t ) );
     for ( unsigned i = 0; i < itFileHeader.nrPatterns; i++ )
-        itFile.read( &(ptnHdrPtrs[i]),sizeof( unsigned ) );
+        itFile.read( &(ptnHdrPtrs[i]),sizeof( std::uint32_t ) );
 
     if ( itFile.getIOError() != VIRTFILE_NO_ERROR ) 
         return 0;
@@ -402,8 +401,54 @@ int Module::loadItFile( VirtualFile& moduleFile )
         if ( result ) 
             return 0;
     }
+    // Check nr of channels here by analysing the patterns:
+    bool patternIsUsed[IT_MAX_PATTERNS];
+    bool channelIsUsed[IT_MAX_CHANNELS];
+    memset( patternIsUsed,false,sizeof( bool ) * IT_MAX_PATTERNS );
+    memset( channelIsUsed,false,sizeof( bool ) * IT_MAX_CHANNELS );
+    for ( int i = 0; i < itFileHeader.songLength;i++ ) { 
+        unsigned usedPattern = patternTable_[i];
+        if( usedPattern < IT_MAX_PATTERNS )
+            patternIsUsed[usedPattern] = true;
+    }
+    for ( int patternNr = 0; patternNr < itFileHeader.nrPatterns; patternNr++ ) {
+        if ( !patternIsUsed[patternNr] ) 
+            continue;
+        unsigned offset = ptnHdrPtrs[patternNr];
+        if ( offset ) {
+            itFile.absSeek( offset );
+            int result = getItActiveChannels( itFile,channelIsUsed );
+            if ( result )
+                return 0;
+            if ( showDebugInfo_ ) {
+                std::cout
+                    << "\n" << std::setw( 3 ) << patternNr << ":";
+                for ( int i = 0; i < IT_MAX_CHANNELS;i++ ) {
+                    std::cout << (channelIsUsed[i] ? "Y" : "N");
+                }
+            }
+        }
+    }
+    /*
+        We could of course remap unused channels .S3M style but this is not the
+        way the Impulse tracker or the .IT format works so we simple keep the
+        highest channels as the nr of channels (+ 1 because 1st channel is 0).
+    */
+    nrChannels_ = 0;
+    for ( int i = IT_MAX_CHANNELS - 1; i >= 0; i-- )
+        if ( channelIsUsed[i] ) {
+            nrChannels_ = i + 1;
+            break;
+        }
+    
+    if ( showDebugInfo_ )
+        std::cout
+            << "\nDetected " << nrChannels_ << " nr of channels.";
+
     // load patterns
     for ( int patternNr = 0; patternNr < itFileHeader.nrPatterns; patternNr++ ) {
+        if ( !patternIsUsed[patternNr] )
+            continue;
         unsigned offset = ptnHdrPtrs[patternNr];
         if ( offset ) {
             itFile.absSeek( offset );
@@ -635,13 +680,6 @@ int Module::loadItSample(
     if ( !(itSampleHeader.flag & IT_SMP_ASSOCIATED_WITH_HEADER) )
         return 0; // nothing to load: a bit drastic maybe (song message lost)
 
-    //if ( isStereoSample ) {
-    //    if ( showDebugInfo_ )
-    //        std::cout << "\n\n"
-    //            << "Sample header nr " << sampleNr << ": "
-    //            << "Stereo samples are not supported yet!";            
-    //    return -1;
-    //}
     SampleHeader sample;
     //samples_[sampleNr] = new Sample;
     sample.name.append( itSampleHeader.name,IT_SMP_NAME_LENGTH );
@@ -715,18 +753,12 @@ int Module::loadItSample(
     // Now take care of the sample data:
     unsigned    dataLength = sample.length;
     
-    //sample.dataType = SAMPLEDATA_IS_SIGNED_FLAG; 
-    if ( is16BitSample ) {
-        //sample.dataType = SAMPLEDATA_SIGNED_16BIT;
-        //sample.dataType |= SAMPLEDATA_IS_16BIT_FLAG;
+    if ( is16BitSample ) 
         dataLength <<= 1;
-    } 
+     
     if( isStereoSample )
         dataLength <<= 1;
 
-    //else {
-    //    sample.dataType = SAMPLEDATA_SIGNED_8BIT;
-    //}
     itFile.absSeek( itSampleHeader.samplePointer );
     std::unique_ptr<unsigned char[]> buffer = 
         std::make_unique<unsigned char[]>( dataLength );
@@ -753,8 +785,7 @@ int Module::loadItSample(
 
     // Load the sample:
     sample.data = (std::int16_t *)buffer.get();
-    bool unsignedData = (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0;
-    
+    bool unsignedData = (itSampleHeader.convert & IT_SIGNED_SAMPLE_DATA) == 0;    
 
     sample.dataType =   (unsignedData   ? 0 : SAMPLEDATA_IS_SIGNED_FLAG) |
                         (is16BitSample  ? SAMPLEDATA_IS_16BIT_FLAG : 0) |
@@ -992,15 +1023,11 @@ void remapItEffects( Effect& remapFx )
 // pattern numbers are 0-based
 int Module::loadItPattern( VirtualFile& itFile,int patternNr )
 {
-    nrChannels_ = 32; // = IT_MAX_CHANNELS; // TODO TO FIX!
-    boolean         channelIsUsed[IT_MAX_CHANNELS];
     unsigned char   masks[IT_MAX_CHANNELS];
     Note            prevRow[IT_MAX_CHANNELS];
     unsigned char   prevVolc[IT_MAX_CHANNELS];
-    //Note            *iNote,*patternData;
     ItPatternHeader itPatternHeader;
 
-    memset( &channelIsUsed,false,sizeof( channelIsUsed ) );
     memset( &masks,0,sizeof( masks ) );
     memset( &prevRow,0,sizeof( prevRow ) );
     memset( &prevVolc,255,sizeof( prevVolc ) );
@@ -1017,7 +1044,7 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         return -1;
     }
     std::vector<Note> patternData( nrChannels_ * itPatternHeader.nRows );
-    std::vector<Note>::iterator iNote = patternData.begin();
+    //std::vector<Note>::iterator iNote = patternData.begin();
 
     // start decoding:
     unsigned char *source = (unsigned char *)itFile.getSafePointer( itPatternHeader.dataSize );
@@ -1106,9 +1133,8 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         decodeItVolumeColumn( note.effects[0],volc );
         remapItEffects( note.effects[1] );
 
-        if ( channelNr < nrChannels_ ) {
+        //if ( channelNr < nrChannels_ ) 
             patternData[rowNr * nrChannels_ + channelNr] = note;
-        }
     }
     if ( showDebugInfo_ ) {
 #ifdef debug_it_show_patterns
@@ -1122,6 +1148,57 @@ int Module::loadItPattern( VirtualFile& itFile,int patternNr )
         ( nrChannels_,itPatternHeader.nRows,patternData );
     return 0;
 }
+
+// this function quickly scans through the patterns and checks which channels
+// are actually used. We use the result of this function to determine the 
+// number of channels in the song.
+int getItActiveChannels( VirtualFile& itFile,bool (&channelIsUsed)[IT_MAX_CHANNELS] )
+{
+    unsigned char   masks[IT_MAX_CHANNELS];
+    ItPatternHeader itPatternHeader;
+    memset( &masks,0,sizeof( unsigned char ) * IT_MAX_CHANNELS );
+
+    if ( itFile.read( &itPatternHeader,sizeof( ItPatternHeader ) ) != VIRTFILE_NO_ERROR )
+        return -1;
+    if ( itPatternHeader.nRows > IT_MAX_PATTERN_ROWS ||
+        itPatternHeader.nRows < IT_MIN_PATTERN_ROWS ) {
+        return -1;
+    }
+    // start decoding:
+    unsigned char* source = (unsigned char*)itFile.getSafePointer( itPatternHeader.dataSize );
+    if ( source == nullptr ) {
+        return -1; 
+    }
+    for ( unsigned rowNr = 0; rowNr < itPatternHeader.nRows; ) {
+        unsigned char pack;
+        if ( itFile.read( &pack,sizeof( unsigned char ) ) != VIRTFILE_NO_ERROR )
+            return -1;
+        if ( pack == IT_PATTERN_END_OF_ROW_MARKER ) {
+            rowNr++;
+            continue;
+        }
+        unsigned channelNr = (pack - 1) & 63;
+        channelIsUsed[channelNr] = true;
+        unsigned char& mask = masks[channelNr];
+        unsigned skip = 0;
+        if ( pack & IT_PATTERN_CHANNEL_MASK_AVAILABLE ) {
+            if ( itFile.read( &mask,sizeof( unsigned char ) ) != VIRTFILE_NO_ERROR )
+                return -1;
+        }
+        if ( mask & IT_PATTERN_NOTE_PRESENT ) 
+            skip++;
+        if ( mask & IT_PATTERN_INSTRUMENT_PRESENT ) 
+            skip++;
+        if ( mask & IT_PATTERN_VOLUME_COLUMN_PRESENT ) 
+            skip++;
+        if ( mask & IT_PATTERN_COMMAND_PRESENT ) 
+            skip += 2;
+        if ( itFile.relSeek( skip ) != VIRTFILE_NO_ERROR )
+            return -1;
+    }
+    return 0;
+}
+
 
 // DEBUG helper functions that write verbose output to the screen:
 

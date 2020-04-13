@@ -1,6 +1,8 @@
 #pragma once
 // Floating point mixer
 
+#include <conio.h>
+
 #include <climits>
 #if CHAR_BIT != 8 
 This code requires a byte to be 8 bits wide
@@ -58,7 +60,10 @@ This code requires a byte to be 8 bits wide
 **************************************************************************/
 const bool  MXR_VOLUME_RAMP_UP                  = false;
 const bool  MXR_VOLUME_RAMP_DOWN                = true;
-const int   MXR_VOLUME_RAMP_MAX_STEPS           = 40;
+const int   MXR_VOLUME_RAMP_MAX_STEPS           = 42;
+//const float MXR_VOLUME_RAMP_MIN_DELTA = 1.0f / (float)MAX_VOLUME;
+const float MXR_VOLUME_RAMP_STEP_SIZE =
+    (float)MAX_VOLUME / ((float)MXR_VOLUME_RAMP_MAX_STEPS * (float)MAX_VOLUME); 
 const int   MXR_PANNING_FULL_LEFT               = 0;
 const int   MXR_PANNING_CENTER                  = 127;
 const int   MXR_PANNING_FULL_RIGHT              = 255;
@@ -138,10 +143,10 @@ public:
     {
         flags_ = 0;
         parentLogicalChannel_ = 0;
-        rampLeftVolume_ = 0; 
-        rampRightVolume_ = 0;
-        rampLeftInc_ = 0;
-        rampRightInc_ = 0;
+        //rampLeftVolume_ = 0; 
+        //rampRightVolume_ = 0;
+        //rampLeftInc_ = 0;
+        //rampRightInc_ = 0;
         leftVolume_ = 0;
         rightVolume_ = 0;
         frequencyInc_ = 0;
@@ -183,25 +188,67 @@ public:
         else 
             clearFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
 
-        rampLeftVolume_ = leftStartVolume;    // current left side volume during ramp
-        rampRightVolume_ = rightStartVolume;   // current right side volume during ramp
-
-        leftVolume_ = leftEndVolume;   // ?
-        rightVolume_ = rightEndVolume; // ?
-
-        rampLeftInc_ = (leftEndVolume - leftStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
-        rampLeftInc_ = std::min( rampLeftInc_,1.0f );
-        rampRightInc_ = (rightEndVolume - rightStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
-        rampRightInc_ = std::min( rampRightInc_,1.0f );
-
-
-
-
-        rampRightInc_;      // -4 .. 4 (approximately)
-        rampIterCnt_;       // number of volume changes for this ramp
-
+        //rampLeftVolume_ = leftStartVolume;     // current left side volume during ramp
+        //rampRightVolume_ = rightStartVolume;   // current right side volume during ramp
+        //leftVolume_ = leftEndVolume;   // ?
+        //rightVolume_ = rightEndVolume; // ?
+        //rampLeftInc_ = (leftEndVolume - leftStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
+        //rampLeftInc_ = std::min( rampLeftInc_,1.0f );
+        //rampRightInc_ = (rightEndVolume - rightStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
+        //rampRightInc_ = std::min( rampRightInc_,1.0f );
+        //rampRightInc_;      // -4 .. 4 (approximately)
+        //rampIterCnt_;       // number of volume changes for this ramp
         //MXR_VOLUME_RAMP_MAX_STEPS
 
+        float leftVolumeDelta = leftEndVolume - leftStartVolume;
+        float rightVolumeDelta = rightEndVolume - rightStartVolume;
+        float delta = std::max( abs( leftVolumeDelta ),abs( rightVolumeDelta ) );
+        int nrSteps = (int)(delta / (float)MXR_VOLUME_RAMP_STEP_SIZE);
+        float leftStepSize  = leftVolumeDelta / (float)nrSteps;
+        float rightStepSize = rightVolumeDelta / (float)nrSteps;
+        float leftScale,rightScale;
+
+        if ( isVolumeRampingDown() ) { 
+            leftScale = (leftStartVolume != 0) ?
+                (1.0f / leftStartVolume) : 0;
+            rightScale = (rightStartVolume != 0) ?
+                (1.0f / rightStartVolume) : 0;
+        } else { 
+            leftScale = (leftEndVolume != 0) ?
+                (1.0f / leftEndVolume) : 0;
+            rightScale = (rightEndVolume != 0) ?
+                (1.0f / rightEndVolume) : 0;
+        }
+        volumeRampIdx_ = 0;
+        volumeRampLength_ = nrSteps;
+        int i = 0;
+        for ( ; i < (volumeRampLength_ << 1); i += 2 ) {
+            int i2 = (i + 1) >> 1;
+            volumeRamp_[i    ] = (leftStartVolume + leftStepSize * i2) * leftScale;
+            volumeRamp_[i + 1] = (rightStartVolume + rightStepSize * i2) * rightScale;
+        }
+        /*   
+        std::cout
+            << "\nMXR_VOLUME_RAMP_STEP_SIZE " << MXR_VOLUME_RAMP_STEP_SIZE
+            << "\nnrSteps          = " << nrSteps
+            << "\nleftStartVolume   = " << leftStartVolume
+            << "\nrightStartVolume  = " << rightStartVolume
+            << "\nleftEndVolume     = " << leftEndVolume
+            << "\nrightEndVolume    = " << rightEndVolume
+            << "\nvolumeRampIdx     = " << volumeRampIdx_
+            << "\nvolumeRampLength  = " << volumeRampLength_
+            << "\nValues = \n" 
+            ;
+        for ( int i = 0; i < volumeRampLength_; i++ ) {
+            std::cout
+                << volumeRamp_[i * 2] << ":"
+                << volumeRamp_[i * 2 + 1] 
+                << ", ";
+
+        }
+        std::cout << "\n\n";
+        _getch();
+        */
     }
     bool            isVolumeRamping() const { return isSet( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG ); }
     bool            isVolumeRampingDown() const { return isSet( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG ); }
@@ -289,6 +336,18 @@ public:
     Instrument*     getInstrumentPtr() const { return pInstrument_; }
     float           getLeftVolume() const { return leftVolume_; }
     float           getRightVolume() const { return rightVolume_; }
+    float           getVolumeRampVal( int value ) const
+    {
+        assert( value >= 0 && value < (MXR_VOLUME_RAMP_MAX_STEPS * 2) );
+        return volumeRamp_[value];
+    }
+    int             getVolumeRampPosition() const { return volumeRampIdx_; }
+    void            setVolumeRampPosition( int index )
+    {
+        assert( index >= 0 && index < (MXR_VOLUME_RAMP_MAX_STEPS * 2) );
+        volumeRampIdx_ = index;
+    }
+    int             getVolumeRampLength() { return volumeRampLength_; }
     float           getFrequencyInc() const { return frequencyInc_; }
     unsigned        getOffset() const { return offset_; }
     float           getFracOffset() const { return fracOffset_; }
@@ -310,15 +369,20 @@ private:
 private:
     std::uint16_t   flags_;
     std::uint16_t   parentLogicalChannel_;// for a.o. IT effect S7x (NNA process changes)
-    float           rampLeftVolume_;    // current left side volume during ramp
-    float           rampRightVolume_;   // current right side volume during ramp
-    float           rampLeftInc_;       // -4 .. 4 (approximately)
-    float           rampRightInc_;      // -4 .. 4 (approximately)
-    float           rampIterCnt_;       // number of volume changes for this ramp
+    float           volumeRamp_[MXR_VOLUME_RAMP_MAX_STEPS * 2]; // * 2 for stereo
+    int             volumeRampIdx_;     // where we left off
+    int             volumeRampLength_;  // number of volume changes for this ramp
+
+    //float           rampLeftVolume_;    // current left side volume during ramp
+    //float           rampRightVolume_;   // current right side volume during ramp
+    //float           rampLeftInc_;       // -4 .. 4 (approximately)
+    //float           rampRightInc_;      // -4 .. 4 (approximately)
+    //float           rampIterCnt_;       // number of volume changes for this ramp
+
     float           leftVolume_;        //  0 .. 1
     float           rightVolume_;       // -1 .. 1: negative volume for surround
     float           frequencyInc_;      // frequency / mixRate
-    std::uint16_t   fadeOut_;           // 65535 .. 0 // convert to float?
+    std::uint16_t   fadeOut_;           // 65535 .. 0 
     std::uint16_t   volEnvIdx_;         // 0 .. 65535
     std::uint16_t   panEnvIdx_;         // 0 .. 65535
     std::uint16_t   PitchEnvIdx_;       // 0 .. 65535
@@ -326,6 +390,7 @@ private:
     float           fracOffset_;        // fractional part of the offset
     Sample*         pSample_;           // for the sample data
     Instrument*     pInstrument_;       // for the envelopes
+
 
     // might be removed later:
     unsigned        age_;
@@ -651,6 +716,13 @@ public:
         physicalChannels_[physicalChannelNr].playSample(
             logicalChannelNr,pInstrument,pSample,offset,direction );
         calculatePhysicalChannelVolume( physicalChannelNr );
+        physicalChannels_[physicalChannelNr].setVolumeRamp(
+            MXR_VOLUME_RAMP_UP,
+            0,
+            0,
+            physicalChannels_[physicalChannelNr].getLeftVolume(),
+            physicalChannels_[physicalChannelNr].getRightVolume()
+            );
     }
 
     void            stopChannelReplay( int logicalChannelNr )
@@ -678,7 +750,15 @@ public:
         physicalChannels_[physicalChannelNr].makeSecondary();
 
         // temporary, should start volume ramp etc:
-        physicalChannels_[physicalChannelNr].deactivate();        
+        physicalChannels_[physicalChannelNr].deactivate();  // temporary
+
+        physicalChannels_[physicalChannelNr].setVolumeRamp(
+            MXR_VOLUME_RAMP_DOWN,
+            physicalChannels_[physicalChannelNr].getLeftVolume(),
+            physicalChannels_[physicalChannelNr].getRightVolume(),
+            0,
+            0
+            );
     }
 
 private:
@@ -997,7 +1077,7 @@ private:
         cubic interpolation
         sinc interpolation
     */
-    int             mxr_interpolationType_ = MXR_LINEAR_INTERPOLATION;
+    int             mxr_interpolationType_ = MXR_CUBIC_INTERPOLATION;
 
     std::uint16_t   tempo_;
     std::uint16_t   ticksPerRow_;

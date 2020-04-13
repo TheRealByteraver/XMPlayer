@@ -138,15 +138,10 @@ Sample::Sample( const SampleHeader& sampleHeader )
             }
         }
     }
-
-    // TO review (for stereo samples):
-
-    /*
-    
+    /*   
     -|----|----|----|----|----|----|----|----|----|----|----|----
     -5   -4   -3   -2   -1    0    1    2    3    4    5    6
-     R    L    R    L    R    L    R    L    R    L    R
-    
+     R    L    R    L    R    L    R    L    R    L    R    L
     */
     // get pointer to beginning of sample data:
     std::int16_t* iData = getData();

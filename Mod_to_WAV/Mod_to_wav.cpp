@@ -148,7 +148,8 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
-        "D:\\MODS\\M2W_BUGTEST\\ETANOLbiditest.xm",
+        "D:\\MODS\\dosprog\\stardstm.mod",
+        //"D:\\MODS\\M2W_BUGTEST\\ETANOLbiditest.xm",
         "D:\\MODS\\dosprog\\dope.mod",
         "C:\\Users\\Erland-i5\\Desktop\\mods\\Jazz3\\Bart\\05-rocket.it",
         "D:\\MODS\\S3M\\Karsten Koch\\blue_val.s3m",
@@ -165,7 +166,7 @@ int main( int argc, char *argv[] )
         "D:\\MODS\\dosprog\\chipmod\\4ma.mod",
         //"D:\\MODS\\dosprog\\china1.mod",
         //"D:\\MODS\\mod_to_wav\\cd2part4.mod",
-        //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
+        "D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.it",
         //"D:\\MODS\\M2W_BUGTEST\\Alertia_envtest.xm",
 		"D:\\MODS\\M2W_BUGTEST\\AQU-INGO-16b_samp.S3M",
   //      "D:\\MODS\\dosprog\\mods\\probmod\\veena.wow",
@@ -206,12 +207,12 @@ int main( int argc, char *argv[] )
         
         //"D:\\MODS\\M2W_BUGTEST\\qd-anoth-noload.xm",
         //"D:\\MODS\\M2W_BUGTEST\\Crystals.wow",
-        //"D:\\MODS\\M2W_BUGTEST\\china1.it",
-        //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
-        //"D:\\MODS\\M2W_BUGTEST\\menuralli.it",
+        "D:\\MODS\\M2W_BUGTEST\\china1.it",
+        "D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
+        "D:\\MODS\\M2W_BUGTEST\\menuralli.it",
         //"D:\\MODS\\dosprog\\mods\\starsmuz.xm",
         //"D:\\MODS\\dosprog\\mods\\pullmax.xm",
-        //"D:\\MODS\\M2W_BUGTEST\\womeni.it",
+        "D:\\MODS\\M2W_BUGTEST\\womeni.it",
         "D:\\MODS\\dosprog\\backward.s3m",
         //"D:\\MODS\\M2W_BUGTEST\\Creagaia-nocomp.it",
         //"D:\\MODS\\M2W_BUGTEST\\Crea2.it",      // impulse tracker v1.6
@@ -219,7 +220,7 @@ int main( int argc, char *argv[] )
         //"D:\\MODS\\M2W_BUGTEST\\WOMEN.xm",
         //"D:\\MODS\\M2W_BUGTEST\\module1.mptm",
         "D:\\MODS\\M2W_BUGTEST\\finalreality-credits.it",
-        //"D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
+        "D:\\MODS\\M2W_BUGTEST\\BACKWARD.IT",
 
         //"D:\\MODS\\mod_to_wav\\CHINA1.MOD",
         //"D:\\MODS\\MOD\\Jogeir Liljedahl\\slow-motion.mod",
@@ -244,7 +245,6 @@ int main( int argc, char *argv[] )
         //"c:\\Users\\Erland-i5\\desktop\\morning.mod",
         //"D:\\MODS\\dosprog\\china1-okt.s3m",
         //"D:\\MODS\\dosprog\\2nd_pm.xm",
-        "D:\\MODS\\dosprog\\stardstm.mod",
         //"D:\\MODS\\dosprog\\lchina.s3m",
         //"D:\\MODS\\dosprog\\mods\\againstr.s3m",
         //"D:\\MODS\\dosprog\\mods\\againstr.mod",
@@ -353,15 +353,51 @@ int main( int argc, char *argv[] )
     _getch();
     */
 
+    /*
+    for ( float i = -2.0; i < 2.2; i += 0.1 )
+        std::cout
+        << "\ni = " << std::setw( 4 ) << i << "  -> " 
+        << "(int)i = " << std::setw( 4 ) << (int)i
+        << "  but floor( i ) = " << std::floor( i );
+    std::cout << "\n";
+    getch();
+    */
 
-    //for ( float i = -2.0; i < 2.2; i += 0.1 )
-    //    std::cout
-    //    << "\ni = " << std::setw( 4 ) << i << "  -> " 
-    //    << "(int)i = " << std::setw( 4 ) << (int)i
-    //    << "  but floor( i ) = " << std::floor( i );
 
-    //std::cout << "\n";
-    //getch();
+    /*
+    const float freqInc = 0.70000001f;
+    const float smpOfs = 0.2999999f;
+    const int nrLoops = 1000;
+    const float freqInc4 = freqInc * 4.0f;
+    float test1 = smpOfs;
+    float test2 = smpOfs;
+
+
+    std::cout
+        << "\nfreqInc = " << freqInc
+        << "\nsmpOfs  = " << smpOfs
+        << "\nnrLoops = " << nrLoops
+        << "\nfreqInc * 4 = " << freqInc4
+        ;
+
+    for ( int i = 0; i < nrLoops; i++ ) {
+        test1 += freqInc;
+        if ( (i % 4) == 0 )
+            test2 += freqInc4;
+    }
+
+    std::cout
+        << "\n\n" << smpOfs << " + freqInc (" << nrLoops << "x) = " << test1
+        << "\n" << smpOfs << " + freqInc * 4 (" << (nrLoops >> 2) << "x) = " << test2
+        << "\n" << smpOfs << " + freqInc * " << nrLoops << " = " << (smpOfs + freqInc * nrLoops)
+        ;
+    _getch();
+    */
+
+
+
+
+
 
 
 
