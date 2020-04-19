@@ -50,7 +50,9 @@ This code requires a byte to be 8 bits wide
 #include "Sample.h"
 #include "Module.h"
 
-//#define debug_mixer   // enable to get pattern debuginfo :)
+#define debug_mixer   // enable to get pattern debuginfo :)
+#define enable_volume_ramps
+//#define debug_volume_ramp
 
 
 /**************************************************************************
@@ -60,10 +62,9 @@ This code requires a byte to be 8 bits wide
 **************************************************************************/
 const bool  MXR_VOLUME_RAMP_UP                  = false;
 const bool  MXR_VOLUME_RAMP_DOWN                = true;
-const int   MXR_VOLUME_RAMP_MAX_STEPS           = 42;
-//const float MXR_VOLUME_RAMP_MIN_DELTA = 1.0f / (float)MAX_VOLUME;
-const float MXR_VOLUME_RAMP_STEP_SIZE =
-    (float)MAX_VOLUME / ((float)MXR_VOLUME_RAMP_MAX_STEPS * (float)MAX_VOLUME); 
+const int   MXR_VOLUME_RAMP_MAX_STEPS = 160;
+const float MXR_VOLUME_RAMP_STEP_SIZE = (float)MAX_VOLUME / 
+                        ((float)MXR_VOLUME_RAMP_MAX_STEPS * (float)MAX_VOLUME);
 const int   MXR_PANNING_FULL_LEFT               = 0;
 const int   MXR_PANNING_CENTER                  = 127;
 const int   MXR_PANNING_FULL_RIGHT              = 255;
@@ -92,6 +93,7 @@ const int   MXR_SAMPLE_IS_KEYED_OFF_FLAG        = 32;
 const int   MXR_SAMPLE_IS_FADING_OUT_FLAG       = 64;
 const int   MXR_SURROUND_IS_ACTIVE_FLAG         = 128;
 const int   MXR_IS_PRIMARY_CHANNEL_FLAG         = 256;
+const int   MXR_CHANNEL_IS_DYING_FLAG           = 512;
 
 /**************************************************************************
 *                                                                         *
@@ -143,12 +145,10 @@ public:
     {
         flags_ = 0;
         parentLogicalChannel_ = 0;
-        //rampLeftVolume_ = 0; 
-        //rampRightVolume_ = 0;
-        //rampLeftInc_ = 0;
-        //rampRightInc_ = 0;
         leftVolume_ = 0;
         rightVolume_ = 0;
+        finalLeftVolume_ = 0;
+        finalRightVolume_ = 0;
         frequencyInc_ = 0;
         fadeOut_ = 0;
         volEnvIdx_ = 0;
@@ -160,7 +160,11 @@ public:
         pInstrument_ = nullptr;   // for the envelopes
     }
     bool            isActive() const { return (flags_ & MXR_CHANNEL_IS_ACTIVE_FLAG) != 0; }
-    void            activate() { setFlags( MXR_CHANNEL_IS_ACTIVE_FLAG ); }
+    void            activate() 
+    { 
+        setFlags( MXR_CHANNEL_IS_ACTIVE_FLAG );
+        clearFlags( MXR_CHANNEL_IS_DYING_FLAG );
+    }
     void            deactivate() { clearFlags( MXR_CHANNEL_IS_ACTIVE_FLAG ); }
     void            makePrimary() { setFlags( MXR_IS_PRIMARY_CHANNEL_FLAG ); }
     void            makeSecondary() { clearFlags( MXR_IS_PRIMARY_CHANNEL_FLAG ); }
@@ -182,32 +186,24 @@ public:
         float rightEndVolume
         )
     {
-        setFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG );
         if( direction == MXR_VOLUME_RAMP_DOWN )
             setFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
         else 
             clearFlags( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
 
-        //rampLeftVolume_ = leftStartVolume;     // current left side volume during ramp
-        //rampRightVolume_ = rightStartVolume;   // current right side volume during ramp
-        //leftVolume_ = leftEndVolume;   // ?
-        //rightVolume_ = rightEndVolume; // ?
-        //rampLeftInc_ = (leftEndVolume - leftStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
-        //rampLeftInc_ = std::min( rampLeftInc_,1.0f );
-        //rampRightInc_ = (rightEndVolume - rightStartVolume) / MXR_VOLUME_RAMP_MAX_STEPS;
-        //rampRightInc_ = std::min( rampRightInc_,1.0f );
-        //rampRightInc_;      // -4 .. 4 (approximately)
-        //rampIterCnt_;       // number of volume changes for this ramp
-        //MXR_VOLUME_RAMP_MAX_STEPS
-
+        finalLeftVolume_ = leftEndVolume;
+        finalRightVolume_ = rightEndVolume;
         float leftVolumeDelta = leftEndVolume - leftStartVolume;
         float rightVolumeDelta = rightEndVolume - rightStartVolume;
         float delta = std::max( abs( leftVolumeDelta ),abs( rightVolumeDelta ) );
         int nrSteps = (int)(delta / (float)MXR_VOLUME_RAMP_STEP_SIZE);
+        if ( nrSteps == 0 )
+            return; // volume delta is too small and needs no ramping
         float leftStepSize  = leftVolumeDelta / (float)nrSteps;
         float rightStepSize = rightVolumeDelta / (float)nrSteps;
         float leftScale,rightScale;
 
+        /*
         if ( isVolumeRampingDown() ) { 
             leftScale = (leftStartVolume != 0) ?
                 (1.0f / leftStartVolume) : 0;
@@ -219,6 +215,19 @@ public:
             rightScale = (rightEndVolume != 0) ?
                 (1.0f / rightEndVolume) : 0;
         }
+        */
+
+        if ( leftVolumeDelta < 0 ) 
+            leftVolume_ = leftStartVolume;
+        if ( rightVolumeDelta < 0 )
+            rightVolume_ = rightStartVolume;
+
+        float L = std::max( leftStartVolume,leftEndVolume );
+        float R = std::max( rightStartVolume,rightEndVolume );
+
+        leftScale = (L > 0.0001) ? (1.0f / L) : 0;
+        rightScale = (R > 0.0001) ? (1.0f / R) : 0;
+
         volumeRampIdx_ = 0;
         volumeRampLength_ = nrSteps;
         int i = 0;
@@ -227,10 +236,15 @@ public:
             volumeRamp_[i    ] = (leftStartVolume + leftStepSize * i2) * leftScale;
             volumeRamp_[i + 1] = (rightStartVolume + rightStepSize * i2) * rightScale;
         }
-        /*   
+        setFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG );
+        
+#ifdef debug_volume_ramp
         std::cout
+            << "\nVolume is ramping " << (direction ? "DOWN" : "UP")
             << "\nMXR_VOLUME_RAMP_STEP_SIZE " << MXR_VOLUME_RAMP_STEP_SIZE
             << "\nnrSteps          = " << nrSteps
+            << "\nleftStepSize      = " << leftStepSize
+            << "\nrightStepSize     = " << rightStepSize
             << "\nleftStartVolume   = " << leftStartVolume
             << "\nrightStartVolume  = " << rightStartVolume
             << "\nleftEndVolume     = " << leftEndVolume
@@ -241,17 +255,23 @@ public:
             ;
         for ( int i = 0; i < volumeRampLength_; i++ ) {
             std::cout
-                << volumeRamp_[i * 2] << ":"
-                << volumeRamp_[i * 2 + 1] 
-                << ", ";
-
+                << std::setw( 10 ) << volumeRamp_[i * 2] << ":"
+                << std::setw( 10 ) << volumeRamp_[i * 2 + 1] << "\n";
         }
         std::cout << "\n\n";
         _getch();
-        */
+#endif        
     }
     bool            isVolumeRamping() const { return isSet( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG ); }
     bool            isVolumeRampingDown() const { return isSet( MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG ); }
+    bool            isDying() const { return isSet( MXR_CHANNEL_IS_DYING_FLAG ); }
+    void            letChannelDie() { setFlags( MXR_CHANNEL_IS_DYING_FLAG ); }
+    void            endVolumeRamp()
+    {
+        leftVolume_ = finalLeftVolume_;
+        rightVolume_ = finalRightVolume_;
+        disableVolumeRamp();
+    }
     void            disableVolumeRamp()
     {
         clearFlags( MXR_VOLUME_RAMP_IS_ACTIVE_FLAG | MXR_VOLUME_RAMP_IS_DOWNWARDS_FLAG );
@@ -293,7 +313,6 @@ public:
     {
         clearFlags( MXR_PLAYING_BACKWARDS_FLAG );
     }
-
     void            setFrequency( unsigned frequency )
     {
         frequencyInc_ = (float)frequency / (float)MXR_MIXRATE;
@@ -372,15 +391,10 @@ private:
     float           volumeRamp_[MXR_VOLUME_RAMP_MAX_STEPS * 2]; // * 2 for stereo
     int             volumeRampIdx_;     // where we left off
     int             volumeRampLength_;  // number of volume changes for this ramp
-
-    //float           rampLeftVolume_;    // current left side volume during ramp
-    //float           rampRightVolume_;   // current right side volume during ramp
-    //float           rampLeftInc_;       // -4 .. 4 (approximately)
-    //float           rampRightInc_;      // -4 .. 4 (approximately)
-    //float           rampIterCnt_;       // number of volume changes for this ramp
-
     float           leftVolume_;        //  0 .. 1
     float           rightVolume_;       // -1 .. 1: negative volume for surround
+    float           finalLeftVolume_;   // to reinitialize leftVolume_ after vol ramp down
+    float           finalRightVolume_;  // see above
     float           frequencyInc_;      // frequency / mixRate
     std::uint16_t   fadeOut_;           // 65535 .. 0 
     std::uint16_t   volEnvIdx_;         // 0 .. 65535
@@ -561,6 +575,7 @@ public:
     {
         globalPanning = std::min( MXR_PANNING_FULL_RIGHT,globalPanning );
         globalPanning = std::max( MXR_PANNING_FULL_LEFT,globalPanning );
+        mxr_globalPanning_ = globalPanning;
         recalcChannelVolumes();
     }
     // global balance input range: -100 .. +100
@@ -578,7 +593,6 @@ public:
         }
         recalcChannelVolumes();
     }
-
 
     void            setInterpolationType( int InterPolationType ) 
     {
@@ -612,8 +626,18 @@ public:
         if ( isValidPhysicalChannelNr( physicalChannelNr ) ) {
             int masterChannelNr = physicalChannels_[physicalChannelNr].getParentLogicalChannel();
             if ( (masterChannelNr == logicalChannelNr) &&
-                physicalChannels_[physicalChannelNr].isPrimary() )
+                physicalChannels_[physicalChannelNr].isPrimary() ) {
+                float leftStartVolume = physicalChannels_[physicalChannelNr].getLeftVolume();
+                float rightStartVolume = physicalChannels_[physicalChannelNr].getRightVolume();
                 calculatePhysicalChannelVolume( physicalChannelNr );
+                physicalChannels_[physicalChannelNr].setVolumeRamp(
+                    MXR_VOLUME_RAMP_UP,  // not used info
+                    leftStartVolume,
+                    rightStartVolume,
+                    physicalChannels_[physicalChannelNr].getLeftVolume(),
+                    physicalChannels_[physicalChannelNr].getRightVolume()
+                    );
+            }
         }
 
     }
@@ -670,8 +694,6 @@ public:
         //else
         //    throw("Trying to set frequency in inactive channel!");
     }
-
-
     void            playSample(
         int logicalChannelNr,
         Instrument* pInstrument,
@@ -750,7 +772,8 @@ public:
         physicalChannels_[physicalChannelNr].makeSecondary();
 
         // temporary, should start volume ramp etc:
-        physicalChannels_[physicalChannelNr].deactivate();  // temporary
+        //if( physicalChannels_[physicalChannelNr].getSamplePtr()->isRepeatSample() ) // temporary
+        //    physicalChannels_[physicalChannelNr].deactivate();  
 
         physicalChannels_[physicalChannelNr].setVolumeRamp(
             MXR_VOLUME_RAMP_DOWN,
@@ -759,6 +782,10 @@ public:
             0,
             0
             );
+        physicalChannels_[physicalChannelNr].letChannelDie();
+#ifndef enable_volume_ramps
+        physicalChannels_[physicalChannelNr].deactivate(); // temp until vol ramp is ok
+#endif
     }
 
 private:
@@ -849,7 +876,7 @@ private:
         LogicalChannelInfo& logicalChannelInfo = logicalChannels_[logicalChannelNr];
 
         float finalVolume =
-            //mxr_gain_ *
+            //mxr_gain_ * // not here, but in mixer!
             mxr_globalVolume_ *
             //logicalChannelInfo.globalVolume *
             logicalChannelInfo.volume *

@@ -148,6 +148,8 @@ int main( int argc, char *argv[] )
 { 
     std::vector< std::string > filePaths;
     char        *modPaths[] = {
+        "D:\\MODS\\M2W_BUGTEST\\blue_valclicktest.s3m",
+        "D:\\MODS\\M2W_BUGTEST\\dope_clicktest2.mod",
         "D:\\MODS\\dosprog\\stardstm.mod",
         //"D:\\MODS\\M2W_BUGTEST\\ETANOLbiditest.xm",
         "D:\\MODS\\dosprog\\dope.mod",

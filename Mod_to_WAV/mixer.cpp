@@ -13,9 +13,8 @@ int                 Mixer::waveCurrentBlock_;
 
 Mixer::Mixer()
 {
-
-    setGlobalPanning( 0x30 );
     setGlobalVolume( MAX_GLOBAL_VOLUME );
+    setGlobalPanning( 0x00 ); // DEBUG, should be 0x30
     setGlobalBalance( 0 );
     //mxr_globalVolume_ = 1.0;
     //mxr_globalPanning_ = 0x30;
@@ -318,9 +317,13 @@ int Mixer::doMixBuffer( DestBufferType* buffer )
             saturation++;
 
         dst[i] = t;
+        //if ( (i & 0x1) == 0 )
+        //    std::cout << "\nL: " << src[i];
+        //else
+        //    std::cout << ", R: " << src[i];
 
-        min = std::min( min,t ); // debug
-        max = std::max( max,t ); // debug
+        //min = std::min( min,t ); // debug
+        //max = std::max( max,t ); // debug
     }
     //std::cout                    // debug
     //    << "\nmin: " << std::setw( 16 ) << min
@@ -392,6 +395,11 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
 
             MixBufferType* mixBufferPTR = mixBuffer_.get();
             std::int16_t* SampleDataPTR = sample.getData();
+
+            //std::cout
+            //    << "\nL: " << std::setw( 8 ) << mChn.getLeftVolume()
+            //    << ", R: " << std::setw( 8 ) << mChn.getRightVolume();
+
             float leftGain = mxr_gain_ * mChn.getLeftVolume();   // volume range: 0 .. 1
             float rightGain = mxr_gain_ * mChn.getRightVolume();
 
@@ -410,9 +418,7 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                 mixBlockLength = std::max( mixBlockLength,mChn.getFrequencyInc() ); // extra safety
                 int nrSamplesLeft = (int)(mixBlockLength / mChn.getFrequencyInc()); 
                 nrSamplesLeft = std::min( nrSamplesLeft,smpToMix );
-
                 assert( nrSamplesLeft <= maxSamples ); // added for debugging safety
-
                 mixBlockLength = nrSamplesLeft * freqInc;
 
 #ifdef showdebuginfo
@@ -430,12 +436,9 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                 */
                 if ( mChn.isPlayingBackwards() ) {
                     // substract mixBlockLength from the offset 
-                    float endPosition = (float)smpOffset + mixBlockLength + smpFracOffset; // mixBlockLength < 0
-
-                    // prevent wrong integer truncation below 0:
-                    //smpOffset = (int)((endPosition >= 0) ? endPosition : (endPosition - 1.0 + MXR_EPSILON));
-                    smpOffset = (int)floor( endPosition );
-                    smpFracOffset = (float)endPosition - (float)smpOffset - mixBlockLength;
+                    float endPosition = (float)smpOffset + mixBlockLength + smpFracOffset; // mixBlockLength < 0                   
+                    smpOffset = (int)floor( endPosition ); // prevent wrong integer truncation below 0
+                    smpFracOffset = (float)endPosition - (float)smpOffset - mixBlockLength; // mixBlockLength < 0
 #ifdef showdebuginfo
                     std::cout
                         << "\nendPosition                    = " << endPosition
@@ -446,50 +449,111 @@ void Mixer::doMixAllChannels( unsigned nrSamples )
                     _getch();
 #endif
                 }
-
                 // the memset can be removed once the mixing procedures have been updated from
                 // adding the sample data to storing it:
-                memset( alignedBuffer,0,maxSamples * sizeof( DestBufferType ) ); 
+                memset( alignedBuffer,0,maxSamples * sizeof( DestBufferType ) );
 
-                doMixChannel(                    
-                    alignedBuffer, //mixBufferPTR + chnMixIdx,
-                    SampleDataPTR + (sample.isMono() ? smpOffset : smpOffset << 1), 
-                    nrSamplesLeft,
-                    leftGain,
-                    rightGain,
-                    smpFracOffset,
-                    freqInc,
-                    sample.isMono()
-                );
-                /*
+                
                 if ( mChn.isVolumeRamping() ) {
-                    int nrRampSamples = std::min( nrSamplesLeft,
-                        mChn.getVolumeRampLength() - (mChn.getVolumeRampPosition() >> 1) + 1 );
-                    for ( int i = 0; i < (nrRampSamples << 1); i += 2 ) {
-                        alignedBuffer[i] *= mChn.getVolumeRampVal( i );
-                        alignedBuffer[i + 1] *= mChn.getVolumeRampVal( i + 1 );
+#ifdef enable_volume_ramps                    
+                    int volRampSamples = std::min(
+                        nrSamplesLeft,
+                        mChn.getVolumeRampLength() - mChn.getVolumeRampPosition() );
+                    doMixChannel(
+                        alignedBuffer, //mixBufferPTR + chnMixIdx,
+                        SampleDataPTR + (sample.isMono() ? smpOffset : smpOffset << 1),
+                        volRampSamples,
+                        leftGain,
+                        rightGain,
+                        smpFracOffset,
+                        freqInc,
+                        sample.isMono()
+                        );
+                   
+                    int volRampOfs = mChn.getVolumeRampPosition() << 1;
+                    for ( int i = 0; i < (volRampSamples << 1); i++ ) {
+#ifdef debug_volume_ramp
+                        if( (i & 0x1) == 0)
+                        std::cout
+                            << "\nBefore: "
+                            << std::setw( 10 ) << alignedBuffer[i]
+                            << std::setw( 10 ) << alignedBuffer[i + 1]
+                            ;
+#endif
+                        alignedBuffer[i] *= mChn.getVolumeRampVal( volRampOfs + i );
+#ifdef debug_volume_ramp
+                        if ( (i & 0x1) == 0 )
+                        std::cout << ", after: "
+                            << std::setw( 10 ) << alignedBuffer[i]
+                            << std::setw( 10 ) << alignedBuffer[i + 1]
+                            ;
+#endif
                     }
-                    if ( nrRampSamples >= mChn.getVolumeRampLength() )
-                        mChn.disableVolumeRamp();
-                    else
-                        mChn.setVolumeRampPosition( mChn.getVolumeRampPosition() + nrRampSamples );
+#ifdef debug_volume_ramp
+                    std::cout << "\n";
+                    _getch();
+#endif
 
+                    mChn.setVolumeRampPosition( mChn.getVolumeRampPosition() + volRampSamples );
+                    if ( mChn.getVolumeRampPosition() >= mChn.getVolumeRampLength() ) {
+                        mChn.endVolumeRamp();
+                        // recalculate gain values & reset volume
+                        leftGain = mxr_gain_ * mChn.getLeftVolume();  
+                        rightGain = mxr_gain_ * mChn.getRightVolume();
+                        if ( mChn.isDying() ) {
+                            mChn.deactivate();
+                        }                       
+                    }
+                    // add the volume ramp processed channel to the master mixer channel:
+                    DestBufferType* src = alignedBuffer;
+                    DestBufferType* dst = mixBufferPTR + chnMixIdx;
+                    for ( int s = 0; s < (volRampSamples << 1);s++ ) { // to optimize
+                        dst[s] += src[s];
+                    }
+                    chnMixIdx += volRampSamples << 1; // * 2 for stereo
+                    smpToMix -= volRampSamples;
+                    float displacement = volRampSamples * freqInc + smpFracOffset;
+                    smpOffset += (int)displacement;
+                    smpFracOffset = displacement - (int)displacement;
+
+                    if ( !mChn.isActive() ) 
+                        break;    // quit loop, next channel
+#else
+                    mChn.endVolumeRamp();
+#endif
+                } else {
+
+                    // normal mixing
+                    doMixChannel(
+                        alignedBuffer, //mixBufferPTR + chnMixIdx,
+                        SampleDataPTR + (sample.isMono() ? smpOffset : smpOffset << 1),
+                        nrSamplesLeft,
+                        leftGain,
+                        rightGain,
+                        smpFracOffset,
+                        freqInc,
+                        sample.isMono()
+                        );
+
+                    // to optimize:
+                    DestBufferType* src = alignedBuffer;
+                    DestBufferType* dst = mixBufferPTR + chnMixIdx;
+                    for ( int s = 0; s < (nrSamplesLeft << 1);s++ ) {
+                        dst[s] += src[s];
+                        //if ( (s & 0x1) == 0 )
+                        //    std::cout << "\nL: " << src[s];
+                        //else
+                        //    std::cout << ", R: " << src[s];
+                    }
+                    // end: to optimize
+
+                    chnMixIdx += nrSamplesLeft << 1; // * 2 for stereo
+                    smpToMix -= nrSamplesLeft;
+
+                    float displacement = mixBlockLength + smpFracOffset;
+                    smpOffset += (int)displacement;
+                    smpFracOffset = displacement - (int)displacement;
                 }
-                */
-
-                // to optimize:
-                DestBufferType* src = alignedBuffer;
-                DestBufferType* dst = mixBufferPTR + chnMixIdx;
-                for ( int s = 0; s < (nrSamplesLeft << 1);s++ ) 
-                    dst[s] += src[s];                
-                // end: to optimize
-
-                chnMixIdx += nrSamplesLeft << 1; // * 2 for stereo
-                smpToMix -= nrSamplesLeft;
-
-                float displacement = mixBlockLength + smpFracOffset; 
-                smpOffset += (int)displacement;
-                smpFracOffset = displacement - (int)displacement;
                 double nextPosition = (double)smpOffset + smpFracOffset;
                 /*
                     Note that sample.getRepeatEnd() points to the position 
@@ -796,16 +860,6 @@ void Mixer::MixMonoSampleLinearInterpolation_sse41_v2(
         //fracOffset += 4 * freqInc;
         fracOffset = F.m128_f32[3] + freqInc;
     }
-
-    //MixMonoSampleLinearInterpolation(
-    //    pBuffer + s,
-    //    pSmpData,
-    //    nrSamples & 0x7,
-    //    leftGain,
-    //    rightGain,
-    //    fracOffset,
-    //    freqInc
-    //    );
 }
 
 
